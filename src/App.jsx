@@ -63,7 +63,7 @@ export default function LavanderiaApp() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [filterDate, setFilterDate] = useState(today);
-  const [newOrder, setNewOrder] = useState({ client_name: "", phone: "", garments: 1, service: "lavado_normal", price: "", status: "recibido", notes: "" });
+  const [newOrder, setNewOrder] = useState({ client_name: "", phone: "", garments: 1, garment_type: "", service: "lavado_normal", price: "", status: "recibido", notes: "" });
   const [newExpense, setNewExpense] = useState({ concept: "", amount: "", date: today, category: "insumos" });
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
   const [saving, setSaving] = useState(false);
@@ -111,7 +111,7 @@ export default function LavanderiaApp() {
       const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 });
       if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]);
     }
-    setNewOrder({ client_name: "", phone: "", garments: 1, service: "lavado_normal", price: "", status: "recibido", notes: "" });
+    setNewOrder({ client_name: "", phone: "", garments: 1, garment_type: "", service: "lavado_normal", price: "", status: "recibido", notes: "" });
     setModal(null);
     setSaving(false);
   };
@@ -248,7 +248,7 @@ export default function LavanderiaApp() {
                     <div key={o.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #21262D" }}>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
-                        <div style={{ fontSize: 12, color: "#8B949E" }}>{SERVICES.find(sv => sv.id === o.service)?.label} · {o.garments} prendas</div>
+                        <div style={{ fontSize: 12, color: "#8B949E" }}>{SERVICES.find(sv => sv.id === o.service)?.label} · {o.garments} prendas {o.garment_type ? `· ${o.garment_type}` : ""}</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontWeight: 700, color: "#66BB6A" }}>${o.price}</div>
@@ -292,7 +292,7 @@ export default function LavanderiaApp() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
                     <tr style={{ background: "#21262D" }}>
-                      {["Cliente", "Teléfono", "Servicio", "Prendas", "Precio", "Estado", "Fecha", ""].map((h, i) => (
+                      {["Cliente", "Teléfono", "Tipo Prenda", "Servicio", "Prendas", "Precio", "Estado", "Fecha", ""].map((h, i) => (
                         <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
                       ))}
                     </tr>
@@ -302,6 +302,7 @@ export default function LavanderiaApp() {
                       <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
                         <td style={{ padding: "12px 14px", fontWeight: 600 }}>{o.client_name}</td>
                         <td style={{ padding: "12px 14px", color: "#8B949E" }}>{o.phone}</td>
+                        <td style={{ padding: "12px 14px" }}>{o.garment_type || "—"}</td>
                         <td style={{ padding: "12px 14px" }}>
                           <span style={{ background: SERVICES.find(sv => sv.id === o.service)?.color + "22", color: SERVICES.find(sv => sv.id === o.service)?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>
                             {SERVICES.find(sv => sv.id === o.service)?.icon} {SERVICES.find(sv => sv.id === o.service)?.label}
@@ -467,6 +468,20 @@ export default function LavanderiaApp() {
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>SERVICIO</label>
                     <select style={inp} value={newOrder.service} onChange={e => setNewOrder(p => ({ ...p, service: e.target.value }))}>
                       {SERVICES.map(sv => <option key={sv.id} value={sv.id} style={{ background: "#1a1a2e" }}>{sv.icon} {sv.label}</option>)}
+                    </select></div>
+                  <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>TIPO DE PRENDA</label>
+                    <select style={inp} value={newOrder.garment_type} onChange={e => setNewOrder(p => ({ ...p, garment_type: e.target.value }))}>
+                      <option value="" style={{ background: "#1a1a2e" }}>-- Seleccionar --</option>
+                      <option value="Camisa" style={{ background: "#1a1a2e" }}>👔 Camisa</option>
+                      <option value="Pantalón" style={{ background: "#1a1a2e" }}>👖 Pantalón</option>
+                      <option value="Vestido" style={{ background: "#1a1a2e" }}>👗 Vestido</option>
+                      <option value="Sábana" style={{ background: "#1a1a2e" }}>🛏 Sábana</option>
+                      <option value="Toalla" style={{ background: "#1a1a2e" }}>🏊 Toalla</option>
+                      <option value="Chaqueta" style={{ background: "#1a1a2e" }}>🧥 Chaqueta</option>
+                      <option value="Ropa interior" style={{ background: "#1a1a2e" }}>🩲 Ropa interior</option>
+                      <option value="Calcetines" style={{ background: "#1a1a2e" }}>🧦 Calcetines</option>
+                      <option value="Cortina" style={{ background: "#1a1a2e" }}>🪟 Cortina</option>
+                      <option value="Otro" style={{ background: "#1a1a2e" }}>📦 Otro</option>
                     </select></div>
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>N° PRENDAS</label>
                     <input style={inp} type="number" min={1} value={newOrder.garments} onChange={e => setNewOrder(p => ({ ...p, garments: e.target.value }))} /></div>
