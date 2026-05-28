@@ -266,7 +266,10 @@ export default function LavanderiaApp() {
                     <div key={o.id} style={{ padding: "10px 0", borderBottom: "1px solid #21262D" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                            {o.order_number && <span style={{ fontSize: 11, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 7px", borderRadius: 6 }}>{o.order_number}</span>}
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
+                          </div>
                           <div style={{ fontSize: 12, color: "#8B949E" }}>{SERVICES.find(sv => sv.id === o.service)?.label} · {o.garments} prendas</div>
                           {orderItems[o.id] && (
                             <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
@@ -320,7 +323,7 @@ export default function LavanderiaApp() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
                     <tr style={{ background: "#21262D" }}>
-                      {["Cliente", "Prendas y Precios", "Servicio", "Total", "Estado", "Fecha", ""].map((h, i) => (
+                      {["# Orden", "Cliente", "Prendas y Precios", "Servicio", "Total", "Estado", "Fecha", ""].map((h, i) => (
                         <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
                       ))}
                     </tr>
@@ -328,6 +331,9 @@ export default function LavanderiaApp() {
                   <tbody>
                     {orders.map(o => (
                       <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
+                        <td style={{ padding: "12px 14px" }}>
+                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number || "—"}</span>
+                        </td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ fontWeight: 600 }}>{o.client_name}</div>
                           <div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div>
