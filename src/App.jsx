@@ -335,7 +335,7 @@ export default function LavanderiaApp() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
                     <tr style={{ background: "#21262D" }}>
-                      {["# Orden", "Cliente", "Prendas y Precios", "Servicio", "Total", "Estado", "Fecha", ""].map((h, i) => (
+                      {["# Orden", "Cliente", "Prendas y Precios", "Servicio", "Total", "Estado", "Fecha", "Entrega", ""].map((h, i) => (
                         <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
                       ))}
                     </tr>
