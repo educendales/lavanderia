@@ -37,6 +37,12 @@ const db = {
 const GARMENT_TYPES = ["Camisa","Pantalón","Vestido","Sábana","Toalla","Chaqueta","Ropa interior","Calcetines","Cortina","Cubrelecho","Falda","Blusa","Shorts","Chompa","Otro"];
 const GARMENT_ICONS = {"Camisa":"👔","Pantalón":"👖","Vestido":"👗","Sábana":"🛏","Toalla":"🏊","Chaqueta":"🧥","Ropa interior":"🩲","Calcetines":"🧦","Cortina":"🪟","Cubrelecho":"🛌","Falda":"👘","Blusa":"👚","Shorts":"🩳","Chompa":"🧶","Otro":"📦"};
 
+const COLORS = [
+  "Blanco","Negro","Gris","Rojo","Azul","Azul marino","Azul cielo","Verde","Verde oliva",
+  "Amarillo","Naranja","Morado","Rosa","Rosado","Café","Beige","Crema","Vino","Turquesa",
+  "Celeste","Plateado","Dorado","Multicolor","Estampado"
+];
+
 const SERVICES = [
   { id: "lavado_normal", label: "Lavado Normal", color: "#4FC3F7", icon: "💧" },
   { id: "planchado", label: "Planchado", color: "#FFD54F", icon: "🔥" },
@@ -79,6 +85,7 @@ export default function LavanderiaApp() {
   const [newExpense, setNewExpense] = useState({ concept: "", amount: "", date: today, category: "insumos" });
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
   const [saving, setSaving] = useState(false);
+  const [colorFocusIdx, setColorFocusIdx] = useState(null);
 
   useEffect(() => {
     db.get("employees").then(data => {
@@ -595,8 +602,35 @@ export default function LavanderiaApp() {
                           style={{ ...inp, padding: "8px 6px", textAlign: "center" }} />
                         <input type="number" min={0} placeholder="0.00" value={item.price} onChange={e => updateItem(i, "price", e.target.value)}
                           style={{ ...inp, padding: "8px 6px" }} />
-                        <input type="text" placeholder="Ej: Azul" value={item.color} onChange={e => updateItem(i, "color", e.target.value)}
-                          style={{ ...inp, padding: "8px 6px" }} />
+                        <div style={{ position: "relative" }}>
+                          <input
+                            type="text"
+                            placeholder="Color..."
+                            value={item.color}
+                            onChange={e => updateItem(i, "color", e.target.value)}
+                            onFocus={() => setColorFocusIdx(i)}
+                            onBlur={() => setTimeout(() => setColorFocusIdx(null), 150)}
+                            style={{ ...inp, padding: "8px 6px" }}
+                            autoComplete="off"
+                          />
+                          {colorFocusIdx === i && (() => {
+                            const matches = item.color.length >= 1
+                              ? COLORS.filter(c => c.toLowerCase().includes(item.color.toLowerCase()) && c.toLowerCase() !== item.color.toLowerCase())
+                              : COLORS;
+                            return matches.length > 0 ? (
+                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1C2128", border: "1px solid #30363D", borderRadius: 8, zIndex: 99, overflow: "hidden", marginTop: 2, maxHeight: 180, overflowY: "auto" }}>
+                                {matches.map(c => (
+                                  <div key={c} onMouseDown={() => updateItem(i, "color", c)}
+                                    style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #21262D", display: "flex", alignItems: "center", gap: 8 }}
+                                    onMouseEnter={e => e.currentTarget.style.background = "#21262D"}
+                                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                    🎨 {c}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
                         {items.length > 1 && (
                           <button onClick={() => removeItem(i)} style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", border: "none", borderRadius: 6, padding: "6px 8px", cursor: "pointer", fontSize: 12 }}>✕</button>
                         )}
