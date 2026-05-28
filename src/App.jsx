@@ -52,8 +52,8 @@ const STATUS_LABELS = {
 };
 
 const today = new Date().toISOString().split("T")[0];
-const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", price: "", status: "recibido", notes: "" };
-const emptyItem = { garment_type: "Camisa", quantity: 1 };
+const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", status: "recibido", notes: "" };
+const emptyItem = { garment_type: "Camisa", quantity: 1, price: "" };
 
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
@@ -74,7 +74,6 @@ export default function LavanderiaApp() {
   const [newExpense, setNewExpense] = useState({ concept: "", amount: "", date: today, category: "insumos" });
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
   const [saving, setSaving] = useState(false);
-  const [expandedOrder, setExpandedOrder] = useState(null);
 
   useEffect(() => {
     db.get("employees").then(data => {
@@ -85,10 +84,7 @@ export default function LavanderiaApp() {
 
   const loadData = async () => {
     const [o, e, c, oi] = await Promise.all([
-      db.get("orders"),
-      db.get("expenses"),
-      db.get("clients"),
-      db.get("order_items")
+      db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items")
     ]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
@@ -111,21 +107,20 @@ export default function LavanderiaApp() {
   };
 
   const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity), 0);
+  const totalPrice = (its) => its.reduce((s, i) => s + (Number(i.price) * Number(i.quantity)), 0);
 
   const addOrder = async () => {
-    if (!newOrder.client_name || !newOrder.price || items.length === 0) return;
+    if (!newOrder.client_name || items.length === 0) return;
     setSaving(true);
     const garments = totalGarments(items);
-    const o = { ...newOrder, employee: user.name, date: today, garments, price: Number(newOrder.price) };
+    const price = totalPrice(items);
+    const o = { ...newOrder, employee: user.name, date: today, garments, price };
     const res = await db.post("orders", o);
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
-      // Save items
       for (const item of items) {
-        await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity) });
+        await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price) });
       }
-      setOrders(prev => [{ ...res[0], garments }, ...prev]);
-      // update client
       const existing = clients.find(c => c.phone === newOrder.phone);
       if (existing) {
         await db.patch("clients", existing.id, { total_orders: (existing.total_orders || 0) + 1 });
@@ -225,7 +220,6 @@ export default function LavanderiaApp() {
   return (
     <div style={s}>
       <div style={{ display: "flex", minHeight: "100vh" }}>
-        {/* SIDEBAR */}
         <div style={{ width: 200, background: "#161B22", borderRight: "1px solid #30363D", display: "flex", flexDirection: "column", padding: "20px 12px", flexShrink: 0 }}>
           <div style={{ textAlign: "center", marginBottom: 28 }}>
             <div style={{ fontSize: 32 }}>🫧</div>
@@ -243,10 +237,8 @@ export default function LavanderiaApp() {
           </div>
         </div>
 
-        {/* MAIN */}
         <div style={{ flex: 1, padding: 28, overflowY: "auto" }}>
 
-          {/* DASHBOARD */}
           {tab === "dashboard" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
@@ -272,7 +264,7 @@ export default function LavanderiaApp() {
                   <h3 style={{ margin: "0 0 16px", fontSize: 15, color: "#8B949E" }}>Órdenes recientes</h3>
                   {todayOrders.slice(0, 5).map(o => (
                     <div key={o.id} style={{ padding: "10px 0", borderBottom: "1px solid #21262D" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
                           <div style={{ fontSize: 12, color: "#8B949E" }}>{SERVICES.find(sv => sv.id === o.service)?.label} · {o.garments} prendas</div>
@@ -280,14 +272,14 @@ export default function LavanderiaApp() {
                             <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                               {orderItems[o.id].map((it, i) => (
                                 <span key={i} style={{ fontSize: 11, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>
-                                  {GARMENT_ICONS[it.garment_type] || "📦"} {it.garment_type} x{it.quantity}
+                                  {GARMENT_ICONS[it.garment_type]} {it.garment_type} x{it.quantity} · ${(Number(it.price) * Number(it.quantity)).toFixed(2)}
                                 </span>
                               ))}
                             </div>
                           )}
                         </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontWeight: 700, color: "#66BB6A" }}>${o.price}</div>
+                        <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
+                          <div style={{ fontWeight: 700, color: "#66BB6A" }}>${Number(o.price).toFixed(2)}</div>
                           <span style={{ fontSize: 11, background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20 }}>{STATUS_LABELS[o.status]?.label}</span>
                         </div>
                       </div>
@@ -318,7 +310,6 @@ export default function LavanderiaApp() {
             </div>
           )}
 
-          {/* ORDERS */}
           {tab === "orders" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -329,49 +320,46 @@ export default function LavanderiaApp() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
                     <tr style={{ background: "#21262D" }}>
-                      {["Cliente", "Prendas", "Servicio", "Precio", "Estado", "Fecha", ""].map((h, i) => (
+                      {["Cliente", "Prendas y Precios", "Servicio", "Total", "Estado", "Fecha", ""].map((h, i) => (
                         <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {orders.map(o => (
-                      <>
-                        <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
-                          <td style={{ padding: "12px 14px" }}>
-                            <div style={{ fontWeight: 600 }}>{o.client_name}</div>
-                            <div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div>
-                          </td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <div style={{ fontWeight: 600 }}>{o.garments} prendas</div>
-                            {orderItems[o.id] && (
-                              <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>
-                                {orderItems[o.id].map((it, i) => (
-                                  <span key={i} style={{ fontSize: 10, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "1px 6px", borderRadius: 8 }}>
-                                    {GARMENT_ICONS[it.garment_type] || "📦"} {it.garment_type} x{it.quantity}
-                                  </span>
-                                ))}
+                      <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
+                        <td style={{ padding: "12px 14px" }}>
+                          <div style={{ fontWeight: 600 }}>{o.client_name}</div>
+                          <div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div>
+                        </td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                            {orderItems[o.id] ? orderItems[o.id].map((it, i) => (
+                              <div key={i} style={{ fontSize: 11, background: "#21262D", borderRadius: 8, padding: "4px 8px" }}>
+                                <span>{GARMENT_ICONS[it.garment_type]} {it.garment_type}</span>
+                                <span style={{ color: "#8B949E" }}> x{it.quantity}</span>
+                                <span style={{ color: "#66BB6A", fontWeight: 700 }}> ${(Number(it.price) * Number(it.quantity)).toFixed(2)}</span>
                               </div>
-                            )}
-                          </td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span style={{ background: SERVICES.find(sv => sv.id === o.service)?.color + "22", color: SERVICES.find(sv => sv.id === o.service)?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>
-                              {SERVICES.find(sv => sv.id === o.service)?.icon} {SERVICES.find(sv => sv.id === o.service)?.label}
-                            </span>
-                          </td>
-                          <td style={{ padding: "12px 14px", fontWeight: 700, color: "#66BB6A" }}>${o.price}</td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)}
-                              style={{ background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, border: "none", borderRadius: 20, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-                              {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k} style={{ background: "#1a1a2e" }}>{v.label}</option>)}
-                            </select>
-                          </td>
-                          <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <button onClick={() => deleteOrder(o.id)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
-                          </td>
-                        </tr>
-                      </>
+                            )) : <span style={{ color: "#484F58", fontSize: 12 }}>{o.garments} prendas</span>}
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <span style={{ background: SERVICES.find(sv => sv.id === o.service)?.color + "22", color: SERVICES.find(sv => sv.id === o.service)?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>
+                            {SERVICES.find(sv => sv.id === o.service)?.icon} {SERVICES.find(sv => sv.id === o.service)?.label}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Number(o.price).toFixed(2)}</td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)}
+                            style={{ background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, border: "none", borderRadius: 20, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+                            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k} style={{ background: "#1a1a2e" }}>{v.label}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <button onClick={() => deleteOrder(o.id)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                        </td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -380,7 +368,6 @@ export default function LavanderiaApp() {
             </div>
           )}
 
-          {/* CLIENTS */}
           {tab === "clients" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -405,7 +392,6 @@ export default function LavanderiaApp() {
             </div>
           )}
 
-          {/* EXPENSES */}
           {tab === "expenses" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -440,7 +426,6 @@ export default function LavanderiaApp() {
             </div>
           )}
 
-          {/* REPORT */}
           {tab === "report" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
@@ -459,7 +444,7 @@ export default function LavanderiaApp() {
                 </div>
                 <div style={card}>
                   <h3 style={{ margin: "0 0 16px", color: "#4FC3F7" }}>👕 Resumen de Prendas</h3>
-                  {[["Total prendas", todayGarments], ["Total órdenes", todayOrders.length], ["Promedio por orden", todayOrders.length ? (todayGarments / todayOrders.length).toFixed(1) : 0]].map(([l, v]) => (
+                  {[["Total prendas", todayGarments], ["Total órdenes", todayOrders.length], ["Ticket promedio", todayOrders.length ? `$${(todayRevenue / todayOrders.length).toFixed(2)}` : "$0"]].map(([l, v]) => (
                     <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #21262D" }}>
                       <span style={{ color: "#8B949E" }}>{l}</span>
                       <span style={{ fontWeight: 800, fontSize: 16 }}>{v}</span>
@@ -504,10 +489,9 @@ export default function LavanderiaApp() {
         </div>
       </div>
 
-      {/* MODALS */}
       {modal && (
         <div onClick={() => setModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 16, padding: 28, width: 440, border: "1px solid #30363D", maxHeight: "90vh", overflowY: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 16, padding: 28, width: 460, border: "1px solid #30363D", maxHeight: "90vh", overflowY: "auto" }}>
 
             {modal === "newOrder" && (
               <>
@@ -522,35 +506,44 @@ export default function LavanderiaApp() {
                       {SERVICES.map(sv => <option key={sv.id} value={sv.id} style={{ background: "#1a1a2e" }}>{sv.icon} {sv.label}</option>)}
                     </select></div>
 
-                  {/* PRENDAS */}
+                  {/* PRENDAS CON PRECIO */}
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <label style={{ fontSize: 12, color: "#8B949E", fontWeight: 600 }}>PRENDAS</label>
-                      <button onClick={addItem} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>+ Agregar prenda</button>
+                      <button onClick={addItem} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>+ Agregar</button>
+                    </div>
+                    {/* Header */}
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 60px 80px 30px", gap: 6, marginBottom: 4 }}>
+                      {["Tipo de prenda", "Cant.", "Precio c/u", ""].map((h, i) => (
+                        <div key={i} style={{ fontSize: 10, color: "#484F58", fontWeight: 600 }}>{h}</div>
+                      ))}
                     </div>
                     {items.map((item, i) => (
-                      <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                        <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)}
-                          style={{ ...inp, flex: 2 }}>
-                          {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g] || "📦"} {g}</option>)}
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 60px 80px 30px", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                        <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)} style={{ ...inp, padding: "8px 10px" }}>
+                          {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g]} {g}</option>)}
                         </select>
                         <input type="number" min={1} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)}
-                          style={{ ...inp, width: 60, flex: 0 }} placeholder="Cant" />
+                          style={{ ...inp, padding: "8px 6px", textAlign: "center" }} />
+                        <input type="number" min={0} placeholder="0.00" value={item.price} onChange={e => updateItem(i, "price", e.target.value)}
+                          style={{ ...inp, padding: "8px 6px" }} />
                         {items.length > 1 && (
-                          <button onClick={() => removeItem(i)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 8px", fontSize: 14, flexShrink: 0 }}>✕</button>
+                          <button onClick={() => removeItem(i)} style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", border: "none", borderRadius: 6, padding: "6px 8px", cursor: "pointer", fontSize: 12 }}>✕</button>
                         )}
                       </div>
                     ))}
-                    <div style={{ fontSize: 12, color: "#8B949E", marginTop: 4 }}>
-                      Total: <strong style={{ color: "#4FC3F7" }}>{totalGarments(items)} prendas</strong>
+                    {/* Total */}
+                    <div style={{ background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.3)", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                      <span style={{ fontSize: 13, color: "#8B949E" }}>Total · {totalGarments(items)} prendas</span>
+                      <span style={{ fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${totalPrice(items).toFixed(2)}</span>
                     </div>
                   </div>
 
-                  <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>PRECIO ($)</label>
-                    <input style={inp} type="number" placeholder="0.00" value={newOrder.price} onChange={e => setNewOrder(p => ({ ...p, price: e.target.value }))} /></div>
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOTAS</label>
                     <textarea style={{ ...inp, height: 60, resize: "none" }} placeholder="Observaciones..." value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} /></div>
-                  <button onClick={addOrder} disabled={saving} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: 12, opacity: saving ? 0.7 : 1 }}>{saving ? "Guardando..." : "Guardar Orden"}</button>
+                  <button onClick={addOrder} disabled={saving || !newOrder.client_name} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: 14, fontSize: 15, opacity: saving || !newOrder.client_name ? 0.6 : 1 }}>
+                    {saving ? "Guardando..." : `Guardar Orden · $${totalPrice(items).toFixed(2)}`}
+                  </button>
                 </div>
               </>
             )}
