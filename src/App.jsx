@@ -503,10 +503,64 @@ export default function LavanderiaApp() {
               <>
                 <h3 style={{ margin: "0 0 20px", fontSize: 18 }}>➕ Nueva Orden</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>CLIENTE</label>
-                    <input style={inp} placeholder="Nombre del cliente" value={newOrder.client_name} onChange={e => setNewOrder(p => ({ ...p, client_name: e.target.value }))} /></div>
-                  <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>TELÉFONO</label>
-                    <input style={inp} placeholder="555-0000" value={newOrder.phone} onChange={e => setNewOrder(p => ({ ...p, phone: e.target.value }))} /></div>
+                  {/* TELÉFONO CON AUTOCOMPLETADO */}
+                  <div style={{ position: "relative" }}>
+                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>TELÉFONO</label>
+                    <input
+                      style={{ ...inp, borderColor: clients.find(c => c.phone === newOrder.phone) ? "#66BB6A" : "#30363D" }}
+                      placeholder="Escribe el teléfono..."
+                      value={newOrder.phone}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setNewOrder(p => ({ ...p, phone: val, client_name: "" }));
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          const found = clients.find(c => c.phone === newOrder.phone);
+                          if (found) setNewOrder(p => ({ ...p, client_name: found.name }));
+                        }
+                      }}
+                    />
+                    {newOrder.phone.length >= 3 && (() => {
+                      const matches = clients.filter(c => c.phone.includes(newOrder.phone) && c.phone !== newOrder.phone);
+                      return matches.length > 0 ? (
+                        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1C2128", border: "1px solid #30363D", borderRadius: 8, zIndex: 50, overflow: "hidden", marginTop: 2 }}>
+                          {matches.slice(0, 4).map(c => (
+                            <div key={c.id} onClick={() => setNewOrder(p => ({ ...p, phone: c.phone, client_name: c.name }))}
+                              style={{ padding: "10px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", borderBottom: "1px solid #21262D" }}
+                              onMouseEnter={e => e.currentTarget.style.background = "#21262D"}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                              <span style={{ fontWeight: 600 }}>{c.name}</span>
+                              <span style={{ color: "#8B949E", fontSize: 12 }}>{c.phone}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
+                    {clients.find(c => c.phone === newOrder.phone) && !newOrder.client_name && (
+                      <div style={{ marginTop: 6, background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.3)", borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 13 }}>👤 {clients.find(c => c.phone === newOrder.phone)?.name}</span>
+                        <button onClick={() => setNewOrder(p => ({ ...p, client_name: clients.find(c => c.phone === p.phone)?.name || "" }))}
+                          style={{ ...btn, background: "#66BB6A", color: "#fff", padding: "4px 10px", fontSize: 12 }}>↵ Seleccionar</button>
+                      </div>
+                    )}
+                  </div>
+                  {/* NOMBRE */}
+                  <div>
+                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOMBRE DEL CLIENTE</label>
+                    <input
+                      style={{ ...inp, background: newOrder.client_name && clients.find(c => c.phone === newOrder.phone) ? "rgba(102,187,106,0.08)" : "#0D1117", borderColor: newOrder.client_name && clients.find(c => c.phone === newOrder.phone) ? "#66BB6A" : "#30363D" }}
+                      placeholder={newOrder.phone && !clients.find(c => c.phone === newOrder.phone) ? "Cliente nuevo — escribe el nombre" : "Nombre del cliente"}
+                      value={newOrder.client_name}
+                      onChange={e => setNewOrder(p => ({ ...p, client_name: e.target.value }))}
+                    />
+                    {newOrder.phone && !clients.find(c => c.phone === newOrder.phone) && newOrder.client_name && (
+                      <div style={{ fontSize: 11, color: "#FFD54F", marginTop: 4 }}>⚡ Cliente nuevo — se creará automáticamente</div>
+                    )}
+                    {newOrder.client_name && clients.find(c => c.phone === newOrder.phone) && (
+                      <div style={{ fontSize: 11, color: "#66BB6A", marginTop: 4 }}>✅ Cliente existente</div>
+                    )}
+                  </div>
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>SERVICIO</label>
                     <select style={inp} value={newOrder.service} onChange={e => setNewOrder(p => ({ ...p, service: e.target.value }))}>
                       {SERVICES.map(sv => <option key={sv.id} value={sv.id} style={{ background: "#1a1a2e" }}>{sv.icon} {sv.label}</option>)}
