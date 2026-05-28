@@ -34,6 +34,9 @@ const db = {
   }
 };
 
+const GARMENT_TYPES = ["Camisa","Pantalón","Vestido","Sábana","Toalla","Chaqueta","Ropa interior","Calcetines","Cortina","Cubrelecho","Falda","Blusa","Shorts","Chompa","Otro"];
+const GARMENT_ICONS = {"Camisa":"👔","Pantalón":"👖","Vestido":"👗","Sábana":"🛏","Toalla":"🏊","Chaqueta":"🧥","Ropa interior":"🩲","Calcetines":"🧦","Cortina":"🪟","Cubrelecho":"🛌","Falda":"👘","Blusa":"👚","Shorts":"🩳","Chompa":"🧶","Otro":"📦"};
+
 const SERVICES = [
   { id: "lavado_normal", label: "Lavado Normal", color: "#4FC3F7", icon: "💧" },
   { id: "planchado", label: "Planchado", color: "#FFD54F", icon: "🔥" },
@@ -49,6 +52,8 @@ const STATUS_LABELS = {
 };
 
 const today = new Date().toISOString().split("T")[0];
+const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", price: "", status: "recibido", notes: "" };
+const emptyItem = { garment_type: "Camisa", quantity: 1 };
 
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
@@ -58,63 +63,88 @@ export default function LavanderiaApp() {
   const [pinError, setPinError] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [orders, setOrders] = useState([]);
+  const [orderItems, setOrderItems] = useState({});
   const [expenses, setExpenses] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [filterDate, setFilterDate] = useState(today);
-  const [newOrder, setNewOrder] = useState({ client_name: "", phone: "", garments: 1, garment_type: "", service: "lavado_normal", price: "", status: "recibido", notes: "" });
+  const [newOrder, setNewOrder] = useState(emptyOrder);
+  const [items, setItems] = useState([{ ...emptyItem }]);
   const [newExpense, setNewExpense] = useState({ concept: "", amount: "", date: today, category: "insumos" });
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
   const [saving, setSaving] = useState(false);
+  const [expandedOrder, setExpandedOrder] = useState(null);
 
   useEffect(() => {
     db.get("employees").then(data => {
-      if (Array.isArray(data) && data.length) {
-        setEmployees(data);
-        setSelectedEmp(data[0]);
-      }
+      if (Array.isArray(data) && data.length) { setEmployees(data); setSelectedEmp(data[0]); }
       setLoading(false);
     });
   }, []);
 
   const loadData = async () => {
-    const [o, e, c] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients")]);
+    const [o, e, c, oi] = await Promise.all([
+      db.get("orders"),
+      db.get("expenses"),
+      db.get("clients"),
+      db.get("order_items")
+    ]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
+    if (Array.isArray(oi)) {
+      const grouped = {};
+      oi.forEach(item => {
+        if (!grouped[item.order_id]) grouped[item.order_id] = [];
+        grouped[item.order_id].push(item);
+      });
+      setOrderItems(grouped);
+    }
   };
 
   useEffect(() => { if (user) loadData(); }, [user]);
 
   const handleLogin = () => {
-    if (selectedEmp && pin === selectedEmp.pin) {
-      setUser(selectedEmp);
-      setPinError(false);
-    } else {
-      setPinError(true);
-      setPin("");
-    }
+    if (selectedEmp && pin === selectedEmp.pin) { setUser(selectedEmp); setPinError(false); }
+    else { setPinError(true); setPin(""); }
   };
 
+  const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity), 0);
+
   const addOrder = async () => {
+    if (!newOrder.client_name || !newOrder.price || items.length === 0) return;
     setSaving(true);
-    const o = { ...newOrder, employee: user.name, date: today, garments: Number(newOrder.garments), price: Number(newOrder.price) };
+    const garments = totalGarments(items);
+    const o = { ...newOrder, employee: user.name, date: today, garments, price: Number(newOrder.price) };
     const res = await db.post("orders", o);
-    if (Array.isArray(res)) setOrders(prev => [res[0], ...prev]);
-    // upsert client
-    const existing = clients.find(c => c.phone === newOrder.phone);
-    if (existing) {
-      await db.patch("clients", existing.id, { total_orders: (existing.total_orders || 0) + 1 });
-      setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders || 0) + 1 } : c));
-    } else if (newOrder.client_name) {
-      const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 });
-      if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]);
+    if (Array.isArray(res) && res[0]) {
+      const orderId = res[0].id;
+      // Save items
+      for (const item of items) {
+        await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity) });
+      }
+      setOrders(prev => [{ ...res[0], garments }, ...prev]);
+      // update client
+      const existing = clients.find(c => c.phone === newOrder.phone);
+      if (existing) {
+        await db.patch("clients", existing.id, { total_orders: (existing.total_orders || 0) + 1 });
+        setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders || 0) + 1 } : c));
+      } else if (newOrder.client_name) {
+        const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 });
+        if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]);
+      }
     }
-    setNewOrder({ client_name: "", phone: "", garments: 1, garment_type: "", service: "lavado_normal", price: "", status: "recibido", notes: "" });
+    setNewOrder(emptyOrder);
+    setItems([{ ...emptyItem }]);
     setModal(null);
     setSaving(false);
+    loadData();
   };
+
+  const addItem = () => setItems(prev => [...prev, { ...emptyItem }]);
+  const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
+  const updateItem = (i, field, val) => setItems(prev => prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item));
 
   const addExpense = async () => {
     setSaving(true);
@@ -155,9 +185,7 @@ export default function LavanderiaApp() {
   const inp = { padding: "10px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14, width: "100%", boxSizing: "border-box" };
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#0D1117", display: "flex", alignItems: "center", justifyContent: "center", color: "#4FC3F7", fontSize: 18 }}>
-      🫧 Cargando...
-    </div>
+    <div style={{ minHeight: "100vh", background: "#0D1117", display: "flex", alignItems: "center", justifyContent: "center", color: "#4FC3F7", fontSize: 18 }}>🫧 Cargando...</div>
   );
 
   if (!user) return (
@@ -181,9 +209,7 @@ export default function LavanderiaApp() {
             style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${pinError ? "#EF5350" : "rgba(255,255,255,0.15)"}`, background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: 20, letterSpacing: 6, textAlign: "center", boxSizing: "border-box" }} />
           {pinError && <p style={{ color: "#EF5350", fontSize: 12, marginTop: 4, textAlign: "center" }}>PIN incorrecto</p>}
         </div>
-        <button onClick={handleLogin} style={{ width: "100%", padding: "14px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #4FC3F7, #0288D1)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-          Entrar
-        </button>
+        <button onClick={handleLogin} style={{ width: "100%", padding: "14px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #4FC3F7, #0288D1)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Entrar</button>
       </div>
     </div>
   );
@@ -245,14 +271,25 @@ export default function LavanderiaApp() {
                 <div style={card}>
                   <h3 style={{ margin: "0 0 16px", fontSize: 15, color: "#8B949E" }}>Órdenes recientes</h3>
                   {todayOrders.slice(0, 5).map(o => (
-                    <div key={o.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #21262D" }}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
-                        <div style={{ fontSize: 12, color: "#8B949E" }}>{SERVICES.find(sv => sv.id === o.service)?.label} · {o.garments} prendas {o.garment_type ? `· ${o.garment_type}` : ""}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontWeight: 700, color: "#66BB6A" }}>${o.price}</div>
-                        <span style={{ fontSize: 11, background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20 }}>{STATUS_LABELS[o.status]?.label}</span>
+                    <div key={o.id} style={{ padding: "10px 0", borderBottom: "1px solid #21262D" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
+                          <div style={{ fontSize: 12, color: "#8B949E" }}>{SERVICES.find(sv => sv.id === o.service)?.label} · {o.garments} prendas</div>
+                          {orderItems[o.id] && (
+                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                              {orderItems[o.id].map((it, i) => (
+                                <span key={i} style={{ fontSize: 11, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>
+                                  {GARMENT_ICONS[it.garment_type] || "📦"} {it.garment_type} x{it.quantity}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontWeight: 700, color: "#66BB6A" }}>${o.price}</div>
+                          <span style={{ fontSize: 11, background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20 }}>{STATUS_LABELS[o.status]?.label}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -292,35 +329,49 @@ export default function LavanderiaApp() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
                     <tr style={{ background: "#21262D" }}>
-                      {["Cliente", "Teléfono", "Tipo Prenda", "Servicio", "Prendas", "Precio", "Estado", "Fecha", ""].map((h, i) => (
+                      {["Cliente", "Prendas", "Servicio", "Precio", "Estado", "Fecha", ""].map((h, i) => (
                         <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {orders.map(o => (
-                      <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
-                        <td style={{ padding: "12px 14px", fontWeight: 600 }}>{o.client_name}</td>
-                        <td style={{ padding: "12px 14px", color: "#8B949E" }}>{o.phone}</td>
-                        <td style={{ padding: "12px 14px" }}>{o.garment_type || "—"}</td>
-                        <td style={{ padding: "12px 14px" }}>
-                          <span style={{ background: SERVICES.find(sv => sv.id === o.service)?.color + "22", color: SERVICES.find(sv => sv.id === o.service)?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>
-                            {SERVICES.find(sv => sv.id === o.service)?.icon} {SERVICES.find(sv => sv.id === o.service)?.label}
-                          </span>
-                        </td>
-                        <td style={{ padding: "12px 14px" }}>{o.garments}</td>
-                        <td style={{ padding: "12px 14px", fontWeight: 700, color: "#66BB6A" }}>${o.price}</td>
-                        <td style={{ padding: "12px 14px" }}>
-                          <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)}
-                            style={{ background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, border: "none", borderRadius: 20, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-                            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k} style={{ background: "#1a1a2e" }}>{v.label}</option>)}
-                          </select>
-                        </td>
-                        <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
-                        <td style={{ padding: "12px 14px" }}>
-                          <button onClick={() => deleteOrder(o.id)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
-                        </td>
-                      </tr>
+                      <>
+                        <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
+                          <td style={{ padding: "12px 14px" }}>
+                            <div style={{ fontWeight: 600 }}>{o.client_name}</div>
+                            <div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div>
+                          </td>
+                          <td style={{ padding: "12px 14px" }}>
+                            <div style={{ fontWeight: 600 }}>{o.garments} prendas</div>
+                            {orderItems[o.id] && (
+                              <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>
+                                {orderItems[o.id].map((it, i) => (
+                                  <span key={i} style={{ fontSize: 10, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "1px 6px", borderRadius: 8 }}>
+                                    {GARMENT_ICONS[it.garment_type] || "📦"} {it.garment_type} x{it.quantity}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: "12px 14px" }}>
+                            <span style={{ background: SERVICES.find(sv => sv.id === o.service)?.color + "22", color: SERVICES.find(sv => sv.id === o.service)?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>
+                              {SERVICES.find(sv => sv.id === o.service)?.icon} {SERVICES.find(sv => sv.id === o.service)?.label}
+                            </span>
+                          </td>
+                          <td style={{ padding: "12px 14px", fontWeight: 700, color: "#66BB6A" }}>${o.price}</td>
+                          <td style={{ padding: "12px 14px" }}>
+                            <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)}
+                              style={{ background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, border: "none", borderRadius: 20, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+                              {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k} style={{ background: "#1a1a2e" }}>{v.label}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
+                          <td style={{ padding: "12px 14px" }}>
+                            <button onClick={() => deleteOrder(o.id)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                          </td>
+                        </tr>
+                      </>
                     ))}
                   </tbody>
                 </table>
@@ -456,7 +507,8 @@ export default function LavanderiaApp() {
       {/* MODALS */}
       {modal && (
         <div onClick={() => setModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 16, padding: 28, width: 400, border: "1px solid #30363D", maxHeight: "90vh", overflowY: "auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 16, padding: 28, width: 440, border: "1px solid #30363D", maxHeight: "90vh", overflowY: "auto" }}>
+
             {modal === "newOrder" && (
               <>
                 <h3 style={{ margin: "0 0 20px", fontSize: 18 }}>➕ Nueva Orden</h3>
@@ -469,30 +521,40 @@ export default function LavanderiaApp() {
                     <select style={inp} value={newOrder.service} onChange={e => setNewOrder(p => ({ ...p, service: e.target.value }))}>
                       {SERVICES.map(sv => <option key={sv.id} value={sv.id} style={{ background: "#1a1a2e" }}>{sv.icon} {sv.label}</option>)}
                     </select></div>
-                  <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>TIPO DE PRENDA</label>
-                    <select style={inp} value={newOrder.garment_type} onChange={e => setNewOrder(p => ({ ...p, garment_type: e.target.value }))}>
-                      <option value="" style={{ background: "#1a1a2e" }}>-- Seleccionar --</option>
-                      <option value="Camisa" style={{ background: "#1a1a2e" }}>👔 Camisa</option>
-                      <option value="Pantalón" style={{ background: "#1a1a2e" }}>👖 Pantalón</option>
-                      <option value="Vestido" style={{ background: "#1a1a2e" }}>👗 Vestido</option>
-                      <option value="Sábana" style={{ background: "#1a1a2e" }}>🛏 Sábana</option>
-                      <option value="Toalla" style={{ background: "#1a1a2e" }}>🏊 Toalla</option>
-                      <option value="Chaqueta" style={{ background: "#1a1a2e" }}>🧥 Chaqueta</option>
-                      <option value="Ropa interior" style={{ background: "#1a1a2e" }}>🩲 Ropa interior</option>
-                      <option value="Calcetines" style={{ background: "#1a1a2e" }}>🧦 Calcetines</option>
-                      <option value="Cortina" style={{ background: "#1a1a2e" }}>🪟 Cortina</option>
-                      <option value="Otro" style={{ background: "#1a1a2e" }}>📦 Otro</option>
-                    </select></div>
-                  <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>N° PRENDAS</label>
-                    <input style={inp} type="number" min={1} value={newOrder.garments} onChange={e => setNewOrder(p => ({ ...p, garments: e.target.value }))} /></div>
+
+                  {/* PRENDAS */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <label style={{ fontSize: 12, color: "#8B949E", fontWeight: 600 }}>PRENDAS</label>
+                      <button onClick={addItem} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>+ Agregar prenda</button>
+                    </div>
+                    {items.map((item, i) => (
+                      <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                        <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)}
+                          style={{ ...inp, flex: 2 }}>
+                          {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g] || "📦"} {g}</option>)}
+                        </select>
+                        <input type="number" min={1} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)}
+                          style={{ ...inp, width: 60, flex: 0 }} placeholder="Cant" />
+                        {items.length > 1 && (
+                          <button onClick={() => removeItem(i)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 8px", fontSize: 14, flexShrink: 0 }}>✕</button>
+                        )}
+                      </div>
+                    ))}
+                    <div style={{ fontSize: 12, color: "#8B949E", marginTop: 4 }}>
+                      Total: <strong style={{ color: "#4FC3F7" }}>{totalGarments(items)} prendas</strong>
+                    </div>
+                  </div>
+
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>PRECIO ($)</label>
                     <input style={inp} type="number" placeholder="0.00" value={newOrder.price} onChange={e => setNewOrder(p => ({ ...p, price: e.target.value }))} /></div>
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOTAS</label>
-                    <textarea style={{ ...inp, height: 70, resize: "none" }} placeholder="Observaciones..." value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} /></div>
+                    <textarea style={{ ...inp, height: 60, resize: "none" }} placeholder="Observaciones..." value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} /></div>
                   <button onClick={addOrder} disabled={saving} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: 12, opacity: saving ? 0.7 : 1 }}>{saving ? "Guardando..." : "Guardar Orden"}</button>
                 </div>
               </>
             )}
+
             {modal === "newExpense" && (
               <>
                 <h3 style={{ margin: "0 0 20px", fontSize: 18 }}>💰 Nuevo Gasto</h3>
@@ -514,6 +576,7 @@ export default function LavanderiaApp() {
                 </div>
               </>
             )}
+
             {modal === "newClient" && (
               <>
                 <h3 style={{ margin: "0 0 20px", fontSize: 18 }}>👤 Nuevo Cliente</h3>
