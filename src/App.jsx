@@ -64,7 +64,7 @@ const defaultDelivery = () => {
   return d.toISOString().split("T")[0];
 };
 const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", status: "recibido", notes: "", delivery_date: defaultDelivery() };
-const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", color: "" };
+const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", color: "", decolorado: false, percudido: false, roto: false, manchado: false };
 
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
@@ -119,6 +119,19 @@ export default function LavanderiaApp() {
   };
 
   const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity), 0);
+
+  const buildNotes = (its) => {
+    const lines = its.map(it => {
+      const conditions = [];
+      if (it.decolorado) conditions.push("decolorado");
+      if (it.percudido) conditions.push("percudido");
+      if (it.roto) conditions.push("roto");
+      if (it.manchado) conditions.push("manchado");
+      if (conditions.length === 0) return null;
+      return `${it.garment_type}${it.color ? " " + it.color : ""}: ${conditions.join(", ")}`;
+    }).filter(Boolean);
+    return lines.join(" | ");
+  };
   const totalPrice = (its) => its.reduce((s, i) => s + (Number(i.price) * Number(i.quantity)), 0);
 
   const addOrder = async () => {
@@ -151,7 +164,13 @@ export default function LavanderiaApp() {
 
   const addItem = () => setItems(prev => [...prev, { ...emptyItem }]);
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
-  const updateItem = (i, field, val) => setItems(prev => prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item));
+  const updateItem = (i, field, val) => {
+    setItems(prev => {
+      const updated = prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item);
+      setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
+      return updated;
+    });
+  };
 
   const addExpense = async () => {
     setSaving(true);
@@ -635,6 +654,24 @@ export default function LavanderiaApp() {
                           <button onClick={() => removeItem(i)} style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", border: "none", borderRadius: 6, padding: "6px 8px", cursor: "pointer", fontSize: 12 }}>✕</button>
                         )}
                       </div>
+                      {/* CONDITIONS */}
+                      <div style={{ display: "flex", gap: 8, marginBottom: 4, marginTop: 2, flexWrap: "wrap", paddingLeft: 2 }}>
+                        {[
+                          { key: "decolorado", label: "Decolorado", color: "#FFD54F" },
+                          { key: "percudido", label: "Percudido", color: "#EF5350" },
+                          { key: "roto", label: "Roto", color: "#EF5350" },
+                          { key: "manchado", label: "Manchado", color: "#FF8A65" },
+                        ].map(cond => (
+                          <label key={cond.key} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12,
+                            background: item[cond.key] ? cond.color + "22" : "rgba(255,255,255,0.04)",
+                            border: `1px solid ${item[cond.key] ? cond.color : "#30363D"}`,
+                            borderRadius: 20, padding: "3px 10px", userSelect: "none" }}>
+                            <input type="checkbox" checked={item[cond.key]} onChange={e => updateItem(i, cond.key, e.target.checked)}
+                              style={{ accentColor: cond.color, cursor: "pointer" }} />
+                            <span style={{ color: item[cond.key] ? cond.color : "#8B949E" }}>{cond.label}</span>
+                          </label>
+                        ))}
+                      </div>
                     ))}
                     {/* Total */}
                     <div style={{ background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.3)", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", marginTop: 8 }}>
@@ -643,8 +680,10 @@ export default function LavanderiaApp() {
                     </div>
                   </div>
 
-                  <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOTAS</label>
-                    <textarea style={{ ...inp, height: 60, resize: "none" }} placeholder="Observaciones..." value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} /></div>
+                  <div>
+                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOTAS <span style={{ color: "#484F58", fontWeight: 400 }}>(se llena automáticamente)</span></label>
+                    <textarea style={{ ...inp, height: 70, resize: "none", borderColor: newOrder.notes ? "rgba(255,213,79,0.4)" : "#30363D" }} placeholder="Marca las condiciones arriba para llenar automáticamente, o escribe aquí..." value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} />
+                  </div>
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>📅 FECHA DE ENTREGA</label>
                     <input type="date" style={{ ...inp, borderColor: "#FFD54F44" }} value={newOrder.delivery_date} onChange={e => setNewOrder(p => ({ ...p, delivery_date: e.target.value }))} />
