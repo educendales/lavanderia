@@ -188,7 +188,7 @@ export default function LavanderiaApp() {
       <div style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)", borderRadius: 24, padding: "48px 40px", width: 340, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 32px 64px rgba(0,0,0,0.4)" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>🫧</div>
-          <h1 style={{ color: "#fff", fontSize: 26, fontWeight: 800, margin: 0 }}>LavaGest</h1>
+          <h1 style={{ color: "#fff", fontSize: 26, fontWeight: 800, margin: 0 }}>Lavanderías Shaddai</h1>
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, marginTop: 4 }}>Sistema de Lavandería</p>
         </div>
         <div style={{ marginBottom: 16 }}>
@@ -223,7 +223,7 @@ export default function LavanderiaApp() {
         <div style={{ width: 200, background: "#161B22", borderRight: "1px solid #30363D", display: "flex", flexDirection: "column", padding: "20px 12px", flexShrink: 0 }}>
           <div style={{ textAlign: "center", marginBottom: 28 }}>
             <div style={{ fontSize: 32 }}>🫧</div>
-            <div style={{ fontWeight: 800, fontSize: 18, color: "#4FC3F7" }}>LavaGest</div>
+            <div style={{ fontWeight: 800, fontSize: 18, color: "#4FC3F7" }}>Lavanderías Shaddai</div>
           </div>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{ ...btn, background: tab === t.id ? "rgba(79,195,247,0.15)" : "transparent", color: tab === t.id ? "#4FC3F7" : "#8B949E", textAlign: "left", padding: "10px 14px", marginBottom: 4, fontSize: 14, display: "flex", gap: 8, alignItems: "center" }}>
@@ -247,9 +247,9 @@ export default function LavanderiaApp() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
                 {[
-                  { label: "Ingresos del día", value: `$${todayRevenue.toFixed(2)}`, icon: "💵", color: "#66BB6A" },
-                  { label: "Gastos del día", value: `$${todayExp.toFixed(2)}`, icon: "📤", color: "#EF5350" },
-                  { label: "Utilidad", value: `$${(todayRevenue - todayExp).toFixed(2)}`, icon: "📈", color: "#4FC3F7" },
+                  { label: "Ingresos del día", value: `$${Math.round(todayRevenue)}`, icon: "💵", color: "#66BB6A" },
+                  { label: "Gastos del día", value: `$${Math.round(todayExp)}`, icon: "📤", color: "#EF5350" },
+                  { label: "Utilidad", value: `$${Math.round(todayRevenue - todayExp)}`, icon: "📈", color: "#4FC3F7" },
                   { label: "Prendas del día", value: todayGarments, icon: "👕", color: "#FFD54F" },
                 ].map((kpi, i) => (
                   <div key={i} style={{ ...card, borderLeft: `4px solid ${kpi.color}` }}>
@@ -275,14 +275,14 @@ export default function LavanderiaApp() {
                             <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                               {orderItems[o.id].map((it, i) => (
                                 <span key={i} style={{ fontSize: 11, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>
-                                  {GARMENT_ICONS[it.garment_type]} {it.garment_type} x{it.quantity} · ${(Number(it.price) * Number(it.quantity)).toFixed(2)}
+                                  {GARMENT_ICONS[it.garment_type]} {it.garment_type} x{it.quantity} · ${Math.round(Number(it.price) * Number(it.quantity))}
                                 </span>
                               ))}
                             </div>
                           )}
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
-                          <div style={{ fontWeight: 700, color: "#66BB6A" }}>${Number(o.price).toFixed(2)}</div>
+                          <div style={{ fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price))}</div>
                           <span style={{ fontSize: 11, background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20 }}>{STATUS_LABELS[o.status]?.label}</span>
                         </div>
                       </div>
@@ -344,7 +344,7 @@ export default function LavanderiaApp() {
                               <div key={i} style={{ fontSize: 11, background: "#21262D", borderRadius: 8, padding: "4px 8px" }}>
                                 <span>{GARMENT_ICONS[it.garment_type]} {it.garment_type}</span>
                                 <span style={{ color: "#8B949E" }}> x{it.quantity}</span>
-                                <span style={{ color: "#66BB6A", fontWeight: 700 }}> ${(Number(it.price) * Number(it.quantity)).toFixed(2)}</span>
+                                <span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price) * Number(it.quantity))}</span>
                               </div>
                             )) : <span style={{ color: "#484F58", fontSize: 12 }}>{o.garments} prendas</span>}
                           </div>
@@ -354,7 +354,7 @@ export default function LavanderiaApp() {
                             {SERVICES.find(sv => sv.id === o.service)?.icon} {SERVICES.find(sv => sv.id === o.service)?.label}
                           </span>
                         </td>
-                        <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Number(o.price).toFixed(2)}</td>
+                        <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(Number(o.price))}</td>
                         <td style={{ padding: "12px 14px" }}>
                           <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)}
                             style={{ background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, border: "none", borderRadius: 20, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
@@ -406,7 +406,7 @@ export default function LavanderiaApp() {
               </div>
               <div style={{ ...card, marginBottom: 20 }}>
                 <div style={{ display: "flex", gap: 40 }}>
-                  <div><div style={{ fontSize: 22, fontWeight: 800, color: "#EF5350" }}>${expenses.reduce((s, e) => s + Number(e.amount), 0).toFixed(2)}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Total gastos</div></div>
+                  <div><div style={{ fontSize: 22, fontWeight: 800, color: "#EF5350" }}>${Math.round(expenses.reduce((s, e) => s + Number(e.amount), 0))}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Total gastos</div></div>
                   <div><div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>{expenses.length}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Registros</div></div>
                 </div>
               </div>
@@ -441,7 +441,7 @@ export default function LavanderiaApp() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
                 <div style={{ ...card, borderColor: "#66BB6A" }}>
                   <h3 style={{ margin: "0 0 16px", color: "#66BB6A" }}>💵 Resumen Financiero</h3>
-                  {[["Ingresos totales", `$${todayRevenue.toFixed(2)}`, "#66BB6A"], ["Gastos totales", `$${todayExp.toFixed(2)}`, "#EF5350"], ["Utilidad neta", `$${(todayRevenue - todayExp).toFixed(2)}`, "#4FC3F7"]].map(([l, v, c]) => (
+                  {[["Ingresos totales", `$${Math.round(todayRevenue)}`, "#66BB6A"], ["Gastos totales", `$${Math.round(todayExp)}`, "#EF5350"], ["Utilidad neta", `$${Math.round(todayRevenue - todayExp)}`, "#4FC3F7"]].map(([l, v, c]) => (
                     <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #21262D" }}>
                       <span style={{ color: "#8B949E" }}>{l}</span>
                       <span style={{ fontWeight: 800, color: c, fontSize: 16 }}>{v}</span>
@@ -450,7 +450,7 @@ export default function LavanderiaApp() {
                 </div>
                 <div style={card}>
                   <h3 style={{ margin: "0 0 16px", color: "#4FC3F7" }}>👕 Resumen de Prendas</h3>
-                  {[["Total prendas", todayGarments], ["Total órdenes", todayOrders.length], ["Ticket promedio", todayOrders.length ? `$${(todayRevenue / todayOrders.length).toFixed(2)}` : "$0"]].map(([l, v]) => (
+                  {[["Total prendas", todayGarments], ["Total órdenes", todayOrders.length], ["Ticket promedio", todayOrders.length ? `$${Math.round(todayRevenue / todayOrders.length)}` : "$0"]].map(([l, v]) => (
                     <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #21262D" }}>
                       <span style={{ color: "#8B949E" }}>{l}</span>
                       <span style={{ fontWeight: 800, fontSize: 16 }}>{v}</span>
@@ -471,7 +471,7 @@ export default function LavanderiaApp() {
                         <div style={{ fontWeight: 600 }}>{sv.label}</div>
                         <div style={{ fontSize: 12, color: "#8B949E" }}>{ords.length} órdenes · {garm} prendas</div>
                       </div>
-                      <div style={{ fontWeight: 800, color: sv.color, fontSize: 16 }}>${rev.toFixed(2)}</div>
+                      <div style={{ fontWeight: 800, color: sv.color, fontSize: 16 }}>${Math.round(rev)}</div>
                     </div>
                   );
                 })}
@@ -595,14 +595,14 @@ export default function LavanderiaApp() {
                     {/* Total */}
                     <div style={{ background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.3)", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", marginTop: 8 }}>
                       <span style={{ fontSize: 13, color: "#8B949E" }}>Total · {totalGarments(items)} prendas</span>
-                      <span style={{ fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${totalPrice(items).toFixed(2)}</span>
+                      <span style={{ fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(totalPrice(items))}</span>
                     </div>
                   </div>
 
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOTAS</label>
                     <textarea style={{ ...inp, height: 60, resize: "none" }} placeholder="Observaciones..." value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} /></div>
                   <button onClick={addOrder} disabled={saving || !newOrder.client_name} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: 14, fontSize: 15, opacity: saving || !newOrder.client_name ? 0.6 : 1 }}>
-                    {saving ? "Guardando..." : `Guardar Orden · $${totalPrice(items).toFixed(2)}`}
+                    {saving ? "Guardando..." : `Guardar Orden · $${Math.round(totalPrice(items))}`}
                   </button>
                 </div>
               </>
