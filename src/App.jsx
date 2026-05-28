@@ -52,7 +52,12 @@ const STATUS_LABELS = {
 };
 
 const today = new Date().toISOString().split("T")[0];
-const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", status: "recibido", notes: "" };
+const defaultDelivery = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 2);
+  return d.toISOString().split("T")[0];
+};
+const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", status: "recibido", notes: "", delivery_date: defaultDelivery() };
 const emptyItem = { garment_type: "Camisa", quantity: 1, price: "" };
 
 export default function LavanderiaApp() {
@@ -130,7 +135,7 @@ export default function LavanderiaApp() {
         if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]);
       }
     }
-    setNewOrder(emptyOrder);
+    setNewOrder({ client_name: '', phone: '', service: 'lavado_normal', status: 'recibido', notes: '', delivery_date: defaultDelivery() });
     setItems([{ ...emptyItem }]);
     setModal(null);
     setSaving(false);
@@ -362,6 +367,9 @@ export default function LavanderiaApp() {
                           </select>
                         </td>
                         <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date || "—"}</span>
+                        </td>
                         <td style={{ padding: "12px 14px" }}>
                           <button onClick={() => deleteOrder(o.id)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
                         </td>
@@ -601,6 +609,11 @@ export default function LavanderiaApp() {
 
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOTAS</label>
                     <textarea style={{ ...inp, height: 60, resize: "none" }} placeholder="Observaciones..." value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} /></div>
+                  <div>
+                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>📅 FECHA DE ENTREGA</label>
+                    <input type="date" style={{ ...inp, borderColor: "#FFD54F44" }} value={newOrder.delivery_date} onChange={e => setNewOrder(p => ({ ...p, delivery_date: e.target.value }))} />
+                    <div style={{ fontSize: 11, color: "#8B949E", marginTop: 4 }}>Por defecto: 2 días después de hoy. Puedes cambiarla.</div>
+                  </div>
                   <button onClick={addOrder} disabled={saving || !newOrder.client_name} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: 14, fontSize: 15, opacity: saving || !newOrder.client_name ? 0.6 : 1 }}>
                     {saving ? "Guardando..." : `Guardar Orden · $${Math.round(totalPrice(items))}`}
                   </button>
