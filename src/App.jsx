@@ -58,7 +58,7 @@ const defaultDelivery = () => {
   return d.toISOString().split("T")[0];
 };
 const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", status: "recibido", notes: "", delivery_date: defaultDelivery() };
-const emptyItem = { garment_type: "Camisa", quantity: 1, price: "" };
+const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", color: "" };
 
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
@@ -124,7 +124,7 @@ export default function LavanderiaApp() {
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
       for (const item of items) {
-        await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price) });
+        await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: item.color });
       }
       const existing = clients.find(c => c.phone === newOrder.phone);
       if (existing) {
@@ -280,7 +280,7 @@ export default function LavanderiaApp() {
                             <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                               {orderItems[o.id].map((it, i) => (
                                 <span key={i} style={{ fontSize: 11, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>
-                                  {GARMENT_ICONS[it.garment_type]} {it.garment_type} x{it.quantity} · ${Math.round(Number(it.price) * Number(it.quantity))}
+                                  {GARMENT_ICONS[it.garment_type]} {it.garment_type} x{it.quantity}{it.color ? ` · ${it.color}` : ""} · ${Math.round(Number(it.price) * Number(it.quantity))}
                                 </span>
                               ))}
                             </div>
@@ -581,19 +581,21 @@ export default function LavanderiaApp() {
                       <button onClick={addItem} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>+ Agregar</button>
                     </div>
                     {/* Header */}
-                    <div style={{ display: "grid", gridTemplateColumns: "2fr 60px 80px 30px", gap: 6, marginBottom: 4 }}>
-                      {["Tipo de prenda", "Cant.", "Precio c/u", ""].map((h, i) => (
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 60px 80px 90px 30px", gap: 6, marginBottom: 4 }}>
+                      {["Tipo de prenda", "Cant.", "Precio c/u", "Color", ""].map((h, i) => (
                         <div key={i} style={{ fontSize: 10, color: "#484F58", fontWeight: 600 }}>{h}</div>
                       ))}
                     </div>
                     {items.map((item, i) => (
-                      <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 60px 80px 30px", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                      <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 60px 80px 90px 30px", gap: 6, marginBottom: 6, alignItems: "center" }}>
                         <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)} style={{ ...inp, padding: "8px 10px" }}>
                           {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g]} {g}</option>)}
                         </select>
                         <input type="number" min={1} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)}
                           style={{ ...inp, padding: "8px 6px", textAlign: "center" }} />
                         <input type="number" min={0} placeholder="0.00" value={item.price} onChange={e => updateItem(i, "price", e.target.value)}
+                          style={{ ...inp, padding: "8px 6px" }} />
+                        <input type="text" placeholder="Ej: Azul" value={item.color} onChange={e => updateItem(i, "color", e.target.value)}
                           style={{ ...inp, padding: "8px 6px" }} />
                         {items.length > 1 && (
                           <button onClick={() => removeItem(i)} style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", border: "none", borderRadius: 6, padding: "6px 8px", cursor: "pointer", fontSize: 12 }}>✕</button>
