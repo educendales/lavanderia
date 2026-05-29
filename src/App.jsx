@@ -438,7 +438,14 @@ export default function LavanderiaApp() {
                           <span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date || "—"}</span>
                         </td>
                         <td style={{ padding: "12px 14px" }}>
-                          <button onClick={() => deleteOrder(o.id)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                          <button onClick={() => {
+                            const pwd = prompt("Ingresa la contraseña para eliminar:");
+                            if (pwd === "9621") {
+                              if (window.confirm("¿Seguro que deseas eliminar esta orden?")) deleteOrder(o.id);
+                            } else if (pwd !== null) {
+                              alert("❌ Contraseña incorrecta");
+                            }
+                          }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
                         </td>
                       </tr>
                     ))}
