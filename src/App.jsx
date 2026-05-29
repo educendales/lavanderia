@@ -354,7 +354,7 @@ export default function LavanderiaApp() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
                     <tr style={{ background: "#21262D" }}>
-                      {["# Orden", "Cliente", "Prendas y Precios", "Servicio", "Total", "Estado", "Fecha", "Entrega", ""].map((h, i) => (
+                      {["# Orden", "Cliente", "Prendas y Precios", "Servicio", "Total", "Fecha", "Entrega", ""].map((h, i) => (
                         <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
                       ))}
                     </tr>
@@ -386,12 +386,7 @@ export default function LavanderiaApp() {
                           </span>
                         </td>
                         <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(Number(o.price))}</td>
-                        <td style={{ padding: "12px 14px" }}>
-                          <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)}
-                            style={{ background: STATUS_LABELS[o.status]?.color + "22", color: STATUS_LABELS[o.status]?.color, border: "none", borderRadius: 20, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-                            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k} style={{ background: "#1a1a2e" }}>{v.label}</option>)}
-                          </select>
-                        </td>
+
                         <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
                         <td style={{ padding: "12px 14px" }}>
                           <span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date || "—"}</span>
@@ -599,7 +594,7 @@ export default function LavanderiaApp() {
                   {(() => {
                     const pendientes = orders.filter(o =>
                       o.phone === newOrder.phone &&
-                      (o.status === "listo" || o.status === "en_proceso" || o.status === "recibido")
+                      o.status === "listo"
                     );
                     return pendientes.length > 0 ? (
                       <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.4)", borderRadius: 10, padding: "12px 14px" }}>
