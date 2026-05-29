@@ -57,11 +57,20 @@ const STATUS_LABELS = {
   entregado: { label: "Entregado", color: "#9E9E9E" },
 };
 
-const today = new Date().toISOString().split("T")[0];
+const today = (() => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+})();
 const defaultDelivery = () => {
   const d = new Date();
   d.setDate(d.getDate() + 2);
-  return d.toISOString().split("T")[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", status: "recibido", notes: "", delivery_date: defaultDelivery() };
 const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], decolorado: false, percudido: false, roto: false, manchado: false };
