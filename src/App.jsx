@@ -64,7 +64,7 @@ const defaultDelivery = () => {
   return d.toISOString().split("T")[0];
 };
 const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", status: "recibido", notes: "", delivery_date: defaultDelivery() };
-const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", color: "", decolorado: false, percudido: false, roto: false, manchado: false };
+const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], decolorado: false, percudido: false, roto: false, manchado: false };
 
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
@@ -144,7 +144,7 @@ export default function LavanderiaApp() {
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
       for (const item of items) {
-        await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: item.color });
+        await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors || []).join(", ") });
       }
       const existing = clients.find(c => c.phone === newOrder.phone);
       if (existing) {
@@ -633,40 +633,71 @@ export default function LavanderiaApp() {
                       <button onClick={addItem} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>+ Agregar</button>
                     </div>
                     {/* Header */}
-                    <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 1fr 30px", gap: 6, marginBottom: 4 }}>
-                      {["Tipo de prenda", "Precio c/u", "Color", ""].map((h, i) => (
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 55px 75px 1fr 30px", gap: 6, marginBottom: 4 }}>
+                      {["Tipo de prenda", "Cant.", "Precio c/u", "Colores", ""].map((h, i) => (
                         <div key={i} style={{ fontSize: 10, color: "#484F58", fontWeight: 600 }}>{h}</div>
                       ))}
                     </div>
                     {items.map((item, i) => (
                       <div key={i} style={{ marginBottom: 8, background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "10px", border: "1px solid #21262D" }}>
                         {/* Fila principal: tipo, cant, precio, color, eliminar */}
-                        <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 1fr 30px", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "2fr 55px 75px 1fr 30px", gap: 6, alignItems: "center", marginBottom: 8 }}>
                           <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)} style={{ ...inp, padding: "8px 10px" }}>
                             {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g]} {g}</option>)}
                           </select>
 
+                          <input type="number" min={1} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)}
+                            style={{ ...inp, padding: "8px 6px", textAlign: "center" }} />
                           <input type="number" min={0} placeholder="0.00" value={item.price} onChange={e => updateItem(i, "price", e.target.value)}
                             style={{ ...inp, padding: "8px 6px" }} />
                           <div style={{ position: "relative" }}>
-                            <input
-                              type="text"
-                              placeholder="Color..."
-                              value={item.color}
-                              onChange={e => updateItem(i, "color", e.target.value)}
-                              onFocus={() => setColorFocusIdx(i)}
-                              onBlur={() => setTimeout(() => setColorFocusIdx(null), 150)}
-                              style={{ ...inp, padding: "8px 6px" }}
-                              autoComplete="off"
-                            />
-                            {colorFocusIdx === i && (() => {
-                              const matches = item.color.length >= 1
-                                ? COLORS.filter(c => c.toLowerCase().includes(item.color.toLowerCase()) && c.toLowerCase() !== item.color.toLowerCase())
-                                : COLORS;
+                            {/* Selected colors chips */}
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: (item.colors||[]).length > 0 ? 4 : 0 }}>
+                              {(item.colors||[]).map((c, ci) => (
+                                <span key={ci} style={{ fontSize: 11, background: "rgba(199,146,234,0.2)", color: "#C792EA", border: "1px solid rgba(199,146,234,0.4)", borderRadius: 12, padding: "2px 8px", display: "flex", alignItems: "center", gap: 4 }}>
+                                  🎨 {c}
+                                  <span onMouseDown={() => updateItem(i, "colors", (item.colors||[]).filter((_, idx) => idx !== ci))}
+                                    style={{ cursor: "pointer", color: "#EF5350", fontWeight: 700, fontSize: 13 }}>×</span>
+                                </span>
+                              ))}
+                            </div>
+                            {/* Warning if colors < quantity */}
+                            {Number(item.quantity) > 0 && (item.colors||[]).length < Number(item.quantity) && (item.colors||[]).length > 0 && (
+                              <div style={{ fontSize: 10, color: "#FFD54F", marginBottom: 3 }}>
+                                ⚠️ Faltan {Number(item.quantity) - (item.colors||[]).length} color{Number(item.quantity) - (item.colors||[]).length > 1 ? "es" : ""}
+                              </div>
+                            )}
+                            {/* Color input - hidden when colors complete */}
+                            {(item.colors||[]).length < Number(item.quantity) && (
+                              <input
+                                type="text"
+                                placeholder="Color..."
+                                value={item.colorInput || ""}
+                                onChange={e => updateItem(i, "colorInput", e.target.value)}
+                                onFocus={() => setColorFocusIdx(i)}
+                                onBlur={() => setTimeout(() => setColorFocusIdx(null), 150)}
+                                style={{ ...inp, padding: "6px 8px", fontSize: 12 }}
+                                autoComplete="off"
+                              />
+                            )}
+                            {(item.colors||[]).length >= Number(item.quantity) && Number(item.quantity) > 0 && (
+                              <div style={{ fontSize: 11, color: "#66BB6A", padding: "4px 0" }}>✅ {item.quantity} color{Number(item.quantity) > 1 ? "es" : ""} asignado{Number(item.quantity) > 1 ? "s" : ""}</div>
+                            )}
+                            {/* Dropdown */}
+                            {colorFocusIdx === i && (item.colors||[]).length < Number(item.quantity) && (() => {
+                              const val = item.colorInput || "";
+                              const selected = item.colors || [];
+                              const matches = val.length >= 1
+                                ? COLORS.filter(c => c.toLowerCase().includes(val.toLowerCase()) && !selected.includes(c))
+                                : COLORS.filter(c => !selected.includes(c));
                               return matches.length > 0 ? (
                                 <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1C2128", border: "1px solid #30363D", borderRadius: 8, zIndex: 99, overflow: "hidden", marginTop: 2, maxHeight: 180, overflowY: "auto" }}>
                                   {matches.map(c => (
-                                    <div key={c} onMouseDown={() => updateItem(i, "color", c)}
+                                    <div key={c} onMouseDown={() => {
+                                      const newColors = [...(item.colors||[]), c];
+                                      updateItem(i, "colors", newColors);
+                                      updateItem(i, "colorInput", "");
+                                    }}
                                       style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #21262D", display: "flex", alignItems: "center", gap: 8 }}
                                       onMouseEnter={e => e.currentTarget.style.background = "#21262D"}
                                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -705,7 +736,7 @@ export default function LavanderiaApp() {
                     ))}
                                         {/* Total */}
                     <div style={{ background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.3)", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                      <span style={{ fontSize: 13, color: "#8B949E" }}>Total · {items.length} prenda{items.length !== 1 ? "s" : ""}</span>
+                      <span style={{ fontSize: 13, color: "#8B949E" }}>Total · {totalGarments(items)} prendas</span>
                       <span style={{ fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(totalPrice(items))}</span>
                     </div>
                   </div>
