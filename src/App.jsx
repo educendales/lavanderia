@@ -721,8 +721,8 @@ export default function LavanderiaApp() {
                               const val = item.colorInput || "";
                               const selected = item.colors || [];
                               const matches = val.length >= 1
-                                ? COLORS.filter(c => c.toLowerCase().includes(val.toLowerCase()) && !selected.includes(c))
-                                : COLORS.filter(c => !selected.includes(c));
+                                ? COLORS.filter(c => c.toLowerCase().includes(val.toLowerCase()))
+                                : COLORS;
                               return matches.length > 0 ? (
                                 <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1C2128", border: "1px solid #30363D", borderRadius: 8, zIndex: 99, overflow: "hidden", marginTop: 2, maxHeight: 180, overflowY: "auto" }}>
                                   {matches.map(c => (
