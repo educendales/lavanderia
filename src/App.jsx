@@ -613,67 +613,72 @@ export default function LavanderiaApp() {
                       ))}
                     </div>
                     {items.map((item, i) => (
-                      <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 60px 80px 90px 30px", gap: 6, marginBottom: 6, alignItems: "center" }}>
-                        <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)} style={{ ...inp, padding: "8px 10px" }}>
-                          {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g]} {g}</option>)}
-                        </select>
-                        <input type="number" min={1} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)}
-                          style={{ ...inp, padding: "8px 6px", textAlign: "center" }} />
-                        <input type="number" min={0} placeholder="0.00" value={item.price} onChange={e => updateItem(i, "price", e.target.value)}
-                          style={{ ...inp, padding: "8px 6px" }} />
-                        <div style={{ position: "relative" }}>
-                          <input
-                            type="text"
-                            placeholder="Color..."
-                            value={item.color}
-                            onChange={e => updateItem(i, "color", e.target.value)}
-                            onFocus={() => setColorFocusIdx(i)}
-                            onBlur={() => setTimeout(() => setColorFocusIdx(null), 150)}
-                            style={{ ...inp, padding: "8px 6px" }}
-                            autoComplete="off"
-                          />
-                          {colorFocusIdx === i && (() => {
-                            const matches = item.color.length >= 1
-                              ? COLORS.filter(c => c.toLowerCase().includes(item.color.toLowerCase()) && c.toLowerCase() !== item.color.toLowerCase())
-                              : COLORS;
-                            return matches.length > 0 ? (
-                              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1C2128", border: "1px solid #30363D", borderRadius: 8, zIndex: 99, overflow: "hidden", marginTop: 2, maxHeight: 180, overflowY: "auto" }}>
-                                {matches.map(c => (
-                                  <div key={c} onMouseDown={() => updateItem(i, "color", c)}
-                                    style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #21262D", display: "flex", alignItems: "center", gap: 8 }}
-                                    onMouseEnter={e => e.currentTarget.style.background = "#21262D"}
-                                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                    🎨 {c}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null;
-                          })()}
+                      <div key={i} style={{ marginBottom: 8, background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "10px", border: "1px solid #21262D" }}>
+                        {/* Fila principal: tipo, cant, precio, color, eliminar */}
+                        <div style={{ display: "grid", gridTemplateColumns: "2fr 55px 75px 1fr 30px", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                          <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)} style={{ ...inp, padding: "8px 10px" }}>
+                            {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g]} {g}</option>)}
+                          </select>
+                          <input type="number" min={1} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)}
+                            style={{ ...inp, padding: "8px 6px", textAlign: "center" }} />
+                          <input type="number" min={0} placeholder="0.00" value={item.price} onChange={e => updateItem(i, "price", e.target.value)}
+                            style={{ ...inp, padding: "8px 6px" }} />
+                          <div style={{ position: "relative" }}>
+                            <input
+                              type="text"
+                              placeholder="Color..."
+                              value={item.color}
+                              onChange={e => updateItem(i, "color", e.target.value)}
+                              onFocus={() => setColorFocusIdx(i)}
+                              onBlur={() => setTimeout(() => setColorFocusIdx(null), 150)}
+                              style={{ ...inp, padding: "8px 6px" }}
+                              autoComplete="off"
+                            />
+                            {colorFocusIdx === i && (() => {
+                              const matches = item.color.length >= 1
+                                ? COLORS.filter(c => c.toLowerCase().includes(item.color.toLowerCase()) && c.toLowerCase() !== item.color.toLowerCase())
+                                : COLORS;
+                              return matches.length > 0 ? (
+                                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1C2128", border: "1px solid #30363D", borderRadius: 8, zIndex: 99, overflow: "hidden", marginTop: 2, maxHeight: 180, overflowY: "auto" }}>
+                                  {matches.map(c => (
+                                    <div key={c} onMouseDown={() => updateItem(i, "color", c)}
+                                      style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #21262D", display: "flex", alignItems: "center", gap: 8 }}
+                                      onMouseEnter={e => e.currentTarget.style.background = "#21262D"}
+                                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                                      🎨 {c}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null;
+                            })()}
+                          </div>
+                          {items.length > 1 ? (
+                            <button onClick={() => removeItem(i)} style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", border: "none", borderRadius: 6, padding: "6px 8px", cursor: "pointer", fontSize: 12 }}>✕</button>
+                          ) : <div />}
                         </div>
-                        {items.length > 1 && (
-                          <button onClick={() => removeItem(i)} style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", border: "none", borderRadius: 6, padding: "6px 8px", cursor: "pointer", fontSize: 12 }}>✕</button>
-                        )}
-                      </div>
-                      {/* CONDITIONS */}
-                      <div style={{ display: "flex", gap: 8, marginBottom: 4, marginTop: 2, flexWrap: "wrap", paddingLeft: 2 }}>
-                        {[
-                          { key: "decolorado", label: "Decolorado", color: "#FFD54F" },
-                          { key: "percudido", label: "Percudido", color: "#EF5350" },
-                          { key: "roto", label: "Roto", color: "#EF5350" },
-                          { key: "manchado", label: "Manchado", color: "#FF8A65" },
-                        ].map(cond => (
-                          <label key={cond.key} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12,
-                            background: item[cond.key] ? cond.color + "22" : "rgba(255,255,255,0.04)",
-                            border: `1px solid ${item[cond.key] ? cond.color : "#30363D"}`,
-                            borderRadius: 20, padding: "3px 10px", userSelect: "none" }}>
-                            <input type="checkbox" checked={item[cond.key]} onChange={e => updateItem(i, cond.key, e.target.checked)}
-                              style={{ accentColor: cond.color, cursor: "pointer" }} />
-                            <span style={{ color: item[cond.key] ? cond.color : "#8B949E" }}>{cond.label}</span>
-                          </label>
-                        ))}
+                        {/* Casillas de condición */}
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {[
+                            { key: "decolorado", label: "Decolorado", color: "#FFD54F" },
+                            { key: "percudido",  label: "Percudido",  color: "#EF5350" },
+                            { key: "roto",       label: "Roto",       color: "#EF5350" },
+                            { key: "manchado",   label: "Manchado",   color: "#FF8A65" },
+                          ].map(cond => (
+                            <label key={cond.key} style={{
+                              display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12,
+                              background: item[cond.key] ? cond.color + "22" : "rgba(255,255,255,0.04)",
+                              border: `1px solid ${item[cond.key] ? cond.color : "#30363D"}`,
+                              borderRadius: 20, padding: "4px 10px", userSelect: "none"
+                            }}>
+                              <input type="checkbox" checked={!!item[cond.key]} onChange={e => updateItem(i, cond.key, e.target.checked)}
+                                style={{ accentColor: cond.color, cursor: "pointer" }} />
+                              <span style={{ color: item[cond.key] ? cond.color : "#8B949E" }}>{cond.label}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     ))}
-                    {/* Total */}
+                                        {/* Total */}
                     <div style={{ background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.3)", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", marginTop: 8 }}>
                       <span style={{ fontSize: 13, color: "#8B949E" }}>Total · {totalGarments(items)} prendas</span>
                       <span style={{ fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(totalPrice(items))}</span>
