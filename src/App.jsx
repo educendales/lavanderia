@@ -93,6 +93,7 @@ export default function LavanderiaApp() {
   const [items, setItems] = useState([{ ...emptyItem }]);
   const [newExpense, setNewExpense] = useState({ concept: "", amount: "", date: today, category: "insumos", payment_method: "efectivo" });
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
+  const [editingClient, setEditingClient] = useState(null);
   const [saving, setSaving] = useState(false);
   const [entregaSearch, setEntregaSearch] = useState("");
   const [entregaResult, setEntregaResult] = useState(null);
@@ -233,6 +234,18 @@ export default function LavanderiaApp() {
   const deleteExpense = async (id) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
     await db.delete("expenses", id);
+  };
+
+  const deleteClient = async (id) => {
+    setClients(prev => prev.filter(c => c.id !== id));
+    await db.delete("clients", id);
+  };
+
+  const updateClient = async () => {
+    if (!editingClient) return;
+    await db.patch("clients", editingClient.id, { name: editingClient.name, phone: editingClient.phone, email: editingClient.email });
+    setClients(prev => prev.map(c => c.id === editingClient.id ? { ...c, ...editingClient } : c));
+    setEditingClient(null);
   };
 
   const updateStatus = async (id, status) => {
@@ -647,7 +660,20 @@ export default function LavanderiaApp() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 16 }}>
                 {clients.map(c => (
                   <div key={c.id} style={{ ...card, borderTop: "3px solid #4FC3F7" }}>
-                    <div style={{ fontSize: 28, marginBottom: 8 }}>👤</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                      <div style={{ fontSize: 28 }}>👤</div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => setEditingClient({ ...c })} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
+                        <button onClick={() => {
+                          const pwd = prompt("Ingresa la contraseña para eliminar:");
+                          if (pwd === "9621") {
+                            if (window.confirm("¿Seguro que deseas eliminar este cliente?")) deleteClient(c.id);
+                          } else if (pwd !== null) {
+                            alert("❌ Contraseña incorrecta");
+                          }
+                        }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
+                      </div>
+                    </div>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{c.name}</div>
                     <div style={{ color: "#8B949E", fontSize: 13, marginTop: 4 }}>📞 {c.phone}</div>
                     {c.email && <div style={{ color: "#8B949E", fontSize: 13 }}>✉️ {c.email}</div>}
@@ -1100,6 +1126,27 @@ export default function LavanderiaApp() {
                   <button onClick={addClient} disabled={saving} style={{ ...btn, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff", padding: 12, opacity: saving ? 0.7 : 1 }}>{saving ? "Guardando..." : "Guardar Cliente"}</button>
                 </div>
               </>
+            )}
+
+            {/* EDIT CLIENT MODAL */}
+            {editingClient && (
+              <div onClick={() => setEditingClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 16, padding: 28, width: 400, border: "1px solid #4FC3F7" }}>
+                  <h3 style={{ margin: "0 0 20px", fontSize: 18 }}>✏️ Editar Cliente</h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOMBRE</label>
+                      <input style={inp} value={editingClient.name} onChange={e => setEditingClient(p => ({ ...p, name: e.target.value }))} /></div>
+                    <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>TELÉFONO</label>
+                      <input style={inp} value={editingClient.phone} onChange={e => setEditingClient(p => ({ ...p, phone: e.target.value }))} /></div>
+                    <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>EMAIL</label>
+                      <input style={inp} type="email" value={editingClient.email || ""} onChange={e => setEditingClient(p => ({ ...p, email: e.target.value }))} /></div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => setEditingClient(null)} style={{ ...btn, flex: 1, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: 12 }}>Cancelar</button>
+                      <button onClick={updateClient} style={{ ...btn, flex: 2, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: 12 }}>💾 Guardar cambios</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
