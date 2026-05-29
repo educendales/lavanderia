@@ -599,7 +599,7 @@ export default function LavanderiaApp() {
                   {(() => {
                     const pendientes = orders.filter(o =>
                       o.phone === newOrder.phone &&
-                      o.status === "listo"
+                      (o.status === "listo" || o.status === "en_proceso" || o.status === "recibido")
                     );
                     return pendientes.length > 0 ? (
                       <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.4)", borderRadius: 10, padding: "12px 14px" }}>
