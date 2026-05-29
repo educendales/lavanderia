@@ -223,9 +223,10 @@ export default function LavanderiaApp() {
       status: "entregado",
       payment_method: entregaPayment,
       sin_recibo: entregaSinRecibo,
+      delivered_at: today,
     });
-    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo } : o));
-    setEntregaResult(prev => ({ ...prev, status: "entregado" }));
+    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today } : o));
+    setEntregaResult(prev => ({ ...prev, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today }));
     setEntregaConfirmed(true);
   };
 
@@ -591,12 +592,36 @@ export default function LavanderiaApp() {
 
                   {/* Already delivered or just confirmed */}
                   {(entregaResult.status === "entregado" || entregaConfirmed) && (
-                    <div style={{ textAlign: "center", padding: "20px 0" }}>
-                      <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
-                      <div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>¡Entrega confirmada!</div>
-                      <div style={{ color: "#8B949E", fontSize: 14, marginTop: 4 }}>La orden fue marcada como entregada</div>
+                    <div style={{ padding: "16px 0" }}>
+                      <div style={{ textAlign: "center", marginBottom: 20 }}>
+                        <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
+                        <div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>¡Entrega confirmada!</div>
+                      </div>
+                      {/* Delivery details */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                        <div style={{ background: "#0D1117", borderRadius: 10, padding: "14px 16px" }}>
+                          <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 4, fontWeight: 600 }}>📅 FECHA DE ENTREGA</div>
+                          <div style={{ fontWeight: 800, fontSize: 16, color: "#66BB6A" }}>{entregaResult.delivered_at || today}</div>
+                        </div>
+                        <div style={{ background: "#0D1117", borderRadius: 10, padding: "14px 16px" }}>
+                          <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 4, fontWeight: 600 }}>💳 MÉTODO DE PAGO</div>
+                          <div style={{ fontWeight: 800, fontSize: 16, color: entregaResult.payment_method === "nequi" ? "#C792EA" : entregaResult.payment_method === "daviplata" ? "#667EEA" : "#66BB6A" }}>
+                            {entregaResult.payment_method === "nequi" ? "📱 Nequi" : entregaResult.payment_method === "daviplata" ? "💜 Daviplata" : "💵 Efectivo"}
+                          </div>
+                        </div>
+                        <div style={{ background: "#0D1117", borderRadius: 10, padding: "14px 16px" }}>
+                          <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 4, fontWeight: 600 }}>💰 TOTAL COBRADO</div>
+                          <div style={{ fontWeight: 800, fontSize: 16, color: "#66BB6A" }}>${Math.round(Number(entregaResult.price))}</div>
+                        </div>
+                        <div style={{ background: "#0D1117", borderRadius: 10, padding: "14px 16px" }}>
+                          <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 4, fontWeight: 600 }}>📋 RECIBO</div>
+                          <div style={{ fontWeight: 800, fontSize: 16, color: entregaResult.sin_recibo ? "#FFD54F" : "#66BB6A" }}>
+                            {entregaResult.sin_recibo ? "⚠️ Sin recibo" : "✅ Con recibo"}
+                          </div>
+                        </div>
+                      </div>
                       <button onClick={() => { setEntregaResult(null); setEntregaSearch(""); setEntregaConfirmed(false); }}
-                        style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", marginTop: 16, padding: "10px 24px" }}>
+                        style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", width: "100%", padding: "12px", fontSize: 14 }}>
                         🔍 Nueva búsqueda
                       </button>
                     </div>
