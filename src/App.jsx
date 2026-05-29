@@ -94,6 +94,11 @@ export default function LavanderiaApp() {
   const [newExpense, setNewExpense] = useState({ concept: "", amount: "", date: today, category: "insumos", payment_method: "efectivo" });
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
   const [saving, setSaving] = useState(false);
+  const [entregaSearch, setEntregaSearch] = useState("");
+  const [entregaResult, setEntregaResult] = useState(null);
+  const [entregaPayment, setEntregaPayment] = useState("efectivo");
+  const [entregaSinRecibo, setEntregaSinRecibo] = useState(false);
+  const [entregaConfirmed, setEntregaConfirmed] = useState(false);
   const [colorFocusIdx, setColorFocusIdx] = useState(null);
 
   useEffect(() => {
@@ -199,6 +204,31 @@ export default function LavanderiaApp() {
     setSaving(false);
   };
 
+  const searchEntrega = () => {
+    const q = entregaSearch.trim().toLowerCase();
+    if (!q) return;
+    const found = orders.find(o =>
+      o.order_number?.toLowerCase() === q ||
+      o.phone?.toLowerCase().includes(q)
+    );
+    setEntregaResult(found || null);
+    setEntregaConfirmed(false);
+    setEntregaSinRecibo(false);
+    setEntregaPayment("efectivo");
+  };
+
+  const confirmarEntrega = async () => {
+    if (!entregaResult) return;
+    await db.patch("orders", entregaResult.id, {
+      status: "entregado",
+      payment_method: entregaPayment,
+      sin_recibo: entregaSinRecibo,
+    });
+    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo } : o));
+    setEntregaResult(prev => ({ ...prev, status: "entregado" }));
+    setEntregaConfirmed(true);
+  };
+
   const deleteExpense = async (id) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
     await db.delete("expenses", id);
@@ -257,6 +287,7 @@ export default function LavanderiaApp() {
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
     { id: "orders", label: "Órdenes", icon: "👕" },
+    { id: "entregas", label: "Entregas", icon: "📦" },
     { id: "clients", label: "Clientes", icon: "👤" },
     { id: "expenses", label: "Gastos", icon: "💰" },
     { id: "report", label: "Informes", icon: "📋" },
@@ -414,6 +445,164 @@ export default function LavanderiaApp() {
                 </table>
                 {orders.length === 0 && <p style={{ color: "#484F58", textAlign: "center", padding: 40 }}>No hay órdenes aún</p>}
               </div>
+            </div>
+          )}
+
+          {tab === "entregas" && (
+            <div>
+              <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 800 }}>📦 Entregas</h2>
+
+              {/* Search box */}
+              <div style={{ ...card, marginBottom: 20 }}>
+                <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>BUSCAR POR TELÉFONO O NÚMERO DE ORDEN</label>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input
+                    style={{ ...inp, flex: 1, fontSize: 16 }}
+                    placeholder="Ej: 3105604421 o S0001"
+                    value={entregaSearch}
+                    onChange={e => setEntregaSearch(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && searchEntrega()}
+                  />
+                  <button onClick={searchEntrega} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 24px", fontSize: 15 }}>
+                    🔍 Buscar
+                  </button>
+                </div>
+              </div>
+
+              {/* No result */}
+              {entregaSearch && entregaResult === null && (
+                <div style={{ ...card, textAlign: "center", color: "#EF5350", padding: 32 }}>
+                  <div style={{ fontSize: 40, marginBottom: 8 }}>😕</div>
+                  <div style={{ fontWeight: 600 }}>No se encontró ninguna orden</div>
+                  <div style={{ fontSize: 13, color: "#8B949E", marginTop: 4 }}>Verifica el teléfono o número de orden</div>
+                </div>
+              )}
+
+              {/* Result found */}
+              {entregaResult && (
+                <div style={{ ...card, border: entregaConfirmed ? "1px solid #66BB6A" : "1px solid #4FC3F7" }}>
+                  {/* Order header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                        <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 12px", borderRadius: 8, fontSize: 16 }}>{entregaResult.order_number || "—"}</span>
+                        <span style={{ background: STATUS_LABELS[entregaResult.status]?.color + "22", color: STATUS_LABELS[entregaResult.status]?.color, padding: "4px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>{STATUS_LABELS[entregaResult.status]?.label}</span>
+                      </div>
+                      <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 2 }}>{entregaResult.client_name}</div>
+                      <div style={{ color: "#8B949E", fontSize: 14 }}>📞 {entregaResult.phone}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 800, fontSize: 28, color: "#66BB6A" }}>${Math.round(Number(entregaResult.price))}</div>
+                      <div style={{ fontSize: 12, color: "#8B949E" }}>Total a cobrar</div>
+                    </div>
+                  </div>
+
+                  {/* Order details */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+                    <div style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px" }}>
+                      <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 2 }}>SERVICIO</div>
+                      <div style={{ fontWeight: 600 }}>{SERVICES.find(s => s.id === entregaResult.service)?.icon} {SERVICES.find(s => s.id === entregaResult.service)?.label}</div>
+                    </div>
+                    <div style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px" }}>
+                      <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 2 }}>PRENDAS</div>
+                      <div style={{ fontWeight: 600 }}>{entregaResult.garments} prendas</div>
+                    </div>
+                    <div style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px" }}>
+                      <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 2 }}>FECHA ENTREGA</div>
+                      <div style={{ fontWeight: 600, color: "#FFD54F" }}>📅 {entregaResult.delivery_date || "—"}</div>
+                    </div>
+                  </div>
+
+                  {/* Items */}
+                  {orderItems[entregaResult.id] && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, color: "#8B949E", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {orderItems[entregaResult.id].map((it, i) => (
+                          <div key={i} style={{ background: "#21262D", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>
+                            <span>{GARMENT_ICONS[it.garment_type]} {it.garment_type}</span>
+                            {it.color && <span style={{ color: "#C792EA" }}> · {it.color}</span>}
+                            <span style={{ color: "#66BB6A", fontWeight: 700 }}> · ${Math.round(Number(it.price) * Number(it.quantity))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  {entregaResult.notes && (
+                    <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#FFD54F" }}>
+                      📝 {entregaResult.notes}
+                    </div>
+                  )}
+
+                  {entregaResult.status !== "entregado" && !entregaConfirmed && (
+                    <>
+                      {/* Payment method */}
+                      <div style={{ marginBottom: 16 }}>
+                        <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
+                        <div style={{ display: "flex", gap: 10 }}>
+                          {[
+                            { value: "efectivo", label: "💵 Efectivo" },
+                            { value: "nequi", label: "📱 Nequi" },
+                            { value: "daviplata", label: "💜 Daviplata" },
+                          ].map(opt => (
+                            <label key={opt.value} style={{
+                              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                              cursor: "pointer", fontSize: 13, fontWeight: 600,
+                              background: entregaPayment === opt.value ? "rgba(79,195,247,0.15)" : "rgba(255,255,255,0.04)",
+                              border: `2px solid ${entregaPayment === opt.value ? "#4FC3F7" : "#30363D"}`,
+                              borderRadius: 10, padding: "10px 6px", userSelect: "none",
+                              color: entregaPayment === opt.value ? "#4FC3F7" : "#8B949E"
+                            }}>
+                              <input type="radio" name="entrega_payment" value={opt.value}
+                                checked={entregaPayment === opt.value}
+                                onChange={e => setEntregaPayment(e.target.value)}
+                                style={{ display: "none" }} />
+                              {opt.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Sin recibo */}
+                      <div style={{ marginBottom: 20 }}>
+                        <label style={{
+                          display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+                          background: entregaSinRecibo ? "rgba(255,213,79,0.1)" : "rgba(255,255,255,0.04)",
+                          border: `1px solid ${entregaSinRecibo ? "#FFD54F" : "#30363D"}`,
+                          borderRadius: 10, padding: "12px 16px", userSelect: "none"
+                        }}>
+                          <input type="checkbox" checked={entregaSinRecibo} onChange={e => setEntregaSinRecibo(e.target.checked)}
+                            style={{ width: 18, height: 18, accentColor: "#FFD54F", cursor: "pointer" }} />
+                          <div>
+                            <div style={{ fontWeight: 600, color: entregaSinRecibo ? "#FFD54F" : "#8B949E" }}>📋 Entregado sin recibo</div>
+                            <div style={{ fontSize: 12, color: "#484F58" }}>El cliente no presentó recibo físico</div>
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Confirm button */}
+                      <button onClick={confirmarEntrega} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff", padding: 16, fontSize: 16, fontWeight: 800, borderRadius: 10 }}>
+                        ✅ Confirmar Entrega · ${Math.round(Number(entregaResult.price))}
+                      </button>
+                    </>
+                  )}
+
+                  {/* Already delivered or just confirmed */}
+                  {(entregaResult.status === "entregado" || entregaConfirmed) && (
+                    <div style={{ textAlign: "center", padding: "20px 0" }}>
+                      <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
+                      <div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>¡Entrega confirmada!</div>
+                      <div style={{ color: "#8B949E", fontSize: 14, marginTop: 4 }}>La orden fue marcada como entregada</div>
+                      <button onClick={() => { setEntregaResult(null); setEntregaSearch(""); setEntregaConfirmed(false); }}
+                        style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", marginTop: 16, padding: "10px 24px" }}>
+                        🔍 Nueva búsqueda
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
