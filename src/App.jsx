@@ -594,6 +594,39 @@ export default function LavanderiaApp() {
                   {(() => {
                     const pendientes = orders.filter(o =>
                       o.phone === newOrder.phone &&
+                      (o.status === "listo" || o.status === "en_proceso" || o.status === "recibido")
+                    );
+                    return pendientes.length > 0 ? (
+                      <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.4)", borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                          <span style={{ fontSize: 16 }}>⚠️</span>
+                          <span style={{ fontWeight: 700, color: "#FFD54F", fontSize: 13 }}>
+                            Tiene {pendientes.length} orden{pendientes.length > 1 ? "es" : ""} pendiente{pendientes.length > 1 ? "s" : ""} por recoger
+                          </span>
+                        </div>
+                        {pendientes.map(p => (
+                          <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,213,79,0.15)" }}>
+                            <div>
+                              <span style={{ fontWeight: 700, color: "#4FC3F7", fontSize: 13 }}>{p.order_number || "—"}</span>
+                              <span style={{ color: "#8B949E", fontSize: 12 }}> · {SERVICES.find(s => s.id === p.service)?.label} · {p.garments} prendas</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontWeight: 700, color: "#66BB6A", fontSize: 13 }}>${Math.round(Number(p.price))}</span>
+                              <span style={{ fontSize: 11, background: STATUS_LABELS[p.status]?.color + "22", color: STATUS_LABELS[p.status]?.color, padding: "2px 8px", borderRadius: 20 }}>{STATUS_LABELS[p.status]?.label}</span>
+                            </div>
+                          </div>
+                        ))}
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                          <span style={{ fontSize: 12, color: "#8B949E" }}>Total pendiente</span>
+                          <span style={{ fontWeight: 800, color: "#FFD54F", fontSize: 15 }}>${Math.round(pendientes.reduce((s, p) => s + Number(p.price), 0))}</span>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                  {/* PENDIENTES POR RECOGER */}
+                  {(() => {
+                    const pendientes = orders.filter(o =>
+                      o.phone === newOrder.phone &&
                       o.status === "listo"
                     );
                     return pendientes.length > 0 ? (
