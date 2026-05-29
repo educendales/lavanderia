@@ -374,7 +374,7 @@ export default function LavanderiaApp() {
                             {orderItems[o.id] ? orderItems[o.id].map((it, i) => (
                               <div key={i} style={{ fontSize: 11, background: "#21262D", borderRadius: 8, padding: "4px 8px" }}>
                                 <span>{GARMENT_ICONS[it.garment_type]} {it.garment_type}</span>
-                                <span style={{ color: "#8B949E" }}> x{it.quantity}</span>
+                                
                                 <span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price) * Number(it.quantity))}</span>
                               </div>
                             )) : <span style={{ color: "#484F58", fontSize: 12 }}>{o.garments} prendas</span>}
@@ -633,20 +633,19 @@ export default function LavanderiaApp() {
                       <button onClick={addItem} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>+ Agregar</button>
                     </div>
                     {/* Header */}
-                    <div style={{ display: "grid", gridTemplateColumns: "2fr 60px 80px 90px 30px", gap: 6, marginBottom: 4 }}>
-                      {["Tipo de prenda", "Cant.", "Precio c/u", "Color", ""].map((h, i) => (
+                    <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 1fr 30px", gap: 6, marginBottom: 4 }}>
+                      {["Tipo de prenda", "Precio c/u", "Color", ""].map((h, i) => (
                         <div key={i} style={{ fontSize: 10, color: "#484F58", fontWeight: 600 }}>{h}</div>
                       ))}
                     </div>
                     {items.map((item, i) => (
                       <div key={i} style={{ marginBottom: 8, background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "10px", border: "1px solid #21262D" }}>
                         {/* Fila principal: tipo, cant, precio, color, eliminar */}
-                        <div style={{ display: "grid", gridTemplateColumns: "2fr 55px 75px 1fr 30px", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "2fr 80px 1fr 30px", gap: 6, alignItems: "center", marginBottom: 8 }}>
                           <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)} style={{ ...inp, padding: "8px 10px" }}>
                             {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g]} {g}</option>)}
                           </select>
-                          <input type="number" min={1} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)}
-                            style={{ ...inp, padding: "8px 6px", textAlign: "center" }} />
+
                           <input type="number" min={0} placeholder="0.00" value={item.price} onChange={e => updateItem(i, "price", e.target.value)}
                             style={{ ...inp, padding: "8px 6px" }} />
                           <div style={{ position: "relative" }}>
@@ -706,7 +705,7 @@ export default function LavanderiaApp() {
                     ))}
                                         {/* Total */}
                     <div style={{ background: "rgba(102,187,106,0.1)", border: "1px solid rgba(102,187,106,0.3)", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                      <span style={{ fontSize: 13, color: "#8B949E" }}>Total · {totalGarments(items)} prendas</span>
+                      <span style={{ fontSize: 13, color: "#8B949E" }}>Total · {items.length} prenda{items.length !== 1 ? "s" : ""}</span>
                       <span style={{ fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(totalPrice(items))}</span>
                     </div>
                   </div>
