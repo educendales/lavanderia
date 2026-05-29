@@ -199,6 +199,11 @@ export default function LavanderiaApp() {
     setSaving(false);
   };
 
+  const deleteExpense = async (id) => {
+    setExpenses(prev => prev.filter(e => e.id !== id));
+    await db.delete("expenses", id);
+  };
+
   const updateStatus = async (id, status) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
     await db.patch("orders", id, { status });
@@ -451,7 +456,7 @@ export default function LavanderiaApp() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: "#21262D" }}>
-                    {["Concepto", "Categoría", "Monto", "Fecha"].map(h => (
+                    {["Concepto", "Categoría", "Monto", "Fecha", ""].map(h => (
                       <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
                     ))}
                   </tr>
@@ -463,6 +468,16 @@ export default function LavanderiaApp() {
                       <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>{e.category}</span></td>
                       <td style={{ padding: "12px 14px", fontWeight: 700, color: "#EF5350" }}>${e.amount}</td>
                       <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{e.date}</td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <button onClick={() => {
+                          const pwd = prompt("Ingresa la contraseña para eliminar:");
+                          if (pwd === "9621") {
+                            if (window.confirm("¿Seguro que deseas eliminar este gasto?")) deleteExpense(e.id);
+                          } else if (pwd !== null) {
+                            alert("❌ Contraseña incorrecta");
+                          }
+                        }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
