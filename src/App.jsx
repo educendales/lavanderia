@@ -91,7 +91,7 @@ export default function LavanderiaApp() {
   const [filterDate, setFilterDate] = useState(today);
   const [newOrder, setNewOrder] = useState(emptyOrder);
   const [items, setItems] = useState([{ ...emptyItem }]);
-  const [newExpense, setNewExpense] = useState({ concept: "", amount: "", date: today, category: "insumos" });
+  const [newExpense, setNewExpense] = useState({ concept: "", amount: "", date: today, category: "insumos", payment_method: "efectivo" });
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
   const [saving, setSaving] = useState(false);
   const [colorFocusIdx, setColorFocusIdx] = useState(null);
@@ -185,7 +185,7 @@ export default function LavanderiaApp() {
     setSaving(true);
     const res = await db.post("expenses", { ...newExpense, amount: Number(newExpense.amount) });
     if (Array.isArray(res)) setExpenses(prev => [res[0], ...prev]);
-    setNewExpense({ concept: "", amount: "", date: today, category: "insumos" });
+    setNewExpense({ concept: "", amount: "", date: today, category: "insumos", payment_method: "efectivo" });
     setModal(null);
     setSaving(false);
   };
@@ -456,7 +456,7 @@ export default function LavanderiaApp() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: "#21262D" }}>
-                    {["Concepto", "Categoría", "Monto", "Fecha", ""].map(h => (
+                    {["Concepto", "Categoría", "Pago", "Monto", "Fecha", ""].map(h => (
                       <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
                     ))}
                   </tr>
@@ -466,6 +466,11 @@ export default function LavanderiaApp() {
                     <tr key={e.id} style={{ borderBottom: "1px solid #21262D" }}>
                       <td style={{ padding: "12px 14px", fontWeight: 600 }}>{e.concept}</td>
                       <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>{e.category}</span></td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <span style={{ fontSize: 12, background: e.payment_method === "nequi" ? "rgba(199,146,234,0.15)" : e.payment_method === "daviplata" ? "rgba(102,126,234,0.15)" : "rgba(102,187,106,0.15)", color: e.payment_method === "nequi" ? "#C792EA" : e.payment_method === "daviplata" ? "#667EEA" : "#66BB6A", padding: "3px 10px", borderRadius: 20 }}>
+                          {e.payment_method === "nequi" ? "📱 Nequi" : e.payment_method === "daviplata" ? "💜 Daviplata" : "💵 Efectivo"}
+                        </span>
+                      </td>
                       <td style={{ padding: "12px 14px", fontWeight: 700, color: "#EF5350" }}>${e.amount}</td>
                       <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{e.date}</td>
                       <td style={{ padding: "12px 14px" }}>
@@ -827,6 +832,31 @@ export default function LavanderiaApp() {
                       <option value="mantenimiento" style={{ background: "#1a1a2e" }}>Mantenimiento</option>
                       <option value="otros" style={{ background: "#1a1a2e" }}>Otros</option>
                     </select></div>
+                  <div>
+                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8 }}>MÉTODO DE PAGO</label>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      {[
+                        { value: "efectivo", label: "💵 Efectivo" },
+                        { value: "nequi", label: "📱 Nequi" },
+                        { value: "daviplata", label: "💜 Daviplata" },
+                      ].map(opt => (
+                        <label key={opt.value} style={{
+                          flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                          cursor: "pointer", fontSize: 13, fontWeight: 600,
+                          background: newExpense.payment_method === opt.value ? "rgba(79,195,247,0.15)" : "rgba(255,255,255,0.04)",
+                          border: `2px solid ${newExpense.payment_method === opt.value ? "#4FC3F7" : "#30363D"}`,
+                          borderRadius: 10, padding: "10px 6px", userSelect: "none",
+                          color: newExpense.payment_method === opt.value ? "#4FC3F7" : "#8B949E"
+                        }}>
+                          <input type="radio" name="payment_method" value={opt.value}
+                            checked={newExpense.payment_method === opt.value}
+                            onChange={e => setNewExpense(p => ({ ...p, payment_method: e.target.value }))}
+                            style={{ display: "none" }} />
+                          {opt.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>MONTO ($)</label>
                     <input style={inp} type="number" placeholder="0.00" value={newExpense.amount} onChange={e => setNewExpense(p => ({ ...p, amount: e.target.value }))} /></div>
                   <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>FECHA</label>
