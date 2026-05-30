@@ -1133,43 +1133,40 @@ export default function LavanderiaApp() {
         </div>
       )}
 
-    </div>
-
-
-{editingClient && (
-  <div onClick={() => setEditingClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, fontFamily: "'Segoe UI', sans-serif" }}>
-    <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 16, padding: 28, width: 400, border: "1px solid #4FC3F7" }}>
-      <h3 style={{ margin: "0 0 20px", fontSize: 18, color: "#E6EDF3" }}>✏️ Editar Cliente</h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div>
-          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOMBRE</label>
-          <input style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14, width: "100%", boxSizing: "border-box" }}
-            value={editingClient.name} onChange={e => setEditingClient(p => ({ ...p, name: e.target.value }))} />
+      {editingClient && (
+        <div onClick={() => setEditingClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 16, padding: 28, width: 400, border: "1px solid #4FC3F7", fontFamily: "'Segoe UI', sans-serif" }}>
+            <h3 style={{ margin: "0 0 20px", fontSize: 18, color: "#E6EDF3" }}>✏️ Editar Cliente</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOMBRE</label>
+                <input style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14, width: "100%", boxSizing: "border-box" }}
+                  value={editingClient.name} onChange={e => setEditingClient(p => ({ ...p, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>TELÉFONO</label>
+                <input style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14, width: "100%", boxSizing: "border-box" }}
+                  value={editingClient.phone} onChange={e => setEditingClient(p => ({ ...p, phone: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>EMAIL</label>
+                <input style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14, width: "100%", boxSizing: "border-box" }}
+                  type="email" value={editingClient.email || ""} onChange={e => setEditingClient(p => ({ ...p, email: e.target.value }))} />
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                <button onClick={() => setEditingClient(null)}
+                  style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: "rgba(255,255,255,0.05)", color: "#8B949E", fontWeight: 600, cursor: "pointer", fontSize: 13 }}>
+                  Cancelar
+                </button>
+                <button onClick={updateClient}
+                  style={{ flex: 2, padding: 12, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                  💾 Guardar cambios
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div>
-          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>TELÉFONO</label>
-          <input style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14, width: "100%", boxSizing: "border-box" }}
-            value={editingClient.phone} onChange={e => setEditingClient(p => ({ ...p, phone: e.target.value }))} />
-        </div>
-        <div>
-          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>EMAIL</label>
-          <input style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14, width: "100%", boxSizing: "border-box" }}
-            type="email" value={editingClient.email || ""} onChange={e => setEditingClient(p => ({ ...p, email: e.target.value }))} />
-        </div>
-        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-          <button onClick={() => setEditingClient(null)}
-            style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: "rgba(255,255,255,0.05)", color: "#8B949E", fontWeight: 600, cursor: "pointer", fontSize: 13 }}>
-            Cancelar
-          </button>
-          <button onClick={updateClient}
-            style={{ flex: 2, padding: 12, borderRadius: 8, border: "none", background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
-            💾 Guardar cambios
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+      )}
     </div>
   );
 }
