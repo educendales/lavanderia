@@ -72,7 +72,7 @@ const defaultDelivery = () => {
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
-const emptyOrder = { client_name: "", phone: "", service: "lavado_normal", status: "recibido", notes: "", delivery_date: defaultDelivery() };
+const emptyOrder = { client_name: "", phone: "", services: ["lavado_normal"], status: "recibido", notes: "", delivery_date: defaultDelivery() };
 const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], decolorado: false, percudido: false, roto: false, manchado: false };
 
 export default function LavanderiaApp() {
@@ -155,7 +155,7 @@ export default function LavanderiaApp() {
     setSaving(true);
     const garments = totalGarments(items);
     const price = totalPrice(items);
-    const o = { ...newOrder, employee: user.name, date: today, garments, price };
+    const o = { ...newOrder, service: (newOrder.services || []).join(","), employee: user.name, date: today, garments, price };
     const res = await db.post("orders", o);
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
@@ -171,7 +171,7 @@ export default function LavanderiaApp() {
         if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]);
       }
     }
-    setNewOrder({ client_name: '', phone: '', service: 'lavado_normal', status: 'recibido', notes: '', delivery_date: defaultDelivery() });
+    setNewOrder({ client_name: '', phone: '', services: ['lavado_normal'], status: 'recibido', notes: '', delivery_date: defaultDelivery() });
     setItems([{ ...emptyItem }]);
     setModal(null);
     setSaving(false);
@@ -361,7 +361,7 @@ export default function LavanderiaApp() {
                             {o.order_number && <span style={{ fontSize: 11, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 7px", borderRadius: 6 }}>{o.order_number}</span>}
                             <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
                           </div>
-                          <div style={{ fontSize: 12, color: "#8B949E" }}>{SERVICES.find(sv => sv.id === o.service)?.label} · {o.garments} prendas</div>
+                          <div style={{ fontSize: 12, color: "#8B949E" }}>{(o.service||"").split(",").map(sid => SERVICES.find(sv=>sv.id===sid.trim())?.label).filter(Boolean).join(" + ")} · {o.garments} prendas</div>
                           {orderItems[o.id] && (
                             <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                               {orderItems[o.id].map((it, i) => (
@@ -384,7 +384,7 @@ export default function LavanderiaApp() {
                 <div style={card}>
                   <h3 style={{ margin: "0 0 16px", fontSize: 15, color: "#8B949E" }}>Servicios del día</h3>
                   {SERVICES.map(sv => {
-                    const cnt = todayOrders.filter(o => o.service === sv.id).length;
+                    const cnt = todayOrders.filter(o => (o.service||"").split(",").map(s=>s.trim()).includes(sv.id)).length;
                     return (
                       <div key={sv.id} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                         <div style={{ fontSize: 18 }}>{sv.icon}</div>
@@ -451,9 +451,16 @@ export default function LavanderiaApp() {
                           </div>
                         </td>
                         <td style={{ padding: "12px 14px" }}>
-                          <span style={{ background: SERVICES.find(sv => sv.id === o.service)?.color + "22", color: SERVICES.find(sv => sv.id === o.service)?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>
-                            {SERVICES.find(sv => sv.id === o.service)?.icon} {SERVICES.find(sv => sv.id === o.service)?.label}
-                          </span>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {(o.service || "").split(",").map(sid => {
+                              const sv = SERVICES.find(s => s.id === sid.trim());
+                              return sv ? (
+                                <span key={sid} style={{ background: sv.color + "22", color: sv.color, padding: "3px 8px", borderRadius: 20, fontSize: 11, whiteSpace: "nowrap" }}>
+                                  {sv.icon} {sv.label}
+                                </span>
+                              ) : null;
+                            })}
+                          </div>
                         </td>
                         <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(Number(o.price))}</td>
 
@@ -533,7 +540,7 @@ export default function LavanderiaApp() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
                     <div style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px" }}>
                       <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 2 }}>SERVICIO</div>
-                      <div style={{ fontWeight: 600 }}>{SERVICES.find(s => s.id === entregaResult.service)?.icon} {SERVICES.find(s => s.id === entregaResult.service)?.label}</div>
+                      <div style={{ fontWeight: 600 }}>{(entregaResult.service||"").split(",").map(sid => { const sv = SERVICES.find(s=>s.id===sid.trim()); return sv ? sv.icon+" "+sv.label : null; }).filter(Boolean).join(" + ")}</div>
                     </div>
                     <div style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px" }}>
                       <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 2 }}>PRENDAS</div>
@@ -777,7 +784,7 @@ export default function LavanderiaApp() {
               <div style={card}>
                 <h3 style={{ margin: "0 0 16px", color: "#8B949E" }}>📊 Desglose por Servicio</h3>
                 {SERVICES.map(sv => {
-                  const ords = todayOrders.filter(o => o.service === sv.id);
+                  const ords = todayOrders.filter(o => (o.service||"").split(",").map(s=>s.trim()).includes(sv.id));
                   const rev = ords.reduce((s, o) => s + Number(o.price), 0);
                   const garm = ords.reduce((s, o) => s + Number(o.garments), 0);
                   return (
@@ -895,7 +902,7 @@ export default function LavanderiaApp() {
                           <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,213,79,0.15)" }}>
                             <div>
                               <span style={{ fontWeight: 700, color: "#4FC3F7", fontSize: 13 }}>{p.order_number || "—"}</span>
-                              <span style={{ color: "#8B949E", fontSize: 12 }}> · {SERVICES.find(s => s.id === p.service)?.label} · {p.garments} prendas</span>
+                              <span style={{ color: "#8B949E", fontSize: 12 }}> · {(p.service||"").split(",").map(sid=>SERVICES.find(s=>s.id===sid.trim())?.label).filter(Boolean).join("+")} · {p.garments} prendas</span>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontWeight: 700, color: "#66BB6A", fontSize: 13 }}>${Math.round(Number(p.price))}</span>
@@ -926,7 +933,7 @@ export default function LavanderiaApp() {
                           <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,213,79,0.15)" }}>
                             <div>
                               <span style={{ fontWeight: 700, color: "#4FC3F7", fontSize: 13 }}>{p.order_number || "—"}</span>
-                              <span style={{ color: "#8B949E", fontSize: 12 }}> · {SERVICES.find(s => s.id === p.service)?.label} · {p.garments} prendas</span>
+                              <span style={{ color: "#8B949E", fontSize: 12 }}> · {(p.service||"").split(",").map(sid=>SERVICES.find(s=>s.id===sid.trim())?.label).filter(Boolean).join("+")} · {p.garments} prendas</span>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontWeight: 700, color: "#66BB6A", fontSize: 13 }}>${Math.round(Number(p.price))}</span>
@@ -941,10 +948,35 @@ export default function LavanderiaApp() {
                       </div>
                     ) : null;
                   })()}
-                  <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>SERVICIO</label>
-                    <select style={inp} value={newOrder.service} onChange={e => setNewOrder(p => ({ ...p, service: e.target.value }))}>
-                      {SERVICES.map(sv => <option key={sv.id} value={sv.id} style={{ background: "#1a1a2e" }}>{sv.icon} {sv.label}</option>)}
-                    </select></div>
+                  <div>
+                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8 }}>SERVICIOS</label>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {SERVICES.map(sv => {
+                        const selected = (newOrder.services || []).includes(sv.id);
+                        return (
+                          <label key={sv.id} onClick={() => {
+                            const curr = newOrder.services || [];
+                            const next = curr.includes(sv.id)
+                              ? curr.filter(s => s !== sv.id)
+                              : [...curr, sv.id];
+                            if (next.length > 0) setNewOrder(p => ({ ...p, services: next }));
+                          }} style={{
+                            display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
+                            background: selected ? sv.color + "22" : "rgba(255,255,255,0.04)",
+                            border: `2px solid ${selected ? sv.color : "#30363D"}`,
+                            borderRadius: 10, padding: "8px 14px", userSelect: "none", flex: "1 0 40%"
+                          }}>
+                            <span style={{ fontSize: 18 }}>{sv.icon}</span>
+                            <span style={{ fontWeight: 600, color: selected ? sv.color : "#8B949E", fontSize: 13 }}>{sv.label}</span>
+                            {selected && <span style={{ marginLeft: "auto", color: sv.color }}>✓</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {(newOrder.services || []).length === 0 && (
+                      <div style={{ fontSize: 11, color: "#EF5350", marginTop: 4 }}>⚠️ Selecciona al menos un servicio</div>
+                    )}
+                  </div>
 
                   {/* PRENDAS CON PRECIO */}
                   <div>
