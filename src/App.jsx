@@ -95,6 +95,7 @@ export default function LavanderiaApp() {
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
   const [editingClient, setEditingClient] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [orderFilterDate, setOrderFilterDate] = useState(today);
   const [entregaSearch, setEntregaSearch] = useState("");
   const [entregaResult, setEntregaResult] = useState(null);
   const [entregaPayment, setEntregaPayment] = useState("efectivo");
@@ -406,7 +407,17 @@ export default function LavanderiaApp() {
           {tab === "orders" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Órdenes</h2>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Órdenes</h2>
+                  <input type="date" value={orderFilterDate} onChange={e => setOrderFilterDate(e.target.value)}
+                    style={{ ...inp, width: 160, fontSize: 13 }} />
+                  {orderFilterDate !== "" && (
+                    <button onClick={() => setOrderFilterDate("")}
+                      style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>
+                      Ver todas
+                    </button>
+                  )}
+                </div>
                 <button onClick={() => setModal("newOrder")} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
               </div>
               <div style={{ overflowX: "auto" }}>
@@ -419,7 +430,7 @@ export default function LavanderiaApp() {
                     </tr>
                   </thead>
                   <tbody>
-                    {orders.map(o => (
+                    {(orderFilterDate ? orders.filter(o => o.date === orderFilterDate) : orders).map(o => (
                       <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
                         <td style={{ padding: "12px 14px" }}>
                           <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number || "—"}</span>
