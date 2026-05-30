@@ -73,7 +73,7 @@ const defaultDelivery = () => {
   return `${year}-${month}-${day}`;
 };
 const emptyOrder = { client_name: "", phone: "", services: ["lavado_normal"], status: "recibido", notes: "", delivery_date: defaultDelivery() };
-const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], decolorado: false, percudido: false, roto: false, manchado: false };
+const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
 
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
@@ -155,12 +155,13 @@ export default function LavanderiaApp() {
     setSaving(true);
     const garments = totalGarments(items);
     const price = totalPrice(items);
-    const o = { ...newOrder, service: (newOrder.services || []).join(","), employee: user.name, date: today, garments, price };
+    const uniqueServices = [...new Set((items || []).map(it => it.service))];
+    const o = { ...newOrder, service: uniqueServices.join(","), employee: user.name, date: today, garments, price };
     const res = await db.post("orders", o);
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
       for (const item of items) {
-        await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors || []).join(", ") });
+        await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors || []).join(", "), service: item.service });
       }
       const existing = clients.find(c => c.phone === newOrder.phone);
       if (existing) {
@@ -948,35 +949,7 @@ export default function LavanderiaApp() {
                       </div>
                     ) : null;
                   })()}
-                  <div>
-                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8 }}>SERVICIOS</label>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {SERVICES.map(sv => {
-                        const selected = (newOrder.services || []).includes(sv.id);
-                        return (
-                          <label key={sv.id} onClick={() => {
-                            const curr = newOrder.services || [];
-                            const next = curr.includes(sv.id)
-                              ? curr.filter(s => s !== sv.id)
-                              : [...curr, sv.id];
-                            if (next.length > 0) setNewOrder(p => ({ ...p, services: next }));
-                          }} style={{
-                            display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
-                            background: selected ? sv.color + "22" : "rgba(255,255,255,0.04)",
-                            border: `2px solid ${selected ? sv.color : "#30363D"}`,
-                            borderRadius: 10, padding: "8px 14px", userSelect: "none", flex: "1 0 40%"
-                          }}>
-                            <span style={{ fontSize: 18 }}>{sv.icon}</span>
-                            <span style={{ fontWeight: 600, color: selected ? sv.color : "#8B949E", fontSize: 13 }}>{sv.label}</span>
-                            {selected && <span style={{ marginLeft: "auto", color: sv.color }}>✓</span>}
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {(newOrder.services || []).length === 0 && (
-                      <div style={{ fontSize: 11, color: "#EF5350", marginTop: 4 }}>⚠️ Selecciona al menos un servicio</div>
-                    )}
-                  </div>
+
 
                   {/* PRENDAS CON PRECIO */}
                   <div>
@@ -993,6 +966,24 @@ export default function LavanderiaApp() {
                     {items.map((item, i) => (
                       <div key={i} style={{ marginBottom: 8, background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "10px", border: "1px solid #21262D" }}>
                         {/* Fila principal: tipo, cant, precio, color, eliminar */}
+                        {/* Service selector per item */}
+                        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                          {SERVICES.map(sv => {
+                            const sel = item.service === sv.id;
+                            return (
+                              <label key={sv.id} onClick={() => updateItem(i, "service", sv.id)} style={{
+                                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                                cursor: "pointer", fontSize: 11, fontWeight: 600,
+                                background: sel ? sv.color + "22" : "rgba(255,255,255,0.03)",
+                                border: `1.5px solid ${sel ? sv.color : "#30363D"}`,
+                                borderRadius: 8, padding: "5px 4px", userSelect: "none",
+                                color: sel ? sv.color : "#484F58"
+                              }}>
+                                {sv.icon} {sv.label}
+                              </label>
+                            );
+                          })}
+                        </div>
                         <div style={{ display: "grid", gridTemplateColumns: "2fr 55px 75px 1fr 30px", gap: 6, alignItems: "center", marginBottom: 8 }}>
                           <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)} style={{ ...inp, padding: "8px 10px" }}>
                             {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g]} {g}</option>)}
