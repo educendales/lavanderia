@@ -156,7 +156,18 @@ export default function LavanderiaApp() {
     const garments = totalGarments(items);
     const price = totalPrice(items);
     const uniqueServices = [...new Set((items || []).map(it => it.service))];
-    const o = { ...newOrder, service: uniqueServices.join(","), employee: user.name, date: today, garments, price };
+    const o = {
+      client_name: newOrder.client_name,
+      phone: newOrder.phone,
+      status: newOrder.status,
+      notes: newOrder.notes,
+      delivery_date: newOrder.delivery_date,
+      service: uniqueServices.join(","),
+      employee: user.name,
+      date: today,
+      garments,
+      price
+    };
     const res = await db.post("orders", o);
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
