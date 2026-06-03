@@ -842,8 +842,6 @@ export default function LavanderiaApp() {
               </div>
             </div>
           )}
-        </div>
-      </div>
 
           {tab === "config" && (
             <div>
@@ -1284,10 +1282,8 @@ export default function LavanderiaApp() {
               </>
             )}
 
-
-          </div>
         </div>
-      )}
+      </div>
 
       {editingClient && (
         <div onClick={() => setEditingClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
@@ -1323,6 +1319,8 @@ export default function LavanderiaApp() {
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }
