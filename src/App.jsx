@@ -34,14 +34,10 @@ const db = {
   }
 };
 
-const GARMENT_TYPES = ["Camisa","Pantalón","Vestido","Sábana","Toalla","Chaqueta","Ropa interior","Calcetines","Cortina","Cubrelecho","Falda","Blusa","Shorts","Chompa","Otro"];
+const DEFAULT_GARMENT_TYPES = ["Camisa","Pantalón","Vestido","Sábana","Toalla","Chaqueta","Ropa interior","Calcetines","Cortina","Cubrelecho","Falda","Blusa","Shorts","Chompa","Otro"];
 const GARMENT_ICONS = {"Camisa":"👔","Pantalón":"👖","Vestido":"👗","Sábana":"🛏","Toalla":"🏊","Chaqueta":"🧥","Ropa interior":"🩲","Calcetines":"🧦","Cortina":"🪟","Cubrelecho":"🛌","Falda":"👘","Blusa":"👚","Shorts":"🩳","Chompa":"🧶","Otro":"📦"};
 
-const COLORS = [
-  "Blanco","Negro","Gris","Rojo","Azul","Azul marino","Azul cielo","Verde","Verde oliva",
-  "Amarillo","Naranja","Morado","Rosa","Rosado","Café","Beige","Crema","Vino","Turquesa",
-  "Celeste","Plateado","Dorado","Multicolor","Estampado"
-];
+const DEFAULT_COLORS = ["Blanco","Negro","Gris","Rojo","Azul","Azul marino","Azul cielo","Verde","Verde oliva","Amarillo","Naranja","Morado","Rosa","Rosado","Café","Beige","Crema","Vino","Turquesa","Celeste","Plateado","Dorado","Multicolor","Estampado"];
 
 const SERVICES = [
   { id: "lavado_normal", label: "Lavado Normal", color: "#4FC3F7", icon: "💧" },
@@ -95,6 +91,14 @@ export default function LavanderiaApp() {
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
   const [editingClient, setEditingClient] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [garmentTypes, setGarmentTypes] = useState(() => {
+    try { const s = localStorage.getItem("garmentTypes"); return s ? JSON.parse(s) : DEFAULT_GARMENT_TYPES; } catch { return DEFAULT_GARMENT_TYPES; }
+  });
+  const [colors, setColors] = useState(() => {
+    try { const s = localStorage.getItem("colors"); return s ? JSON.parse(s) : DEFAULT_COLORS; } catch { return DEFAULT_COLORS; }
+  });
+  const [newGarment, setNewGarment] = useState("");
+  const [newColor, setNewColor] = useState("");
   const [orderFilterDate, setOrderFilterDate] = useState(today);
   const [entregaSearch, setEntregaSearch] = useState("");
   const [entregaResult, setEntregaResult] = useState(null);
@@ -249,6 +253,16 @@ export default function LavanderiaApp() {
     await db.delete("expenses", id);
   };
 
+  const saveGarmentTypes = (list) => {
+    setGarmentTypes(list);
+    localStorage.setItem("garmentTypes", JSON.stringify(list));
+  };
+
+  const saveColors = (list) => {
+    setColors(list);
+    localStorage.setItem("colors", JSON.stringify(list));
+  };
+
   const deleteClient = async (id) => {
     setClients(prev => prev.filter(c => c.id !== id));
     await db.delete("clients", id);
@@ -318,6 +332,7 @@ export default function LavanderiaApp() {
     { id: "clients", label: "Clientes", icon: "👤" },
     { id: "expenses", label: "Gastos", icon: "💰" },
     { id: "report", label: "Informes", icon: "📋" },
+    { id: "config", label: "Configuración", icon: "⚙️" },
   ];
 
   return (
@@ -378,7 +393,7 @@ export default function LavanderiaApp() {
                             <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
                               {orderItems[o.id].map((it, i) => (
                                 <span key={i} style={{ fontSize: 11, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>
-                                  {GARMENT_ICONS[it.garment_type]} {it.garment_type} x{it.quantity}{it.color ? ` · ${it.color}` : ""} · ${Math.round(Number(it.price) * Number(it.quantity))}
+                                  {(GARMENT_ICONS[it.garment_type] || "👕")} {it.garment_type} x{it.quantity}{it.color ? ` · ${it.color}` : ""} · ${Math.round(Number(it.price) * Number(it.quantity))}
                                 </span>
                               ))}
                             </div>
@@ -455,7 +470,7 @@ export default function LavanderiaApp() {
                           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                             {orderItems[o.id] ? orderItems[o.id].map((it, i) => (
                               <div key={i} style={{ fontSize: 11, background: "#21262D", borderRadius: 8, padding: "4px 8px" }}>
-                                <span>{GARMENT_ICONS[it.garment_type]} {it.garment_type}</span>
+                                <span>{(GARMENT_ICONS[it.garment_type] || "👕")} {it.garment_type}</span>
                                 
                                 <span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price) * Number(it.quantity))}</span>
                               </div>
@@ -571,7 +586,7 @@ export default function LavanderiaApp() {
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {orderItems[entregaResult.id].map((it, i) => (
                           <div key={i} style={{ background: "#21262D", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>
-                            <span>{GARMENT_ICONS[it.garment_type]} {it.garment_type}</span>
+                            <span>{(GARMENT_ICONS[it.garment_type] || "👕")} {it.garment_type}</span>
                             {it.color && <span style={{ color: "#C792EA" }}> · {it.color}</span>}
                             <span style={{ color: "#66BB6A", fontWeight: 700 }}> · ${Math.round(Number(it.price) * Number(it.quantity))}</span>
                           </div>
@@ -830,6 +845,102 @@ export default function LavanderiaApp() {
         </div>
       </div>
 
+          {tab === "config" && (
+            <div>
+              <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 800 }}>⚙️ Configuración</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+
+                {/* PRENDAS */}
+                <div style={{ background: "#161B22", borderRadius: 14, padding: 20, border: "1px solid #30363D" }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#4FC3F7" }}>👕 Tipos de Prenda</h3>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                    <input
+                      style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14 }}
+                      placeholder="Nueva prenda..."
+                      value={newGarment}
+                      onChange={e => setNewGarment(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && newGarment.trim()) {
+                          saveGarmentTypes([...garmentTypes, newGarment.trim()]);
+                          setNewGarment("");
+                        }
+                      }}
+                    />
+                    <button onClick={() => {
+                      if (newGarment.trim()) {
+                        saveGarmentTypes([...garmentTypes, newGarment.trim()]);
+                        setNewGarment("");
+                      }
+                    }} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
+                      + Agregar
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 400, overflowY: "auto" }}>
+                    {garmentTypes.map((g, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0D1117", borderRadius: 8, padding: "8px 12px" }}>
+                        <span style={{ fontSize: 14 }}>{GARMENT_ICONS[g] || "👕"} {g}</span>
+                        <button onClick={() => {
+                          if (window.confirm(`¿Eliminar "${g}" de la lista?`)) {
+                            saveGarmentTypes(garmentTypes.filter((_, idx) => idx !== i));
+                          }
+                        }} style={{ background: "rgba(239,83,80,0.15)", color: "#EF5350", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 12 }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => {
+                    if (window.confirm("¿Restaurar lista de prendas por defecto?")) saveGarmentTypes(DEFAULT_GARMENT_TYPES);
+                  }} style={{ marginTop: 12, width: "100%", padding: "8px", borderRadius: 8, border: "1px solid #30363D", background: "transparent", color: "#8B949E", cursor: "pointer", fontSize: 12 }}>
+                    🔄 Restaurar por defecto
+                  </button>
+                </div>
+
+                {/* COLORES */}
+                <div style={{ background: "#161B22", borderRadius: 14, padding: 20, border: "1px solid #30363D" }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#C792EA" }}>🎨 Colores</h3>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                    <input
+                      style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14 }}
+                      placeholder="Nuevo color..."
+                      value={newColor}
+                      onChange={e => setNewColor(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && newColor.trim()) {
+                          saveColors([...colors, newColor.trim()]);
+                          setNewColor("");
+                        }
+                      }}
+                    />
+                    <button onClick={() => {
+                      if (newColor.trim()) {
+                        saveColors([...colors, newColor.trim()]);
+                        setNewColor("");
+                      }
+                    }} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#C792EA,#9B59B6)", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
+                      + Agregar
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 400, overflowY: "auto" }}>
+                    {colors.map((c, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(199,146,234,0.1)", border: "1px solid rgba(199,146,234,0.3)", borderRadius: 20, padding: "4px 10px" }}>
+                        <span style={{ fontSize: 13, color: "#C792EA" }}>🎨 {c}</span>
+                        <button onClick={() => {
+                          if (window.confirm(`¿Eliminar "${c}" de la lista?`)) {
+                            saveColors(colors.filter((_, idx) => idx !== i));
+                          }
+                        }} style={{ background: "none", color: "#EF5350", border: "none", cursor: "pointer", fontSize: 13, padding: "0 2px", fontWeight: 700 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => {
+                    if (window.confirm("¿Restaurar lista de colores por defecto?")) saveColors(DEFAULT_COLORS);
+                  }} style={{ marginTop: 12, width: "100%", padding: "8px", borderRadius: 8, border: "1px solid #30363D", background: "transparent", color: "#8B949E", cursor: "pointer", fontSize: 12 }}>
+                    🔄 Restaurar por defecto
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
       {modal && (
         <div onClick={() => setModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 16, padding: 28, width: 460, border: "1px solid #30363D", maxHeight: "90vh", overflowY: "auto" }}>
@@ -997,7 +1108,7 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "2fr 55px 75px 1fr 30px", gap: 6, alignItems: "center", marginBottom: 8 }}>
                           <select value={item.garment_type} onChange={e => updateItem(i, "garment_type", e.target.value)} style={{ ...inp, padding: "8px 10px" }}>
-                            {GARMENT_TYPES.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g]} {g}</option>)}
+                            {garmentTypes.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{(GARMENT_ICONS[g] || "👕")} {g}</option>)}
                           </select>
 
                           <input type="number" min={1} value={item.quantity} onChange={e => updateItem(i, "quantity", e.target.value)}
@@ -1043,7 +1154,7 @@ export default function LavanderiaApp() {
                               const selected = item.colors || [];
                               const matches = val.length >= 1
                                 ? COLORS.filter(c => c.toLowerCase().includes(val.toLowerCase()))
-                                : COLORS;
+                                : colors;
                               return matches.length > 0 ? (
                                 <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1C2128", border: "1px solid #30363D", borderRadius: 8, zIndex: 99, overflow: "hidden", marginTop: 2, maxHeight: 180, overflowY: "auto" }}>
                                   {matches.map(c => (
