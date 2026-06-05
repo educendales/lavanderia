@@ -110,6 +110,8 @@ export default function LavanderiaApp() {
     try { const s = localStorage.getItem("colors"); return s ? JSON.parse(s) : DEFAULT_COLORS; } catch { return DEFAULT_COLORS; }
   });
   const [newGarment, setNewGarment] = useState("");
+  const [newEmployee, setNewEmployee] = useState({ name: "", pin: "", role: "employee", turno: "mañana" });
+  const [editingEmployee, setEditingEmployee] = useState(null);
   const [reversarSearch, setReversarSearch] = useState("");
   const [reversarResults, setReversarResults] = useState(null);
   const [reversarDone, setReversarDone] = useState(false);
@@ -141,6 +143,30 @@ export default function LavanderiaApp() {
     }
     setReversarResults(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null } : o));
     setReversarDone(true);
+  };
+
+  const addEmployee = async () => {
+    if (!newEmployee.name || !newEmployee.pin) return;
+    const res = await db.post("employees", newEmployee);
+    if (Array.isArray(res) && res[0]) {
+      setEmployees(prev => [...prev, res[0]]);
+      setNewEmployee({ name: "", pin: "", role: "employee", turno: "mañana" });
+    }
+  };
+
+  const updateEmployee = async () => {
+    if (!editingEmployee) return;
+    await db.patch("employees", editingEmployee.id, { name: editingEmployee.name, pin: editingEmployee.pin, role: editingEmployee.role, turno: editingEmployee.turno });
+    setEmployees(prev => prev.map(e => e.id === editingEmployee.id ? { ...e, ...editingEmployee } : e));
+    setEditingEmployee(null);
+  };
+
+  const deleteEmployee = async (id) => {
+    const pwd = prompt("Contraseña para eliminar:");
+    if (pwd !== "9621") { if (pwd !== null) alert("❌ Contraseña incorrecta"); return; }
+    if (!window.confirm("¿Eliminar este usuario?")) return;
+    await db.delete("employees", id);
+    setEmployees(prev => prev.filter(e => e.id !== id));
   };
 
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
@@ -976,6 +1002,70 @@ export default function LavanderiaApp() {
                   </button>
                 </div>
               </div>
+
+              {/* USUARIOS */}
+              <div style={{ marginTop: 20, ...card }}>
+                <h3 style={{ margin: "0 0 20px", fontSize: 16, color: "#FFD54F" }}>👥 Usuarios y Turnos</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                  <div>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 13, color: "#8B949E", fontWeight: 600 }}>USUARIOS REGISTRADOS</h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {employees.map(e => (
+                        <div key={e.id} style={{ background: "#0D1117", borderRadius: 10, padding: "12px 14px", border: `1px solid ${e.id === user.id ? "#4FC3F7" : "#21262D"}` }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                <span style={{ fontWeight: 700, fontSize: 15 }}>{e.name}</span>
+                                {e.id === user.id && <span style={{ fontSize: 10, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "1px 7px", borderRadius: 10 }}>Tú</span>}
+                              </div>
+                              <div style={{ display: "flex", gap: 8 }}>
+                                <span style={{ fontSize: 11, background: e.role === "admin" ? "rgba(255,213,79,0.15)" : "rgba(255,255,255,0.05)", color: e.role === "admin" ? "#FFD54F" : "#8B949E", padding: "2px 8px", borderRadius: 10 }}>
+                                  {e.role === "admin" ? "👑 Admin" : "👤 Empleado"}
+                                </span>
+                                <span style={{ fontSize: 11, background: "rgba(102,187,106,0.1)", color: "#66BB6A", padding: "2px 8px", borderRadius: 10 }}>
+                                  🕐 {e.turno || "mañana"}
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button onClick={() => setEditingEmployee({ ...e })} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>✏️</button>
+                              {e.id !== user.id && (
+                                <button onClick={() => deleteEmployee(e.id)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 13, color: "#8B949E", fontWeight: 600 }}>NUEVO USUARIO</h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div><label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>NOMBRE</label>
+                        <input style={inp} placeholder="Nombre del empleado" value={newEmployee.name} onChange={e => setNewEmployee(p=>({...p,name:e.target.value}))} /></div>
+                      <div><label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>PIN (4-6 dígitos)</label>
+                        <input style={inp} type="password" placeholder="••••" maxLength={6} value={newEmployee.pin} onChange={e => setNewEmployee(p=>({...p,pin:e.target.value}))} /></div>
+                      <div><label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>ROL</label>
+                        <select style={inp} value={newEmployee.role} onChange={e => setNewEmployee(p=>({...p,role:e.target.value}))}>
+                          <option value="employee" style={{ background: "#1a1a2e" }}>👤 Empleado</option>
+                          <option value="admin" style={{ background: "#1a1a2e" }}>👑 Administrador</option>
+                        </select></div>
+                      <div><label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>TURNO</label>
+                        <select style={inp} value={newEmployee.turno} onChange={e => setNewEmployee(p=>({...p,turno:e.target.value}))}>
+                          <option value="mañana" style={{ background: "#1a1a2e" }}>🌅 Mañana</option>
+                          <option value="tarde" style={{ background: "#1a1a2e" }}>🌆 Tarde</option>
+                          <option value="noche" style={{ background: "#1a1a2e" }}>🌙 Noche</option>
+                          <option value="completo" style={{ background: "#1a1a2e" }}>⏰ Día completo</option>
+                        </select></div>
+                      <button onClick={addEmployee} disabled={!newEmployee.name || !newEmployee.pin}
+                        style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: 12, fontWeight: 800, opacity: !newEmployee.name||!newEmployee.pin ? 0.5 : 1 }}>
+                        + Crear Usuario
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -1219,6 +1309,41 @@ export default function LavanderiaApp() {
               </>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* EDIT EMPLOYEE MODAL */}
+      {editingEmployee && (
+        <div onClick={() => setEditingEmployee(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 16, padding: 28, width: 400, border: "1px solid #FFD54F", fontFamily: "'Segoe UI', sans-serif" }}>
+            <h3 style={{ margin: "0 0 20px", fontSize: 18, color: "#E6EDF3" }}>✏️ Editar Usuario</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOMBRE</label>
+                <input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }}
+                  value={editingEmployee.name} onChange={e => setEditingEmployee(p=>({...p,name:e.target.value}))} /></div>
+              <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>PIN</label>
+                <input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }}
+                  type="password" maxLength={6} value={editingEmployee.pin} onChange={e => setEditingEmployee(p=>({...p,pin:e.target.value}))} /></div>
+              <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>ROL</label>
+                <select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }}
+                  value={editingEmployee.role} onChange={e => setEditingEmployee(p=>({...p,role:e.target.value}))}>
+                  <option value="employee" style={{ background: "#1a1a2e" }}>👤 Empleado</option>
+                  <option value="admin" style={{ background: "#1a1a2e" }}>👑 Administrador</option>
+                </select></div>
+              <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>TURNO</label>
+                <select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }}
+                  value={editingEmployee.turno||"mañana"} onChange={e => setEditingEmployee(p=>({...p,turno:e.target.value}))}>
+                  <option value="mañana" style={{ background: "#1a1a2e" }}>🌅 Mañana</option>
+                  <option value="tarde" style={{ background: "#1a1a2e" }}>🌆 Tarde</option>
+                  <option value="noche" style={{ background: "#1a1a2e" }}>🌙 Noche</option>
+                  <option value="completo" style={{ background: "#1a1a2e" }}>⏰ Día completo</option>
+                </select></div>
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                <button onClick={() => setEditingEmployee(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
+                <button onClick={updateEmployee} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
