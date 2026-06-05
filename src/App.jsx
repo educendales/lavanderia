@@ -110,7 +110,32 @@ export default function LavanderiaApp() {
     try { const s = localStorage.getItem("colors"); return s ? JSON.parse(s) : DEFAULT_COLORS; } catch { return DEFAULT_COLORS; }
   });
   const [newGarment, setNewGarment] = useState("");
+  const [reversarSearch, setReversarSearch] = useState("");
+  const [reversarResults, setReversarResults] = useState(null);
+  const [reversarDone, setReversarDone] = useState(false);
   const [newColor, setNewColor] = useState("");
+
+  const searchReversar = () => {
+    const q = reversarSearch.trim().toLowerCase();
+    if (!q) return;
+    const byOrder = orders.find(o => o.order_number?.toLowerCase() === q && o.status === "entregado");
+    if (byOrder) { setReversarResults([byOrder]); }
+    else {
+      const byPhone = orders.filter(o => o.phone?.toLowerCase().includes(q) && o.status === "entregado");
+      setReversarResults(byPhone);
+    }
+    setReversarDone(false);
+  };
+
+  const confirmarReversar = async (order) => {
+    const pwd = prompt("Ingresa la clave para reversar:");
+    if (pwd !== "9621") { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
+    if (!window.confirm(`¿Reversar la orden ${order.order_number} a estado "Listo"?`)) return;
+    await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null });
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null } : o));
+    setReversarResults(prev => prev.filter(o => o.id !== order.id));
+    setReversarDone(true);
+  };
 
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
@@ -319,6 +344,7 @@ export default function LavanderiaApp() {
     { id: "expenses", label: "Gastos", icon: "💰" },
     { id: "report", label: "Informes", icon: "📋" },
     { id: "config", label: "Configuración", icon: "⚙️" },
+    { id: "reversar", label: "Reversar", icon: "↩️" },
   ];
 
   return (
@@ -800,6 +826,93 @@ export default function LavanderiaApp() {
                   })}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* REVERSAR */}
+          {tab === "reversar" && (
+            <div>
+              <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>↩️ Reversar Entrega</h2>
+              <p style={{ color: "#8B949E", fontSize: 13, marginBottom: 24 }}>Busca una orden entregada y devuélvela a estado "Listo" si hubo un error.</p>
+
+              <div style={{ ...card, marginBottom: 20 }}>
+                <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>BUSCAR POR TELÉFONO O NÚMERO DE ORDEN</label>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input style={{ ...inp, flex: 1, fontSize: 16 }} placeholder="Ej: 3105604421 o S0001"
+                    value={reversarSearch}
+                    onChange={e => { setReversarSearch(e.target.value); setReversarResults(null); setReversarDone(false); }}
+                    onKeyDown={e => e.key === "Enter" && searchReversar()} />
+                  <button onClick={searchReversar} style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: "10px 24px", fontWeight: 800 }}>
+                    🔍 Buscar
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: "#484F58", marginTop: 8 }}>⚠️ Solo muestra órdenes ya entregadas</div>
+              </div>
+
+              {/* No results */}
+              {reversarResults !== null && reversarResults.length === 0 && (
+                <div style={{ ...card, textAlign: "center", padding: 32 }}>
+                  <div style={{ fontSize: 40, marginBottom: 8 }}>😕</div>
+                  <div style={{ fontWeight: 600, color: "#8B949E" }}>No se encontraron órdenes entregadas</div>
+                  <div style={{ fontSize: 13, color: "#484F58", marginTop: 4 }}>Verifica el teléfono o número de orden</div>
+                </div>
+              )}
+
+              {/* Success message */}
+              {reversarDone && reversarResults !== null && reversarResults.length === 0 && (
+                <div style={{ ...card, textAlign: "center", padding: 32, border: "1px solid #66BB6A" }}>
+                  <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
+                  <div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A" }}>¡Orden reversada correctamente!</div>
+                  <div style={{ fontSize: 13, color: "#8B949E", marginTop: 4 }}>La orden volvió a estado "Listo"</div>
+                  <button onClick={() => { setReversarSearch(""); setReversarResults(null); setReversarDone(false); }}
+                    style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", marginTop: 16, padding: "10px 24px" }}>
+                    🔍 Nueva búsqueda
+                  </button>
+                </div>
+              )}
+
+              {/* Results list */}
+              {reversarResults !== null && reversarResults.length > 0 && (
+                <div>
+                  <div style={{ marginBottom: 12, fontSize: 13, color: "#8B949E" }}>
+                    <strong style={{ color: "#FFD54F" }}>{reversarResults.length} orden{reversarResults.length > 1 ? "es" : ""}</strong> entregada{reversarResults.length > 1 ? "s" : ""} encontrada{reversarResults.length > 1 ? "s" : ""}
+                  </div>
+                  {reversarResults.map(o => (
+                    <div key={o.id} style={{ ...card, marginBottom: 12, borderLeft: "4px solid #9E9E9E" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number || "—"}</span>
+                            <span style={{ background: "#9E9E9E22", color: "#9E9E9E", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Entregado</span>
+                          </div>
+                          <div style={{ fontWeight: 700, fontSize: 16 }}>{o.client_name}</div>
+                          <div style={{ fontSize: 13, color: "#8B949E" }}>📞 {o.phone}</div>
+                          <div style={{ fontSize: 12, color: "#8B949E", marginTop: 4 }}>
+                            {getServiceLabel(o.service)} · {o.garments} prendas
+                          </div>
+                          <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "#484F58" }}>
+                            <span>📅 Ingreso: {o.date}</span>
+                            {o.delivered_at && <span>✅ Entregado: {o.delivered_at}</span>}
+                            {o.payment_method && <span>{o.payment_method === "nequi" ? "📱 Nequi" : o.payment_method === "daviplata" ? "💜 Daviplata" : "💵 Efectivo"}</span>}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
+                          <div style={{ fontWeight: 800, fontSize: 22, color: "#66BB6A", marginBottom: 8 }}>${Math.round(Number(o.price))}</div>
+                          <button onClick={() => confirmarReversar(o)}
+                            style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
+                            ↩️ Reversar
+                          </button>
+                        </div>
+                      </div>
+                      {o.sin_recibo && (
+                        <div style={{ fontSize: 12, color: "#FFD54F", background: "rgba(255,213,79,0.08)", borderRadius: 6, padding: "4px 10px", display: "inline-block" }}>
+                          ⚠️ Fue entregado sin recibo
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
