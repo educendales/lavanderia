@@ -118,10 +118,10 @@ export default function LavanderiaApp() {
   const searchReversar = () => {
     const q = reversarSearch.trim().toLowerCase();
     if (!q) return;
-    const byOrder = orders.find(o => o.order_number?.toLowerCase() === q && o.status === "entregado");
+    const byOrder = orders.find(o => o.order_number?.toLowerCase() === q);
     if (byOrder) { setReversarResults([byOrder]); }
     else {
-      const byPhone = orders.filter(o => o.phone?.toLowerCase().includes(q) && o.status === "entregado");
+      const byPhone = orders.filter(o => o.phone?.toLowerCase().includes(q));
       setReversarResults(byPhone);
     }
     setReversarDone(false);
@@ -130,10 +130,16 @@ export default function LavanderiaApp() {
   const confirmarReversar = async (order) => {
     const pwd = prompt("Ingresa la clave para reversar:");
     if (pwd !== "9621") { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
-    if (!window.confirm(`¿Reversar la orden ${order.order_number} a estado "Listo"?`)) return;
-    await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null });
-    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null } : o));
-    setReversarResults(prev => prev.filter(o => o.id !== order.id));
+    if (order.status === "entregado") {
+      if (!window.confirm(`¿Reversar la orden ${order.order_number} a estado "Listo"?`)) return;
+      await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null });
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null } : o));
+    } else {
+      if (!window.confirm(`¿Cambiar la orden ${order.order_number} a estado "Listo"?`)) return;
+      await db.patch("orders", order.id, { status: "listo" });
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo" } : o));
+    }
+    setReversarResults(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null } : o));
     setReversarDone(true);
   };
 
@@ -846,7 +852,7 @@ export default function LavanderiaApp() {
                     🔍 Buscar
                   </button>
                 </div>
-                <div style={{ fontSize: 12, color: "#484F58", marginTop: 8 }}>⚠️ Solo muestra órdenes ya entregadas</div>
+                <div style={{ fontSize: 12, color: "#484F58", marginTop: 8 }}>Busca por teléfono para ver todas las órdenes del cliente</div>
               </div>
 
               {/* No results */}
@@ -883,7 +889,7 @@ export default function LavanderiaApp() {
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                             <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number || "—"}</span>
-                            <span style={{ background: "#9E9E9E22", color: "#9E9E9E", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>Entregado</span>
+                            <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
                           </div>
                           <div style={{ fontWeight: 700, fontSize: 16 }}>{o.client_name}</div>
                           <div style={{ fontSize: 13, color: "#8B949E" }}>📞 {o.phone}</div>
@@ -899,8 +905,8 @@ export default function LavanderiaApp() {
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
                           <div style={{ fontWeight: 800, fontSize: 22, color: "#66BB6A", marginBottom: 8 }}>${Math.round(Number(o.price))}</div>
                           <button onClick={() => confirmarReversar(o)}
-                            style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
-                            ↩️ Reversar
+                            style={{ ...btn, background: o.status === "entregado" ? "linear-gradient(135deg,#FFD54F,#F57F17)" : "rgba(255,255,255,0.08)", color: o.status === "entregado" ? "#000" : "#8B949E", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
+                            ↩️ {o.status === "entregado" ? "Reversar" : "Eliminar orden"}
                           </button>
                         </div>
                       </div>
