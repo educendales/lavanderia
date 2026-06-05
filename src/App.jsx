@@ -98,6 +98,7 @@ export default function LavanderiaApp() {
   const [colorFocusIdx, setColorFocusIdx] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
   const [entregaSearch, setEntregaSearch] = useState("");
+  const [entregaResults, setEntregaResults] = useState(null);
   const [entregaResult, setEntregaResult] = useState(null);
   const [entregaPayment, setEntregaPayment] = useState("efectivo");
   const [entregaSinRecibo, setEntregaSinRecibo] = useState(false);
@@ -249,8 +250,15 @@ export default function LavanderiaApp() {
   const searchEntrega = () => {
     const q = entregaSearch.trim().toLowerCase();
     if (!q) return;
-    const found = orders.find(o => o.order_number?.toLowerCase() === q || o.phone?.toLowerCase().includes(q));
-    setEntregaResult(found || null);
+    // Search by order number (single) or phone (multiple)
+    const byOrder = orders.find(o => o.order_number?.toLowerCase() === q);
+    if (byOrder) {
+      setEntregaResults([byOrder]);
+    } else {
+      const byPhone = orders.filter(o => o.phone?.toLowerCase().includes(q));
+      setEntregaResults(byPhone);
+    }
+    setEntregaResult(null);
     setEntregaConfirmed(false);
     setEntregaSinRecibo(false);
     setEntregaPayment("efectivo");
@@ -496,17 +504,57 @@ export default function LavanderiaApp() {
                 <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>BUSCAR POR TELÉFONO O NÚMERO DE ORDEN</label>
                 <div style={{ display: "flex", gap: 10 }}>
                   <input style={{ ...inp, flex: 1, fontSize: 16 }} placeholder="Ej: 3105604421 o S0001" value={entregaSearch}
-                    onChange={e => setEntregaSearch(e.target.value)} onKeyDown={e => e.key === "Enter" && searchEntrega()} />
+                    onChange={e => { setEntregaSearch(e.target.value); setEntregaResults(null); setEntregaResult(null); }}
+                    onKeyDown={e => e.key === "Enter" && searchEntrega()} />
                   <button onClick={searchEntrega} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 24px" }}>🔍 Buscar</button>
                 </div>
               </div>
-              {entregaSearch && entregaResult === null && (
+
+              {/* No results */}
+              {entregaResults !== null && entregaResults.length === 0 && (
                 <div style={{ ...card, textAlign: "center", color: "#EF5350", padding: 32 }}>
                   <div style={{ fontSize: 40, marginBottom: 8 }}>😕</div>
                   <div style={{ fontWeight: 600 }}>No se encontró ninguna orden</div>
                 </div>
               )}
+
+              {/* Multiple results - show list */}
+              {entregaResults !== null && entregaResults.length > 0 && !entregaResult && (
+                <div>
+                  <div style={{ marginBottom: 12, fontSize: 13, color: "#8B949E" }}>
+                    Se encontraron <strong style={{ color: "#4FC3F7" }}>{entregaResults.length} órdenes</strong> para este cliente
+                  </div>
+                  {entregaResults.map(o => (
+                    <div key={o.id} onClick={() => { setEntregaResult(o); setEntregaConfirmed(o.status==="entregado"); setEntregaPayment(o.payment_method||"efectivo"); }}
+                      style={{ ...card, marginBottom: 10, cursor: "pointer", borderLeft: `4px solid ${STATUS_LABELS[o.status]?.color||"#30363D"}`, transition: "all 0.2s" }}
+                      onMouseEnter={e => e.currentTarget.style.background="#1C2128"}
+                      onMouseLeave={e => e.currentTarget.style.background="#161B22"}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number || "—"}</span>
+                            <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
+                          </div>
+                          <div style={{ fontSize: 14, color: "#8B949E" }}>{getServiceLabel(o.service)} · {o.garments} prendas</div>
+                          <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date || "—"}</div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>${Math.round(Number(o.price))}</div>
+                          <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Ver detalle →</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {entregaResult && (
+                <div>
+                  {entregaResults && entregaResults.length > 1 && (
+                    <button onClick={() => { setEntregaResult(null); setEntregaConfirmed(false); }}
+                      style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", marginBottom: 16, fontSize: 13, padding: "8px 16px" }}>
+                      ← Volver a la lista
+                    </button>
+                  )}
                 <div style={{ ...card, border: entregaConfirmed ? "1px solid #66BB6A" : "1px solid #4FC3F7" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
                     <div>
@@ -599,12 +647,13 @@ export default function LavanderiaApp() {
                           </div>
                         ))}
                       </div>
-                      <button onClick={() => { setEntregaResult(null); setEntregaSearch(""); setEntregaConfirmed(false); }}
+                      <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }}
                         style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", width: "100%", padding: 12 }}>
                         🔍 Nueva búsqueda
                       </button>
                     </div>
                   )}
+                </div>
                 </div>
               )}
             </div>
