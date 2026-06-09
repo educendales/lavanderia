@@ -98,6 +98,10 @@ export default function LavanderiaApp() {
   const [colorFocusIdx, setColorFocusIdx] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
   const [entregaSearch, setEntregaSearch] = useState("");
+  const [selectedEntregas, setSelectedEntregas] = useState([]);
+  const [entregaMultiPayment, setEntregaMultiPayment] = useState("efectivo");
+  const [entregaMultiSinRecibo, setEntregaMultiSinRecibo] = useState(false);
+  const [confirmingMulti, setConfirmingMulti] = useState(false);
   const [entregaResults, setEntregaResults] = useState(null);
   const [entregaResult, setEntregaResult] = useState(null);
   const [entregaPayment, setEntregaPayment] = useState("efectivo");
@@ -130,6 +134,16 @@ export default function LavanderiaApp() {
   const [reversarResults, setReversarResults] = useState(null);
   const [reversarDone, setReversarDone] = useState(false);
   const [newColor, setNewColor] = useState("");
+
+  const confirmarMultiEntrega = async () => {
+    for (const order of selectedEntregas) {
+      await db.patch("orders", order.id, { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: today });
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today } : o));
+    }
+    setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today } : o));
+    setSelectedEntregas([]);
+    setConfirmingMulti(false);
+  };
 
   const searchReversar = () => {
     const q = reversarSearch.trim().toLowerCase();
@@ -635,30 +649,99 @@ export default function LavanderiaApp() {
               {/* Multiple results - show list */}
               {entregaResults !== null && entregaResults.length > 0 && !entregaResult && (
                 <div>
-                  <div style={{ marginBottom: 12, fontSize: 13, color: "#8B949E" }}>
-                    Se encontraron <strong style={{ color: "#4FC3F7" }}>{entregaResults.length} órdenes</strong> para este cliente
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, color: "#8B949E" }}>
+                      Se encontraron <strong style={{ color: "#4FC3F7" }}>{entregaResults.length} órdenes</strong> para este cliente
+                    </div>
+                    {/* Select all pending */}
+                    {entregaResults.some(o => o.status !== "entregado") && (
+                      <button onClick={() => {
+                        const pending = entregaResults.filter(o => o.status !== "entregado");
+                        if (selectedEntregas.length === pending.length) setSelectedEntregas([]);
+                        else setSelectedEntregas(pending);
+                      }} style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "6px 14px", fontSize: 12 }}>
+                        {selectedEntregas.length === entregaResults.filter(o=>o.status!=="entregado").length ? "Deseleccionar todo" : "Seleccionar pendientes"}
+                      </button>
+                    )}
                   </div>
-                  {entregaResults.map(o => (
-                    <div key={o.id} onClick={() => { setEntregaResult(o); setEntregaConfirmed(o.status==="entregado"); setEntregaPayment(o.payment_method||"efectivo"); }}
-                      style={{ ...card, marginBottom: 10, cursor: "pointer", borderLeft: `4px solid ${STATUS_LABELS[o.status]?.color||"#30363D"}`, transition: "all 0.2s" }}
-                      onMouseEnter={e => e.currentTarget.style.background="#1C2128"}
-                      onMouseLeave={e => e.currentTarget.style.background="#161B22"}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                            <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number || "—"}</span>
-                            <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
+
+                  {entregaResults.map(o => {
+                    const isSelected = selectedEntregas.some(s => s.id === o.id);
+                    const isPending = o.status !== "entregado";
+                    return (
+                      <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${isSelected ? "#66BB6A" : STATUS_LABELS[o.status]?.color||"#30363D"}`, background: isSelected ? "rgba(102,187,106,0.06)" : "#161B22", transition: "all 0.2s" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
+                            {/* Checkbox for pending orders */}
+                            {isPending && (
+                              <input type="checkbox" checked={isSelected}
+                                onChange={() => setSelectedEntregas(prev => isSelected ? prev.filter(s=>s.id!==o.id) : [...prev, o])}
+                                style={{ width: 20, height: 20, accentColor: "#66BB6A", cursor: "pointer", flexShrink: 0 }} />
+                            )}
+                            {!isPending && <span style={{ fontSize: 18, flexShrink: 0 }}>✅</span>}
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number || "—"}</span>
+                                <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
+                              </div>
+                              <div style={{ fontSize: 13, color: "#8B949E" }}>{getServiceLabel(o.service)} · {o.garments} prendas</div>
+                              <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date || "—"}</div>
+                            </div>
                           </div>
-                          <div style={{ fontSize: 14, color: "#8B949E" }}>{getServiceLabel(o.service)} · {o.garments} prendas</div>
-                          <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date || "—"}</div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>${Math.round(Number(o.price))}</div>
-                          <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Ver detalle →</div>
+                          <div style={{ textAlign: "right", marginLeft: 12 }}>
+                            <div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A", marginBottom: 4 }}>${Math.round(Number(o.price))}</div>
+                            {isPending && (
+                              <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(o.payment_method||"efectivo"); }}
+                                style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "4px 10px", fontSize: 11 }}>Ver detalle →</button>
+                            )}
+                          </div>
                         </div>
                       </div>
+                    );
+                  })}
+
+                  {/* Multi-deliver panel */}
+                  {selectedEntregas.length > 0 && (
+                    <div style={{ ...card, border: "1px solid #66BB6A", background: "rgba(102,187,106,0.06)", marginTop: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#66BB6A", fontSize: 16 }}>
+                            {selectedEntregas.length} orden{selectedEntregas.length>1?"es":""} seleccionada{selectedEntregas.length>1?"s":""}
+                          </div>
+                          <div style={{ fontSize: 13, color: "#8B949E" }}>
+                            Total: <strong style={{ color: "#66BB6A" }}>${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}</strong>
+                            {" · "}{selectedEntregas.reduce((s,o)=>s+Number(o.garments),0)} prendas
+                          </div>
+                        </div>
+                        <button onClick={() => setSelectedEntregas([])} style={{ ...btn, background: "transparent", color: "#8B949E", padding: "4px 10px", fontSize: 12 }}>✕ Cancelar</button>
+                      </div>
+
+                      {/* Payment method */}
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"}].map(opt => (
+                            <label key={opt.value} onClick={() => setEntregaMultiPayment(opt.value)} style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:12, fontWeight:600, background: entregaMultiPayment===opt.value ? "rgba(102,187,106,0.2)" : "rgba(255,255,255,0.04)", border:`2px solid ${entregaMultiPayment===opt.value?"#66BB6A":"#30363D"}`, borderRadius:8, padding:"8px 4px", color: entregaMultiPayment===opt.value?"#66BB6A":"#8B949E" }}>
+                              {opt.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Sin recibo */}
+                      <div style={{ marginBottom: 16 }}>
+                        <label onClick={() => setEntregaMultiSinRecibo(!entregaMultiSinRecibo)} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", background: entregaMultiSinRecibo?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)", border:`1px solid ${entregaMultiSinRecibo?"#FFD54F":"#30363D"}`, borderRadius:8, padding:"10px 14px" }}>
+                          <input type="checkbox" checked={entregaMultiSinRecibo} onChange={e=>setEntregaMultiSinRecibo(e.target.checked)} style={{ width:16,height:16,accentColor:"#FFD54F" }} />
+                          <span style={{ fontSize:13, color: entregaMultiSinRecibo?"#FFD54F":"#8B949E" }}>📋 Entregado sin recibo</span>
+                        </label>
+                      </div>
+
+                      <button onClick={confirmarMultiEntrega}
+                        style={{ ...btn, width:"100%", background:"linear-gradient(135deg,#66BB6A,#388E3C)", color:"#fff", padding:14, fontSize:15, fontWeight:800, borderRadius:10 }}>
+                        ✅ Confirmar {selectedEntregas.length} entrega{selectedEntregas.length>1?"s":""} · ${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}
+                      </button>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
               {entregaResult && (
