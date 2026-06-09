@@ -111,6 +111,7 @@ export default function LavanderiaApp() {
   });
   const [newGarment, setNewGarment] = useState("");
   const [clientSearch, setClientSearch] = useState("");
+  const [expenseFilterDate, setExpenseFilterDate] = useState(today);
   const [showCalc, setShowCalc] = useState(false);
   const [calcDisplay, setCalcDisplay] = useState("0");
   const [calcPrev, setCalcPrev] = useState(null);
@@ -811,14 +812,18 @@ export default function LavanderiaApp() {
           {/* EXPENSES */}
           {tab === "expenses" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Gastos</h2>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Gastos</h2>
+                  <input type="date" value={expenseFilterDate} onChange={e => setExpenseFilterDate(e.target.value)} style={{ ...inp, width: 160, fontSize: 13 }} />
+                  {expenseFilterDate && <button onClick={() => setExpenseFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todos</button>}
+                </div>
                 <button onClick={() => setModal("newExpense")} style={{ ...btn, background: "linear-gradient(135deg,#EF5350,#B71C1C)", color: "#fff" }}>+ Nuevo Gasto</button>
               </div>
               <div style={{ ...card, marginBottom: 20 }}>
                 <div style={{ display: "flex", gap: 40 }}>
-                  <div><div style={{ fontSize: 22, fontWeight: 800, color: "#EF5350" }}>${Math.round(expenses.reduce((s,e) => s+Number(e.amount), 0))}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Total gastos</div></div>
-                  <div><div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>{expenses.length}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Registros</div></div>
+                  <div><div style={{ fontSize: 22, fontWeight: 800, color: "#EF5350" }}>${Math.round((expenseFilterDate ? expenses.filter(e=>e.date===expenseFilterDate) : expenses).reduce((s,e) => s+Number(e.amount), 0))}</div><div style={{ fontSize: 12, color: "#8B949E" }}>{expenseFilterDate ? "Gastos del día" : "Total gastos"}</div></div>
+                  <div><div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>{(expenseFilterDate ? expenses.filter(e=>e.date===expenseFilterDate) : expenses).length}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Registros</div></div>
                 </div>
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
@@ -830,7 +835,7 @@ export default function LavanderiaApp() {
                   </tr>
                 </thead>
                 <tbody>
-                  {expenses.map(e => (
+                  {(expenseFilterDate ? expenses.filter(e=>e.date===expenseFilterDate) : expenses).map(e => (
                     <tr key={e.id} style={{ borderBottom: "1px solid #21262D" }}>
                       <td style={{ padding: "12px 14px", fontWeight: 600 }}>{e.concept}</td>
                       <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>{e.category}</span></td>
