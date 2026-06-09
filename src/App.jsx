@@ -110,6 +110,7 @@ export default function LavanderiaApp() {
     try { const s = localStorage.getItem("colors"); return s ? JSON.parse(s) : DEFAULT_COLORS; } catch { return DEFAULT_COLORS; }
   });
   const [newGarment, setNewGarment] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
   const [newEmployee, setNewEmployee] = useState({ name: "", pin: "", role: "employee", turno: "mañana" });
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [reversarSearch, setReversarSearch] = useState("");
@@ -720,12 +721,26 @@ export default function LavanderiaApp() {
           {/* CLIENTS */}
           {tab === "clients" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Clientes</h2>
                 <button onClick={() => setModal("newClient")} style={{ ...btn, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff" }}>+ Nuevo Cliente</button>
               </div>
+              <div style={{ marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
+                <input
+                  style={{ ...inp, maxWidth: 320 }}
+                  placeholder="🔍 Buscar por nombre o teléfono..."
+                  value={clientSearch}
+                  onChange={e => setClientSearch(e.target.value)}
+                />
+                {clientSearch && (
+                  <button onClick={() => setClientSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 14px", fontSize: 12 }}>✕ Limpiar</button>
+                )}
+                <span style={{ fontSize: 13, color: "#8B949E" }}>
+                  {clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch)).length} cliente{clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch)).length !== 1 ? "s" : ""}
+                </span>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 16 }}>
-                {clients.map(c => (
+                {clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch)).map(c => (
                   <div key={c.id} style={{ ...card, borderTop: "3px solid #4FC3F7" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                       <div style={{ fontSize: 28 }}>👤</div>
