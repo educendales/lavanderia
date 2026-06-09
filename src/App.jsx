@@ -111,6 +111,11 @@ export default function LavanderiaApp() {
   });
   const [newGarment, setNewGarment] = useState("");
   const [clientSearch, setClientSearch] = useState("");
+  const [showCalc, setShowCalc] = useState(false);
+  const [calcDisplay, setCalcDisplay] = useState("0");
+  const [calcPrev, setCalcPrev] = useState(null);
+  const [calcOp, setCalcOp] = useState(null);
+  const [calcNew, setCalcNew] = useState(true);
   const [newEmployee, setNewEmployee] = useState({ name: "", pin: "", role: "employee", turno: "mañana" });
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [reversarSearch, setReversarSearch] = useState("");
@@ -169,6 +174,42 @@ export default function LavanderiaApp() {
     await db.delete("employees", id);
     setEmployees(prev => prev.filter(e => e.id !== id));
   };
+
+  const calcInput = (val) => {
+    if (calcNew) { setCalcDisplay(String(val)); setCalcNew(false); }
+    else { setCalcDisplay(prev => prev === "0" ? String(val) : prev + val); }
+  };
+  const calcDot = () => {
+    if (calcNew) { setCalcDisplay("0."); setCalcNew(false); return; }
+    if (!calcDisplay.includes(".")) setCalcDisplay(prev => prev + ".");
+  };
+  const calcOperation = (op) => {
+    setCalcPrev(parseFloat(calcDisplay));
+    setCalcOp(op);
+    setCalcNew(true);
+  };
+  const calcEquals = () => {
+    if (calcOp === null || calcPrev === null) return;
+    const cur = parseFloat(calcDisplay);
+    let result = 0;
+    if (calcOp === "+") result = calcPrev + cur;
+    if (calcOp === "-") result = calcPrev - cur;
+    if (calcOp === "×") result = calcPrev * cur;
+    if (calcOp === "÷") result = cur !== 0 ? calcPrev / cur : 0;
+    const str = parseFloat(result.toFixed(6)).toString();
+    setCalcDisplay(str);
+    setCalcPrev(null);
+    setCalcOp(null);
+    setCalcNew(true);
+  };
+  const calcClear = () => { setCalcDisplay("0"); setCalcPrev(null); setCalcOp(null); setCalcNew(true); };
+  const calcBackspace = () => {
+    if (calcNew) return;
+    const next = calcDisplay.slice(0,-1);
+    setCalcDisplay(next.length === 0 || next === "-" ? "0" : next);
+  };
+  const calcToggleSign = () => setCalcDisplay(prev => prev.startsWith("-") ? prev.slice(1) : "-" + prev);
+  const calcPercent = () => setCalcDisplay(prev => String(parseFloat(prev) / 100));
 
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
@@ -1446,6 +1487,71 @@ export default function LavanderiaApp() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* FLOATING CALCULATOR */}
+      <button onClick={() => setShowCalc(!showCalc)} style={{
+        position: "fixed", bottom: 28, right: 28, zIndex: 300,
+        width: 56, height: 56, borderRadius: "50%", border: "none",
+        background: "linear-gradient(135deg,#4FC3F7,#0288D1)",
+        color: "#fff", fontSize: 22, cursor: "pointer",
+        boxShadow: "0 4px 20px rgba(79,195,247,0.4)",
+        display: "flex", alignItems: "center", justifyContent: "center"
+      }}>🧮</button>
+
+      {showCalc && (
+        <div style={{
+          position: "fixed", bottom: 96, right: 28, zIndex: 300,
+          background: "#1C2128", borderRadius: 20, padding: 16,
+          border: "1px solid #30363D", boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+          width: 260, fontFamily: "'Segoe UI', sans-serif"
+        }}>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <span style={{ color: "#8B949E", fontSize: 13, fontWeight: 600 }}>Calculadora</span>
+            <button onClick={() => setShowCalc(false)} style={{ background: "none", border: "none", color: "#8B949E", fontSize: 18, cursor: "pointer" }}>✕</button>
+          </div>
+
+          {/* Display */}
+          <div style={{ background: "#0D1117", borderRadius: 12, padding: "12px 16px", marginBottom: 12, textAlign: "right" }}>
+            {calcOp && <div style={{ fontSize: 12, color: "#8B949E", marginBottom: 2 }}>{calcPrev} {calcOp}</div>}
+            <div style={{ fontSize: 32, fontWeight: 700, color: "#E6EDF3", overflowX: "auto", whiteSpace: "nowrap" }}>{calcDisplay}</div>
+          </div>
+
+          {/* Buttons */}
+          {[
+            [{ l: "AC", fn: calcClear, style: { background: "#EF5350", color: "#fff" } },
+             { l: "+/-", fn: calcToggleSign, style: { background: "#30363D", color: "#E6EDF3" } },
+             { l: "%", fn: calcPercent, style: { background: "#30363D", color: "#E6EDF3" } },
+             { l: "÷", fn: () => calcOperation("÷"), style: { background: "#4FC3F7", color: "#000" } }],
+            [{ l: "7", fn: () => calcInput("7") }, { l: "8", fn: () => calcInput("8") }, { l: "9", fn: () => calcInput("9") },
+             { l: "×", fn: () => calcOperation("×"), style: { background: "#4FC3F7", color: "#000" } }],
+            [{ l: "4", fn: () => calcInput("4") }, { l: "5", fn: () => calcInput("5") }, { l: "6", fn: () => calcInput("6") },
+             { l: "-", fn: () => calcOperation("-"), style: { background: "#4FC3F7", color: "#000" } }],
+            [{ l: "1", fn: () => calcInput("1") }, { l: "2", fn: () => calcInput("2") }, { l: "3", fn: () => calcInput("3") },
+             { l: "+", fn: () => calcOperation("+"), style: { background: "#4FC3F7", color: "#000" } }],
+            [{ l: "⌫", fn: calcBackspace, style: { background: "#30363D", color: "#FFD54F" } },
+             { l: "0", fn: () => calcInput("0") },
+             { l: ".", fn: calcDot },
+             { l: "=", fn: calcEquals, style: { background: "#66BB6A", color: "#fff" } }],
+          ].map((row, ri) => (
+            <div key={ri} style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 8 }}>
+              {row.map((b, bi) => (
+                <button key={bi} onClick={b.fn} style={{
+                  padding: "14px 0", borderRadius: 10, border: "none", cursor: "pointer",
+                  fontWeight: 700, fontSize: 16,
+                  background: b.style?.background || "#21262D",
+                  color: b.style?.color || "#E6EDF3",
+                  transition: "opacity 0.1s"
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity="0.8"}
+                onMouseLeave={e => e.currentTarget.style.opacity="1"}>
+                  {b.l}
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
       )}
 
