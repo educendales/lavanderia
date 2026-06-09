@@ -858,6 +858,92 @@ export default function LavanderiaApp() {
                   })}
                 </div>
               </div>
+
+              {/* INVENTARIO */}
+              <div style={{ ...card, marginTop: 20 }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FF8A65" }}>📦 Inventario — Prendas sin retirar</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Órdenes que aún no han sido entregadas al cliente</p>
+
+                {/* Summary */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+                  {[
+                    { label: "Órdenes pendientes", value: orders.filter(o => o.status !== "entregado").length, color: "#4FC3F7" },
+                    { label: "Prendas en local", value: orders.filter(o => o.status !== "entregado").reduce((s,o) => s+Number(o.garments), 0), color: "#FFD54F" },
+                    { label: "Valor en inventario", value: `$${Math.round(orders.filter(o=>o.status!=="entregado").reduce((s,o)=>s+Number(o.price),0))}`, color: "#66BB6A" },
+                    { label: "Listas para retiro", value: orders.filter(o => o.status === "listo").length, color: "#FF8A65" },
+                  ].map((kpi,i) => (
+                    <div key={i} style={{ background: "#0D1117", borderRadius: 10, padding: "12px 14px", borderLeft: `3px solid ${kpi.color}` }}>
+                      <div style={{ fontWeight: 800, fontSize: 18, color: kpi.color }}>{kpi.value}</div>
+                      <div style={{ fontSize: 11, color: "#8B949E", marginTop: 2 }}>{kpi.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Filter by status */}
+                {(() => {
+                  const pendingOrders = orders.filter(o => o.status !== "entregado").sort((a,b) => new Date(a.delivery_date||"9999") - new Date(b.delivery_date||"9999"));
+                  return pendingOrders.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: 32, color: "#484F58" }}>
+                      <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+                      <div>No hay prendas pendientes de retiro</div>
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: "#21262D" }}>
+                            {["# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días"].map(h => (
+                              <th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 11, whiteSpace: "nowrap" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pendingOrders.map(o => {
+                            const daysIn = Math.floor((new Date() - new Date(o.date)) / (1000*60*60*24));
+                            const isLate = o.delivery_date && new Date(o.delivery_date) < new Date() && o.status !== "entregado";
+                            return (
+                              <tr key={o.id} style={{ borderBottom: "1px solid #21262D", background: isLate ? "rgba(239,83,80,0.05)" : "transparent" }}>
+                                <td style={{ padding: "10px 12px" }}>
+                                  <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 8px", borderRadius: 6, fontSize: 12 }}>{o.order_number || "—"}</span>
+                                </td>
+                                <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.client_name}</td>
+                                <td style={{ padding: "10px 12px", color: "#8B949E", fontSize: 12 }}>{o.phone}</td>
+                                <td style={{ padding: "10px 12px" }}>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                                    {(o.service||"").split(",").map(sid => {
+                                      const sv = SERVICES.find(s=>s.id===sid.trim());
+                                      return sv ? <span key={sid} style={{ background: sv.color+"22", color: sv.color, padding: "1px 6px", borderRadius: 10, fontSize: 11, whiteSpace: "nowrap" }}>{sv.icon} {sv.label}</span> : null;
+                                    })}
+                                  </div>
+                                </td>
+                                <td style={{ padding: "10px 12px", fontWeight: 600, textAlign: "center" }}>{o.garments}</td>
+                                <td style={{ padding: "10px 12px", fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price))}</td>
+                                <td style={{ padding: "10px 12px" }}>
+                                  <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>
+                                    {STATUS_LABELS[o.status]?.label}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "10px 12px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
+                                <td style={{ padding: "10px 12px", fontSize: 12 }}>
+                                  <span style={{ color: isLate ? "#EF5350" : "#FFD54F", fontWeight: isLate ? 700 : 400 }}>
+                                    {isLate ? "⚠️ " : "📅 "}{o.delivery_date || "—"}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                                  <span style={{ fontWeight: 700, color: daysIn > 7 ? "#EF5350" : daysIn > 3 ? "#FFD54F" : "#8B949E", fontSize: 13 }}>
+                                    {daysIn}d
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
+
             </div>
           )}
 
