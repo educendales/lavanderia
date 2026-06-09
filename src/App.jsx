@@ -111,6 +111,7 @@ export default function LavanderiaApp() {
   });
   const [newGarment, setNewGarment] = useState("");
   const [clientSearch, setClientSearch] = useState("");
+  const [inventoryFilter, setInventoryFilter] = useState("");
   const [expenseFilterDate, setExpenseFilterDate] = useState(today);
   const [showCalc, setShowCalc] = useState(false);
   const [calcDisplay, setCalcDisplay] = useState("0");
@@ -922,16 +923,25 @@ export default function LavanderiaApp() {
 
               {/* INVENTARIO */}
               <div style={{ ...card, marginTop: 20 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FF8A65" }}>📦 Inventario — Prendas sin retirar</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Órdenes que aún no han sido entregadas al cliente</p>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FF8A65" }}>📦 Inventario — Prendas sin retirar</h3>
+                    <p style={{ margin: 0, fontSize: 13, color: "#8B949E" }}>Órdenes que aún no han sido entregadas al cliente</p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input type="date" value={inventoryFilter} onChange={e => setInventoryFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }} placeholder="Filtrar por fecha ingreso" />
+                    {inventoryFilter && <button onClick={() => setInventoryFilter("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
+                  </div>
+                </div>
 
                 {/* Summary */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
                   {[
-                    { label: "Órdenes pendientes", value: orders.filter(o => o.status !== "entregado").length, color: "#4FC3F7" },
-                    { label: "Prendas en local", value: orders.filter(o => o.status !== "entregado").reduce((s,o) => s+Number(o.garments), 0), color: "#FFD54F" },
-                    { label: "Valor en inventario", value: `$${Math.round(orders.filter(o=>o.status!=="entregado").reduce((s,o)=>s+Number(o.price),0))}`, color: "#66BB6A" },
-                    { label: "Listas para retiro", value: orders.filter(o => o.status === "listo").length, color: "#FF8A65" },
+                    { label: "Órdenes pendientes", value: orders.filter(o => o.status !== "entregado" && (!inventoryFilter || o.date === inventoryFilter)).length, color: "#4FC3F7" },
+                    { label: "Prendas en local", value: orders.filter(o => o.status !== "entregado" && (!inventoryFilter || o.date === inventoryFilter)).reduce((s,o) => s+Number(o.garments), 0), color: "#FFD54F" },
+                    { label: "Valor en inventario", value: `$${Math.round(orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.price),0))}`, color: "#66BB6A" },
+                    { label: "Listas para retiro", value: orders.filter(o => o.status === "listo" && (!inventoryFilter || o.date === inventoryFilter)).length, color: "#FF8A65" },
                   ].map((kpi,i) => (
                     <div key={i} style={{ background: "#0D1117", borderRadius: 10, padding: "12px 14px", borderLeft: `3px solid ${kpi.color}` }}>
                       <div style={{ fontWeight: 800, fontSize: 18, color: kpi.color }}>{kpi.value}</div>
@@ -942,7 +952,7 @@ export default function LavanderiaApp() {
 
                 {/* Filter by status */}
                 {(() => {
-                  const pendingOrders = orders.filter(o => o.status !== "entregado").sort((a,b) => new Date(a.delivery_date||"9999") - new Date(b.delivery_date||"9999"));
+                  const pendingOrders = orders.filter(o => o.status !== "entregado" && (!inventoryFilter || o.date === inventoryFilter)).sort((a,b) => new Date(a.delivery_date||"9999") - new Date(b.delivery_date||"9999"));
                   return pendingOrders.length === 0 ? (
                     <div style={{ textAlign: "center", padding: 32, color: "#484F58" }}>
                       <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
