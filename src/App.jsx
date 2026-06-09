@@ -111,6 +111,12 @@ export default function LavanderiaApp() {
   });
   const [newGarment, setNewGarment] = useState("");
   const [clientSearch, setClientSearch] = useState("");
+  const [precioPrend, setPrecioPrend] = useState(() => {
+    try { return Number(localStorage.getItem("precioPrend")) || 6500; } catch { return 6500; }
+  });
+  const [showTotalPrendas, setShowTotalPrendas] = useState(false);
+  const [editingPrecio, setEditingPrecio] = useState(false);
+  const [tempPrecio, setTempPrecio] = useState("");
   const [inventoryFilter, setInventoryFilter] = useState("");
   const [expenseFilterDate, setExpenseFilterDate] = useState(today);
   const [showCalc, setShowCalc] = useState(false);
@@ -438,10 +444,16 @@ export default function LavanderiaApp() {
               {t.icon} {t.label}
             </button>
           ))}
-          <div style={{ marginTop: "auto", borderTop: "1px solid #30363D", paddingTop: 16 }}>
-            <div style={{ fontSize: 12, color: "#8B949E" }}>👤 {user.name}</div>
-            <div style={{ fontSize: 11, color: "#484F58", marginBottom: 8 }}>{user.role === "admin" ? "Administrador" : "Empleado"}</div>
-            <button onClick={() => setUser(null)} style={{ ...btn, background: "transparent", color: "#EF5350", padding: "6px 10px", fontSize: 12 }}>Cerrar sesión</button>
+          <div style={{ marginTop: "auto" }}>
+            <button onClick={() => { setShowTotalPrendas(true); setEditingPrecio(false); }}
+              style={{ ...btn, width: "100%", background: "linear-gradient(135deg,rgba(255,213,79,0.2),rgba(245,127,23,0.2))", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "10px 14px", marginBottom: 12, fontSize: 13, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              👕 Total Prendas
+            </button>
+            <div style={{ borderTop: "1px solid #30363D", paddingTop: 16 }}>
+              <div style={{ fontSize: 12, color: "#8B949E" }}>👤 {user.name}</div>
+              <div style={{ fontSize: 11, color: "#484F58", marginBottom: 8 }}>{user.role === "admin" ? "Administrador" : "Empleado"}</div>
+              <button onClick={() => setUser(null)} style={{ ...btn, background: "transparent", color: "#EF5350", padding: "6px 10px", fontSize: 12 }}>Cerrar sesión</button>
+            </div>
           </div>
         </div>
 
@@ -1501,6 +1513,78 @@ export default function LavanderiaApp() {
                 <button onClick={updateEmployee} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOTAL PRENDAS MODAL */}
+      {showTotalPrendas && (
+        <div onClick={() => setShowTotalPrendas(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 250 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#161B22", borderRadius: 20, padding: 32, width: 360, border: "1px solid rgba(255,213,79,0.4)", boxShadow: "0 8px 40px rgba(0,0,0,0.6)", fontFamily: "'Segoe UI', sans-serif" }}>
+            <div style={{ textAlign: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 48, marginBottom: 8 }}>👕</div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#E6EDF3" }}>Total de Prendas del Día</h2>
+              <p style={{ margin: "6px 0 0", fontSize: 13, color: "#8B949E" }}>{filterDate}</p>
+            </div>
+
+            {/* Calculation */}
+            <div style={{ background: "#0D1117", borderRadius: 14, padding: 20, marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #21262D" }}>
+                <span style={{ color: "#8B949E", fontSize: 13 }}>Ingresos del día</span>
+                <span style={{ fontWeight: 700, color: "#66BB6A", fontSize: 16 }}>${Math.round(todayRevenue)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #21262D" }}>
+                <span style={{ color: "#8B949E", fontSize: 13 }}>Precio por prenda</span>
+                <span style={{ fontWeight: 700, color: "#FFD54F", fontSize: 16 }}>${precioPrend.toLocaleString()}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: "#8B949E", fontSize: 13 }}>Total prendas estimado</span>
+                <span style={{ fontWeight: 800, color: "#4FC3F7", fontSize: 28 }}>
+                  {precioPrend > 0 ? Math.round(todayRevenue / precioPrend) : 0}
+                </span>
+              </div>
+            </div>
+
+            {/* Formula */}
+            <div style={{ background: "rgba(79,195,247,0.06)", border: "1px solid rgba(79,195,247,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 20, textAlign: "center", fontSize: 13, color: "#8B949E" }}>
+              ${Math.round(todayRevenue)} ÷ ${precioPrend.toLocaleString()} = <strong style={{ color: "#4FC3F7" }}>{precioPrend > 0 ? Math.round(todayRevenue / precioPrend) : 0} prendas</strong>
+            </div>
+
+            {/* Edit price */}
+            {!editingPrecio ? (
+              <button onClick={() => { setEditingPrecio(true); setTempPrecio(String(precioPrend)); }}
+                style={{ width: "100%", padding: "10px", borderRadius: 10, border: "1px solid #30363D", background: "transparent", color: "#8B949E", cursor: "pointer", fontSize: 13, marginBottom: 12 }}>
+                ✏️ Cambiar precio por prenda (actual: ${precioPrend.toLocaleString()})
+              </button>
+            ) : (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6 }}>NUEVO PRECIO POR PRENDA</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input type="number" value={tempPrecio} onChange={e => setTempPrecio(e.target.value)}
+                    style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #FFD54F", background: "#0D1117", color: "#E6EDF3", fontSize: 16, fontWeight: 700 }}
+                    autoFocus />
+                  <button onClick={() => {
+                    const val = Number(tempPrecio);
+                    if (val > 0) {
+                      setPrecioPrend(val);
+                      try { localStorage.setItem("precioPrend", String(val)); } catch {}
+                    }
+                    setEditingPrecio(false);
+                  }} style={{ padding: "10px 16px", borderRadius: 8, border: "none", background: "#FFD54F", color: "#000", fontWeight: 800, cursor: "pointer" }}>
+                    Guardar
+                  </button>
+                  <button onClick={() => setEditingPrecio(false)}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "none", background: "rgba(255,255,255,0.05)", color: "#8B949E", cursor: "pointer" }}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button onClick={() => setShowTotalPrendas(false)}
+              style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", fontWeight: 800, cursor: "pointer", fontSize: 14 }}>
+              Cerrar
+            </button>
           </div>
         </div>
       )}
