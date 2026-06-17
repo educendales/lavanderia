@@ -115,6 +115,10 @@ export default function LavanderiaApp() {
   });
   const [newGarment, setNewGarment] = useState("");
   const [clientSearch, setClientSearch] = useState("");
+  const [precioDefaults, setPrecioDefaults] = useState(() => {
+    try { const s = localStorage.getItem("precioDefaults"); return s ? JSON.parse(s) : {}; } catch { return {}; }
+  });
+
   const [precioPrend, setPrecioPrend] = useState(() => {
     try { return Number(localStorage.getItem("precioPrend")) || 6500; } catch { return 6500; }
   });
@@ -122,12 +126,32 @@ export default function LavanderiaApp() {
   const [editingPrecio, setEditingPrecio] = useState(false);
   const [tempPrecio, setTempPrecio] = useState("");
   const [inventoryFilter, setInventoryFilter] = useState("");
+  const [inventoryDaysFilter, setInventoryDaysFilter] = useState("");
   const [expenseFilterDate, setExpenseFilterDate] = useState(today);
   const [showCalc, setShowCalc] = useState(false);
   const [calcDisplay, setCalcDisplay] = useState("0");
   const [calcPrev, setCalcPrev] = useState(null);
   const [calcOp, setCalcOp] = useState(null);
   const [calcNew, setCalcNew] = useState(true);
+
+  useEffect(() => {
+    if (!showCalc) return;
+    const handleKey = (e) => {
+      if (e.key >= "0" && e.key <= "9") calcInput(e.key);
+      else if (e.key === ".") calcDot();
+      else if (e.key === "+") calcOperation("+");
+      else if (e.key === "-") calcOperation("-");
+      else if (e.key === "*") calcOperation("×");
+      else if (e.key === "/") { e.preventDefault(); calcOperation("÷"); }
+      else if (e.key === "Enter" || e.key === "=") calcEquals();
+      else if (e.key === "Backspace") calcBackspace();
+      else if (e.key === "Escape") setShowCalc(false);
+      else if (e.key === "c" || e.key === "C") calcClear();
+      else if (e.key === "%") calcPercent();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [showCalc, calcDisplay, calcPrev, calcOp, calcNew]);
   const [newEmployee, setNewEmployee] = useState({ name: "", pin: "", role: "employee", turno: "mañana" });
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [reversarSearch, setReversarSearch] = useState("");
@@ -137,10 +161,10 @@ export default function LavanderiaApp() {
 
   const confirmarMultiEntrega = async () => {
     for (const order of selectedEntregas) {
-      await db.patch("orders", order.id, { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: today });
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today } : o));
+      await db.patch("orders", order.id, { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: today, delivered_by: user.name });
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today, delivered_by: user.name } : o));
     }
-    setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today } : o));
+    setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today, delivered_by: user.name } : o));
     setSelectedEntregas([]);
     setConfirmingMulti(false);
   };
@@ -315,7 +339,11 @@ export default function LavanderiaApp() {
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
   const updateItem = (i, field, val) => {
     setItems(prev => {
-      const updated = prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item);
+      let updated = prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item);
+      // Auto-fill price when garment type changes and has a default
+      if (field === "garment_type" && precioDefaults[val]) {
+        updated = updated.map((item, idx) => idx === i ? { ...item, price: precioDefaults[val] } : item);
+      }
       if (["decolorado","percudido","roto","manchado"].includes(field)) {
         setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
       }
@@ -387,9 +415,9 @@ export default function LavanderiaApp() {
 
   const confirmarEntrega = async () => {
     if (!entregaResult) return;
-    await db.patch("orders", entregaResult.id, { status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today });
-    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, status: "entregado", payment_method: entregaPayment, delivered_at: today } : o));
-    setEntregaResult(prev => ({ ...prev, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today }));
+    await db.patch("orders", entregaResult.id, { status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today, delivered_by: user.name });
+    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, status: "entregado", payment_method: entregaPayment, delivered_at: today, delivered_by: user.name } : o));
+    setEntregaResult(prev => ({ ...prev, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today, delivered_by: user.name }));
     setEntregaConfirmed(true);
   };
 
@@ -609,7 +637,15 @@ export default function LavanderiaApp() {
                           <span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date || "—"}</span>
                         </td>
                         <td style={{ padding: "12px 14px" }}>
-                          <button onClick={() => {
+                          <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
+                    <button onClick={() => {
                             const pwd = prompt("Contraseña para eliminar:");
                             if (pwd === "9621") { if (window.confirm("¿Eliminar esta orden?")) deleteOrder(o.id); }
                             else if (pwd !== null) alert("❌ Contraseña incorrecta");
@@ -655,7 +691,15 @@ export default function LavanderiaApp() {
                     </div>
                     {/* Select all pending */}
                     {entregaResults.some(o => o.status !== "entregado") && (
-                      <button onClick={() => {
+                      <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
+                    <button onClick={() => {
                         const pending = entregaResults.filter(o => o.status !== "entregado");
                         if (selectedEntregas.length === pending.length) setSelectedEntregas([]);
                         else setSelectedEntregas(pending);
@@ -685,13 +729,24 @@ export default function LavanderiaApp() {
                                 <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
                               </div>
                               <div style={{ fontSize: 13, color: "#8B949E" }}>{getServiceLabel(o.service)} · {o.garments} prendas</div>
-                              <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date || "—"}</div>
+                              <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>
+                                Ingreso: {o.date} · Entrega: {o.delivery_date || "—"}
+                                {o.delivered_by && <span style={{ color: "#C792EA" }}> · 👤 {o.delivered_by}</span>}
+                              </div>
                             </div>
                           </div>
                           <div style={{ textAlign: "right", marginLeft: 12 }}>
                             <div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A", marginBottom: 4 }}>${Math.round(Number(o.price))}</div>
                             {isPending && (
-                              <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(o.payment_method||"efectivo"); }}
+                              <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
+                    <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(o.payment_method||"efectivo"); }}
                                 style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "4px 10px", fontSize: 11 }}>Ver detalle →</button>
                             )}
                           </div>
@@ -747,6 +802,14 @@ export default function LavanderiaApp() {
               {entregaResult && (
                 <div>
                   {entregaResults && entregaResults.length > 1 && (
+                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
                     <button onClick={() => { setEntregaResult(null); setEntregaConfirmed(false); }}
                       style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", marginBottom: 16, fontSize: 13, padding: "8px 16px" }}>
                       ← Volver a la lista
@@ -837,6 +900,7 @@ export default function LavanderiaApp() {
                           { label: "💳 MÉTODO DE PAGO", value: entregaResult.payment_method === "nequi" ? "📱 Nequi" : entregaResult.payment_method === "daviplata" ? "💜 Daviplata" : "💵 Efectivo", color: "#4FC3F7" },
                           { label: "💰 TOTAL COBRADO", value: `$${Math.round(Number(entregaResult.price))}`, color: "#66BB6A" },
                           { label: "📋 RECIBO", value: entregaResult.sin_recibo ? "⚠️ Sin recibo" : "✅ Con recibo", color: entregaResult.sin_recibo ? "#FFD54F" : "#66BB6A" },
+                          { label: "👤 ENTREGADO POR", value: entregaResult.delivered_by || "—", color: "#C792EA" },
                         ].map((item, i) => (
                           <div key={i} style={{ background: "#0D1117", borderRadius: 10, padding: "14px 16px" }}>
                             <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 4, fontWeight: 600 }}>{item.label}</div>
@@ -844,7 +908,15 @@ export default function LavanderiaApp() {
                           </div>
                         ))}
                       </div>
-                      <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }}
+                      <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
+                    <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }}
                         style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", width: "100%", padding: 12 }}>
                         🔍 Nueva búsqueda
                       </button>
@@ -884,7 +956,15 @@ export default function LavanderiaApp() {
                       <div style={{ fontSize: 28 }}>👤</div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => setEditingClient({ ...c })} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
-                        <button onClick={() => {
+                        <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
+                    <button onClick={() => {
                           const pwd = prompt("Contraseña para eliminar:");
                           if (pwd === "9621") { if (window.confirm("¿Eliminar este cliente?")) deleteClient(c.id); }
                           else if (pwd !== null) alert("❌ Contraseña incorrecta");
@@ -943,7 +1023,15 @@ export default function LavanderiaApp() {
                       <td style={{ padding: "12px 14px", fontWeight: 700, color: "#EF5350" }}>${e.amount}</td>
                       <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{e.date}</td>
                       <td style={{ padding: "12px 14px" }}>
-                        <button onClick={() => {
+                        <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
+                    <button onClick={() => {
                           const pwd = prompt("Contraseña para eliminar:");
                           if (pwd === "9621") { if (window.confirm("¿Eliminar este gasto?")) deleteExpense(e.id); }
                           else if (pwd !== null) alert("❌ Contraseña incorrecta");
@@ -1016,6 +1104,50 @@ export default function LavanderiaApp() {
                 </div>
               </div>
 
+              {/* REVERSADAS */}
+              <div style={{ ...card, marginTop: 20 }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FFD54F" }}>↩️ Órdenes Reversadas</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Órdenes que fueron entregadas y luego reversadas</p>
+                {(() => {
+                  const reversadas = orders.filter(o => o.status === "listo" && o.delivered_at);
+                  return reversadas.length === 0 ? (
+                    <p style={{ color: "#484F58", fontSize: 13 }}>No hay órdenes reversadas</p>
+                  ) : (
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "#21262D" }}>
+                          {["# Orden","Cliente","Teléfono","Servicio","Total","Fue entregado","Estado actual"].map(h => (
+                            <th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 11 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reversadas.map(o => (
+                          <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
+                            <td style={{ padding: "10px 12px" }}>
+                              <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{o.order_number || "—"}</span>
+                            </td>
+                            <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.client_name}</td>
+                            <td style={{ padding: "10px 12px", color: "#8B949E" }}>{o.phone}</td>
+                            <td style={{ padding: "10px 12px" }}>
+                              {(o.service||"").split(",").map(sid => {
+                                const sv = SERVICES.find(s=>s.id===sid.trim());
+                                return sv ? <span key={sid} style={{ background: sv.color+"22", color: sv.color, padding: "1px 6px", borderRadius: 10, fontSize: 11, marginRight: 3 }}>{sv.icon} {sv.label}</span> : null;
+                              })}
+                            </td>
+                            <td style={{ padding: "10px 12px", fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price))}</td>
+                            <td style={{ padding: "10px 12px", color: "#8B949E", fontSize: 12 }}>📅 {o.delivered_at}</td>
+                            <td style={{ padding: "10px 12px" }}>
+                              <span style={{ background: "#66BB6A22", color: "#66BB6A", padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>Listo</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
+              </div>
+
               {/* INVENTARIO */}
               <div style={{ ...card, marginTop: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
@@ -1023,10 +1155,34 @@ export default function LavanderiaApp() {
                     <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FF8A65" }}>📦 Inventario — Prendas sin retirar</h3>
                     <p style={{ margin: 0, fontSize: 13, color: "#8B949E" }}>Órdenes que aún no han sido entregadas al cliente</p>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
                     <input type="date" value={inventoryFilter} onChange={e => setInventoryFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }} placeholder="Filtrar por fecha ingreso" />
+                      style={{ ...inp, width: 160, fontSize: 13, colorScheme: "dark" }} />
                     {inventoryFilter && <button onClick={() => setInventoryFilter("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
+                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
+                    <button onClick={() => {
+                      const rows = orders.filter(o => o.status !== "entregado" && (!inventoryFilter || o.date === inventoryFilter));
+                      const days = r => Math.floor((new Date() - new Date(r.date)) / (1000*60*60*24));
+                      const csv = [
+                        ["# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días en local"],
+                        ...rows.map(o => [o.order_number||"",o.client_name,o.phone,getServiceLabel(o.service),o.garments,Math.round(Number(o.price)),STATUS_LABELS[o.status]?.label,o.date,o.delivery_date||"",days(o)])
+                      ].map(r => r.join(",")).join("
+");
+                      const blob = new Blob(["﻿"+csv], { type: "text/csv;charset=utf-8;" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url; a.download = `inventario_${today}.csv`; a.click();
+                      URL.revokeObjectURL(url);
+                    }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "6px 14px", fontSize: 12 }}>
+                      📥 Exportar Excel
+                    </button>
                   </div>
                 </div>
 
@@ -1047,7 +1203,18 @@ export default function LavanderiaApp() {
 
                 {/* Filter by status */}
                 {(() => {
-                  const pendingOrders = orders.filter(o => o.status !== "entregado" && (!inventoryFilter || o.date === inventoryFilter)).sort((a,b) => new Date(a.delivery_date||"9999") - new Date(b.delivery_date||"9999"));
+                  const pendingOrders = orders.filter(o => {
+                    if (o.status === "entregado") return false;
+                    if (inventoryFilter && o.date !== inventoryFilter) return false;
+                    if (inventoryDaysFilter) {
+                      const days = Math.floor((new Date() - new Date(o.date)) / (1000*60*60*24));
+                      if (inventoryDaysFilter === "7" && days < 7) return false;
+                      if (inventoryDaysFilter === "30" && days < 30) return false;
+                      if (inventoryDaysFilter === "60" && days < 60) return false;
+                      if (inventoryDaysFilter === "90" && days < 90) return false;
+                    }
+                    return true;
+                  }).sort((a,b) => new Date(a.delivery_date||"9999") - new Date(b.delivery_date||"9999"));
                   return pendingOrders.length === 0 ? (
                     <div style={{ textAlign: "center", padding: 32, color: "#484F58" }}>
                       <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
@@ -1212,6 +1379,14 @@ export default function LavanderiaApp() {
                   <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                     <input style={{ ...inp, flex: 1 }} placeholder="Nueva prenda..." value={newGarment} onChange={e => setNewGarment(e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter" && newGarment.trim()) { saveGarmentTypes([...garmentTypes, newGarment.trim()]); setNewGarment(""); } }} />
+                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
                     <button onClick={() => { if (newGarment.trim()) { saveGarmentTypes([...garmentTypes, newGarment.trim()]); setNewGarment(""); } }}
                       style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
                   </div>
@@ -1219,7 +1394,15 @@ export default function LavanderiaApp() {
                     {garmentTypes.map((g, i) => (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0D1117", borderRadius: 8, padding: "8px 12px" }}>
                         <span>{GARMENT_ICONS[g] || "👕"} {g}</span>
-                        <button onClick={() => { if (window.confirm(`¿Eliminar "${g}"?`)) saveGarmentTypes(garmentTypes.filter((_,idx) => idx !== i)); }}
+                        <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
+                    <button onClick={() => { if (window.confirm(`¿Eliminar "${g}"?`)) saveGarmentTypes(garmentTypes.filter((_,idx) => idx !== i)); }}
                           style={{ background: "rgba(239,83,80,0.15)", color: "#EF5350", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>✕</button>
                       </div>
                     ))}
@@ -1236,6 +1419,14 @@ export default function LavanderiaApp() {
                   <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                     <input style={{ ...inp, flex: 1 }} placeholder="Nuevo color..." value={newColor} onChange={e => setNewColor(e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter" && newColor.trim()) { saveColors([...colors, newColor.trim()]); setNewColor(""); } }} />
+                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
                     <button onClick={() => { if (newColor.trim()) { saveColors([...colors, newColor.trim()]); setNewColor(""); } }}
                       style={{ ...btn, background: "linear-gradient(135deg,#C792EA,#9B59B6)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
                   </div>
@@ -1243,7 +1434,15 @@ export default function LavanderiaApp() {
                     {colors.map((c, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(199,146,234,0.1)", border: "1px solid rgba(199,146,234,0.3)", borderRadius: 20, padding: "4px 10px" }}>
                         <span style={{ fontSize: 13, color: "#C792EA" }}>🎨 {c}</span>
-                        <button onClick={() => { if (window.confirm(`¿Eliminar "${c}"?`)) saveColors(colors.filter((_,idx) => idx !== i)); }}
+                        <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
+                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="">Todos los días</option>
+                      <option value="7">Más de 7 días</option>
+                      <option value="30">Más de 30 días</option>
+                      <option value="60">Más de 60 días</option>
+                      <option value="90">Más de 90 días</option>
+                    </select>
+                    <button onClick={() => { if (window.confirm(`¿Eliminar "${c}"?`)) saveColors(colors.filter((_,idx) => idx !== i)); }}
                           style={{ background: "none", color: "#EF5350", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: "0 2px" }}>×</button>
                       </div>
                     ))}
@@ -1252,6 +1451,26 @@ export default function LavanderiaApp() {
                     style={{ marginTop: 12, width: "100%", padding: 8, borderRadius: 8, border: "1px solid #30363D", background: "transparent", color: "#8B949E", cursor: "pointer", fontSize: 12 }}>
                     🔄 Restaurar por defecto
                   </button>
+                </div>
+              </div>
+
+              {/* PRECIOS POR DEFECTO */}
+              <div style={{ marginTop: 20, ...card }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#66BB6A" }}>💰 Precios por defecto de prendas</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Al seleccionar una prenda en nueva orden se llenará el precio automáticamente</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
+                  {garmentTypes.map(g => (
+                    <div key={g} style={{ display: "flex", alignItems: "center", gap: 8, background: "#0D1117", borderRadius: 8, padding: "8px 12px" }}>
+                      <span style={{ fontSize: 13, flex: 1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
+                      <input type="number" placeholder="Precio" value={precioDefaults[g]||""} onChange={e => {
+                        const val = e.target.value;
+                        const updated = { ...precioDefaults, [g]: val ? Number(val) : undefined };
+                        if (!val) delete updated[g];
+                        setPrecioDefaults(updated);
+                        try { localStorage.setItem("precioDefaults", JSON.stringify(updated)); } catch {}
+                      }} style={{ width: 80, padding: "4px 8px", borderRadius: 6, border: "1px solid #30363D", background: "#161B22", color: "#66BB6A", fontSize: 13, fontWeight: 700, textAlign: "right" }} />
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1506,7 +1725,7 @@ export default function LavanderiaApp() {
                   {/* DELIVERY DATE */}
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>📅 FECHA DE ENTREGA</label>
-                    <input type="date" style={{ ...inp, borderColor: "#FFD54F44" }} value={newOrder.delivery_date} onChange={e => setNewOrder(p => ({ ...p, delivery_date: e.target.value }))} />
+                    <input type="date" style={{ ...inp, colorScheme: 'dark', borderColor: "#FFD54F44" }} value={newOrder.delivery_date} onChange={e => setNewOrder(p => ({ ...p, delivery_date: e.target.value }))} />
                     <div style={{ fontSize: 11, color: "#8B949E", marginTop: 4 }}>Por defecto: 2 días después de hoy. Puedes cambiarla.</div>
                   </div>
 
