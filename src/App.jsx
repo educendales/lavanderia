@@ -217,8 +217,8 @@ export default function LavanderiaApp() {
     if (pwd !== "9621") { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (order.status === "entregado") {
       if (!window.confirm(`¿Reversar la orden ${order.order_number} a estado "Listo"?`)) return;
-      await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null });
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null, delivered_by: o.delivered_by } : o));
+      await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null, reversada: true });
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null, reversada: true } : o));
     } else {
       if (!window.confirm(`¿Cambiar la orden ${order.order_number} a estado "Listo"?`)) return;
       await db.patch("orders", order.id, { status: "listo" });
@@ -1033,11 +1033,7 @@ export default function LavanderiaApp() {
                 {(() => {
                   const q = reversadasSearch.toLowerCase();
                   const reversadas = orders.filter(o => {
-                    if (o.status !== "listo") return false;
-                    // Una orden reversada es la que tiene delivered_by registrado (fue entregada antes)
-                    // O que tiene un historial de entrega (delivered_at aunque esté null ahora)
-                    // La mejor forma: status=listo Y tiene employee registrado como delivered_by
-                    if (!o.delivered_by && !o.delivered_at) return false;
+                    if (!o.reversada) return false;
                     if (!q) return true;
                     return o.client_name?.toLowerCase().includes(q) || o.phone?.includes(q) || o.order_number?.toLowerCase().includes(q);
                   });
