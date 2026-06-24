@@ -127,6 +127,7 @@ export default function LavanderiaApp() {
   const [inventoryFilter, setInventoryFilter] = useState("");
   const [inventoryDaysFilter, setInventoryDaysFilter] = useState("");
   const [expenseFilterDate, setExpenseFilterDate] = useState(today);
+  const [showEliminados, setShowEliminados] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
   const [calcDisplay, setCalcDisplay] = useState("0");
   const [calcPrev, setCalcPrev] = useState(null);
@@ -357,8 +358,8 @@ export default function LavanderiaApp() {
   };
 
   const deleteExpense = async (id) => {
-    setExpenses(prev => prev.filter(e => e.id !== id));
-    await db.delete("expenses", id);
+    await db.patch("expenses", id, { eliminado: true });
+    setExpenses(prev => prev.map(e => e.id === id ? { ...e, eliminado: true } : e));
   };
 
   const addClient = async () => {
@@ -913,48 +914,98 @@ export default function LavanderiaApp() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Gastos</h2>
-                  <input type="date" value={expenseFilterDate} onChange={e => setExpenseFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 13 }} />
-                  {expenseFilterDate && <button onClick={() => setExpenseFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todos</button>}
+                  {!showEliminados && <>
+                    <input type="date" value={expenseFilterDate} onChange={e => setExpenseFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 13 }} />
+                    {expenseFilterDate && <button onClick={() => setExpenseFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todos</button>}
+                  </>}
                 </div>
-                <button onClick={() => setModal("newExpense")} style={{ ...btn, background: "linear-gradient(135deg,#EF5350,#B71C1C)", color: "#fff" }}>+ Nuevo Gasto</button>
-              </div>
-              <div style={{ ...card, marginBottom: 20 }}>
-                <div style={{ display: "flex", gap: 40 }}>
-                  <div><div style={{ fontSize: 22, fontWeight: 800, color: "#EF5350" }}>${Math.round((expenseFilterDate ? expenses.filter(e=>e.date===expenseFilterDate) : expenses).reduce((s,e) => s+Number(e.amount), 0))}</div><div style={{ fontSize: 12, color: "#8B949E" }}>{expenseFilterDate ? "Gastos del día" : "Total gastos"}</div></div>
-                  <div><div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>{(expenseFilterDate ? expenses.filter(e=>e.date===expenseFilterDate) : expenses).length}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Registros</div></div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => setShowEliminados(!showEliminados)} style={{ ...btn, background: showEliminados ? "rgba(239,83,80,0.2)" : "rgba(255,255,255,0.05)", color: showEliminados ? "#EF5350" : "#8B949E", padding: "8px 14px", fontSize: 12 }}>
+                    {showEliminados ? "← Volver" : "🗑 Ver eliminados"}
+                  </button>
+                  {!showEliminados && <button onClick={() => setModal("newExpense")} style={{ ...btn, background: "linear-gradient(135deg,#EF5350,#B71C1C)", color: "#fff" }}>+ Nuevo Gasto</button>}
                 </div>
               </div>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                <thead>
-                  <tr style={{ background: "#21262D" }}>
-                    {["Concepto","Categoría","Pago","Monto","Fecha",""].map(h => (
-                      <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(expenseFilterDate ? expenses.filter(e=>e.date===expenseFilterDate) : expenses).map(e => (
-                    <tr key={e.id} style={{ borderBottom: "1px solid #21262D" }}>
-                      <td style={{ padding: "12px 14px", fontWeight: 600 }}>{e.concept}</td>
-                      <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>{e.category}</span></td>
-                      <td style={{ padding: "12px 14px" }}>
-                        <span style={{ fontSize: 12, background: e.payment_method === "nequi" ? "rgba(199,146,234,0.15)" : e.payment_method === "daviplata" ? "rgba(102,126,234,0.15)" : "rgba(102,187,106,0.15)", color: e.payment_method === "nequi" ? "#C792EA" : e.payment_method === "daviplata" ? "#667EEA" : "#66BB6A", padding: "3px 10px", borderRadius: 20 }}>
-                          {e.payment_method === "nequi" ? "📱 Nequi" : e.payment_method === "daviplata" ? "💜 Daviplata" : "💵 Efectivo"}
-                        </span>
-                      </td>
-                      <td style={{ padding: "12px 14px", fontWeight: 700, color: "#EF5350" }}>${e.amount}</td>
-                      <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{e.date}</td>
-                      <td style={{ padding: "12px 14px" }}>
-                        <button onClick={() => {
-                          const pwd = prompt("Contraseña para eliminar:");
-                          if (pwd === "9621") { if (window.confirm("¿Eliminar este gasto?")) deleteExpense(e.id); }
-                          else if (pwd !== null) alert("❌ Contraseña incorrecta");
-                        }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
-                      </td>
+
+              {/* GASTOS ELIMINADOS */}
+              {showEliminados && (
+                <div>
+                  <div style={{ ...card, marginBottom: 16, border: "1px solid rgba(239,83,80,0.4)" }}>
+                    <div style={{ display: "flex", gap: 40 }}>
+                      <div><div style={{ fontSize: 22, fontWeight: 800, color: "#EF5350" }}>${Math.round(expenses.filter(e=>e.eliminado).reduce((s,e)=>s+Number(e.amount),0))}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Total eliminado</div></div>
+                      <div><div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>{expenses.filter(e=>e.eliminado).length}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Registros</div></div>
+                    </div>
+                  </div>
+                  {expenses.filter(e=>e.eliminado).length === 0
+                    ? <div style={{ ...card, textAlign: "center", padding: 40, color: "#484F58" }}><div style={{ fontSize: 40, marginBottom: 8 }}>🗑</div><div>No hay gastos eliminados</div></div>
+                    : <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                        <thead><tr style={{ background: "#21262D" }}>{["Concepto","Categoría","Pago","Monto","Fecha",""].map(h=><th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
+                        <tbody>
+                          {expenses.filter(e=>e.eliminado).map(e=>(
+                            <tr key={e.id} style={{ borderBottom: "1px solid #21262D", opacity: 0.7 }}>
+                              <td style={{ padding: "12px 14px", fontWeight: 600 }}>{e.concept}</td>
+                              <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>{e.category}</span></td>
+                              <td style={{ padding: "12px 14px" }}>
+                                <span style={{ fontSize: 12, background: e.payment_method==="nequi"?"rgba(199,146,234,0.15)":e.payment_method==="daviplata"?"rgba(102,126,234,0.15)":"rgba(102,187,106,0.15)", color: e.payment_method==="nequi"?"#C792EA":e.payment_method==="daviplata"?"#667EEA":"#66BB6A", padding: "3px 10px", borderRadius: 20 }}>
+                                  {e.payment_method==="nequi"?"📱 Nequi":e.payment_method==="daviplata"?"💜 Daviplata":"💵 Efectivo"}
+                                </span>
+                              </td>
+                              <td style={{ padding: "12px 14px", fontWeight: 700, color: "#EF5350" }}>${e.amount}</td>
+                              <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{e.date}</td>
+                              <td style={{ padding: "12px 14px" }}>
+                                <button onClick={async () => {
+                                  await db.patch("expenses", e.id, { eliminado: false });
+                                  setExpenses(prev => prev.map(ex => ex.id === e.id ? { ...ex, eliminado: false } : ex));
+                                }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "5px 10px", fontSize: 12 }}>↩️ Restaurar</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                  }
+                </div>
+              )}
+
+              {/* GASTOS ACTIVOS */}
+              {!showEliminados && <>
+                <div style={{ ...card, marginBottom: 20 }}>
+                  <div style={{ display: "flex", gap: 40 }}>
+                    <div><div style={{ fontSize: 22, fontWeight: 800, color: "#EF5350" }}>${Math.round((expenseFilterDate ? expenses.filter(e=>e.date===expenseFilterDate&&!e.eliminado) : expenses.filter(e=>!e.eliminado)).reduce((s,e)=>s+Number(e.amount),0))}</div><div style={{ fontSize: 12, color: "#8B949E" }}>{expenseFilterDate ? "Gastos del día" : "Total gastos"}</div></div>
+                    <div><div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>{(expenseFilterDate ? expenses.filter(e=>e.date===expenseFilterDate&&!e.eliminado) : expenses.filter(e=>!e.eliminado)).length}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Registros</div></div>
+                  </div>
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: "#21262D" }}>
+                      {["Concepto","Categoría","Pago","Monto","Fecha",""].map(h => (
+                        <th key={h} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(expenseFilterDate ? expenses.filter(e=>e.date===expenseFilterDate&&!e.eliminado) : expenses.filter(e=>!e.eliminado)).map(e => (
+                      <tr key={e.id} style={{ borderBottom: "1px solid #21262D" }}>
+                        <td style={{ padding: "12px 14px", fontWeight: 600 }}>{e.concept}</td>
+                        <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 10px", borderRadius: 20, fontSize: 12 }}>{e.category}</span></td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <span style={{ fontSize: 12, background: e.payment_method === "nequi" ? "rgba(199,146,234,0.15)" : e.payment_method === "daviplata" ? "rgba(102,126,234,0.15)" : "rgba(102,187,106,0.15)", color: e.payment_method === "nequi" ? "#C792EA" : e.payment_method === "daviplata" ? "#667EEA" : "#66BB6A", padding: "3px 10px", borderRadius: 20 }}>
+                            {e.payment_method === "nequi" ? "📱 Nequi" : e.payment_method === "daviplata" ? "💜 Daviplata" : "💵 Efectivo"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 14px", fontWeight: 700, color: "#EF5350" }}>${e.amount}</td>
+                        <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{e.date}</td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <button onClick={() => {
+                            const pwd = prompt("Contraseña para eliminar:");
+                            if (pwd === "9621") { if (window.confirm("¿Eliminar este gasto?")) deleteExpense(e.id); }
+                            else if (pwd !== null) alert("❌ Contraseña incorrecta");
+                          }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>}
             </div>
           )}
 
