@@ -137,6 +137,7 @@ export default function LavanderiaApp() {
   const [reversarSearch, setReversarSearch] = useState("");
   const [reversarResults, setReversarResults] = useState(null);
   const [reversarDone, setReversarDone] = useState(false);
+  const [reversadasSearch, setReversadasSearch] = useState("");
   const [newColor, setNewColor] = useState("");
 
   // ── CALCULATOR FUNCTIONS (defined before useEffect so keyboard can use them) ──
@@ -1018,35 +1019,69 @@ export default function LavanderiaApp() {
 
               {/* REVERSADAS */}
               <div style={{ ...card, marginTop: 20 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FFD54F" }}>↩️ Órdenes Reversadas</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Órdenes que fueron entregadas y luego reversadas</p>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FFD54F" }}>↩️ Órdenes Reversadas</h3>
+                    <p style={{ margin: 0, fontSize: 13, color: "#8B949E" }}>Órdenes que estuvieron entregadas y fueron reversadas a "Listo"</p>
+                  </div>
+                </div>
+                <div style={{ marginBottom: 16, display: "flex", gap: 10 }}>
+                  <input style={{ ...inp, maxWidth: 300 }} placeholder="🔍 Buscar por nombre, teléfono o # orden..."
+                    value={reversadasSearch} onChange={e => setReversadasSearch(e.target.value)} />
+                  {reversadasSearch && <button onClick={() => setReversadasSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 12px", fontSize: 12 }}>✕</button>}
+                </div>
                 {(() => {
-                  const reversadas = orders.filter(o => o.status === "listo" && o.delivered_at);
+                  const q = reversadasSearch.toLowerCase();
+                  const reversadas = orders.filter(o => {
+                    if (o.status !== "listo") return false;
+                    // Una orden reversada es la que tiene delivered_by registrado (fue entregada antes)
+                    // O que tiene un historial de entrega (delivered_at aunque esté null ahora)
+                    // La mejor forma: status=listo Y tiene employee registrado como delivered_by
+                    if (!o.delivered_by && !o.delivered_at) return false;
+                    if (!q) return true;
+                    return o.client_name?.toLowerCase().includes(q) || o.phone?.includes(q) || o.order_number?.toLowerCase().includes(q);
+                  });
                   return reversadas.length === 0 ? (
-                    <p style={{ color: "#484F58", fontSize: 13 }}>No hay órdenes reversadas</p>
+                    <div style={{ textAlign: "center", padding: 32, color: "#484F58" }}>
+                      <div style={{ fontSize: 32, marginBottom: 8 }}>↩️</div>
+                      <div>{reversadasSearch ? "No se encontraron órdenes reversadas con ese criterio" : "No hay órdenes reversadas aún"}</div>
+                    </div>
                   ) : (
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                      <thead>
-                        <tr style={{ background: "#21262D" }}>
-                          {["# Orden","Cliente","Teléfono","Servicio","Total","Fue entregado","Estado actual"].map(h => (
-                            <th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 11 }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reversadas.map(o => (
-                          <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
-                            <td style={{ padding: "10px 12px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{o.order_number || "—"}</span></td>
-                            <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.client_name}</td>
-                            <td style={{ padding: "10px 12px", color: "#8B949E" }}>{o.phone}</td>
-                            <td style={{ padding: "10px 12px" }}>{(o.service||"").split(",").map(sid => { const sv=SERVICES.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,marginRight:3 }}>{sv.icon} {sv.label}</span>:null; })}</td>
-                            <td style={{ padding: "10px 12px", fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price))}</td>
-                            <td style={{ padding: "10px 12px", color: "#8B949E", fontSize: 12 }}>📅 {o.delivered_at}</td>
-                            <td style={{ padding: "10px 12px" }}><span style={{ background: "#66BB6A22", color: "#66BB6A", padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>Listo</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <>
+                      <div style={{ fontSize: 13, color: "#8B949E", marginBottom: 12 }}>
+                        <strong style={{ color: "#FFD54F" }}>{reversadas.length}</strong> orden{reversadas.length !== 1 ? "es" : ""} reversada{reversadas.length !== 1 ? "s" : ""}
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ background: "#21262D" }}>
+                              {["# Orden","Cliente","Teléfono","Servicio","Total","Entregado por","Estado"].map(h => (
+                                <th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 11 }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reversadas.map(o => (
+                              <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
+                                <td style={{ padding: "10px 12px" }}><span style={{ background: "rgba(255,213,79,0.15)", color: "#FFD54F", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{o.order_number || "—"}</span></td>
+                                <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.client_name}</td>
+                                <td style={{ padding: "10px 12px", color: "#8B949E" }}>{o.phone}</td>
+                                <td style={{ padding: "10px 12px" }}>{(o.service||"").split(",").map(sid => { const sv=SERVICES.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,marginRight:3 }}>{sv.icon} {sv.label}</span>:null; })}</td>
+                                <td style={{ padding: "10px 12px", fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price))}</td>
+                                <td style={{ padding: "10px 12px" }}>
+                                  {o.delivered_by
+                                    ? <span style={{ color: "#C792EA", fontSize: 12 }}>👤 {o.delivered_by}</span>
+                                    : <span style={{ color: "#484F58", fontSize: 12 }}>—</span>}
+                                </td>
+                                <td style={{ padding: "10px 12px" }}>
+                                  <span style={{ background: "#66BB6A22", color: "#66BB6A", padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>↩️ Reversada</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
                   );
                 })()}
               </div>
