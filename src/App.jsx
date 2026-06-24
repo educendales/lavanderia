@@ -179,7 +179,7 @@ export default function LavanderiaApp() {
       else if (e.key === "-") calcOperation("-");
       else if (e.key === "*") calcOperation("×");
       else if (e.key === "/") { e.preventDefault(); calcOperation("÷"); }
-      else if (e.key === "Enter" || e.key === "=") calcEquals();
+      else if (e.key === "Enter" || e.key === "=") { e.preventDefault(); calcEquals(); }
       else if (e.key === "Backspace") calcBackspace();
       else if (e.key === "Escape") setShowCalc(false);
       else if (e.key === "c" || e.key === "C") calcClear();
