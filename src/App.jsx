@@ -118,7 +118,6 @@ export default function LavanderiaApp() {
   const [precioDefaults, setPrecioDefaults] = useState(() => {
     try { const s = localStorage.getItem("precioDefaults"); return s ? JSON.parse(s) : {}; } catch { return {}; }
   });
-
   const [precioPrend, setPrecioPrend] = useState(() => {
     try { return Number(localStorage.getItem("precioPrend")) || 6500; } catch { return 6500; }
   });
@@ -133,7 +132,44 @@ export default function LavanderiaApp() {
   const [calcPrev, setCalcPrev] = useState(null);
   const [calcOp, setCalcOp] = useState(null);
   const [calcNew, setCalcNew] = useState(true);
+  const [newEmployee, setNewEmployee] = useState({ name: "", pin: "", role: "employee", turno: "mañana" });
+  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [reversarSearch, setReversarSearch] = useState("");
+  const [reversarResults, setReversarResults] = useState(null);
+  const [reversarDone, setReversarDone] = useState(false);
+  const [newColor, setNewColor] = useState("");
 
+  // ── CALCULATOR FUNCTIONS (defined before useEffect so keyboard can use them) ──
+  const calcInput = (val) => {
+    if (calcNew) { setCalcDisplay(String(val)); setCalcNew(false); }
+    else { setCalcDisplay(prev => prev === "0" ? String(val) : prev + val); }
+  };
+  const calcDot = () => {
+    if (calcNew) { setCalcDisplay("0."); setCalcNew(false); return; }
+    if (!calcDisplay.includes(".")) setCalcDisplay(prev => prev + ".");
+  };
+  const calcOperation = (op) => { setCalcPrev(parseFloat(calcDisplay)); setCalcOp(op); setCalcNew(true); };
+  const calcEquals = () => {
+    if (calcOp === null || calcPrev === null) return;
+    const cur = parseFloat(calcDisplay);
+    let result = 0;
+    if (calcOp === "+") result = calcPrev + cur;
+    if (calcOp === "-") result = calcPrev - cur;
+    if (calcOp === "×") result = calcPrev * cur;
+    if (calcOp === "÷") result = cur !== 0 ? calcPrev / cur : 0;
+    setCalcDisplay(parseFloat(result.toFixed(6)).toString());
+    setCalcPrev(null); setCalcOp(null); setCalcNew(true);
+  };
+  const calcClear = () => { setCalcDisplay("0"); setCalcPrev(null); setCalcOp(null); setCalcNew(true); };
+  const calcBackspace = () => {
+    if (calcNew) return;
+    const next = calcDisplay.slice(0, -1);
+    setCalcDisplay(next.length === 0 || next === "-" ? "0" : next);
+  };
+  const calcToggleSign = () => setCalcDisplay(prev => prev.startsWith("-") ? prev.slice(1) : "-" + prev);
+  const calcPercent = () => setCalcDisplay(prev => String(parseFloat(prev) / 100));
+
+  // ── KEYBOARD SUPPORT FOR CALCULATOR ──
   useEffect(() => {
     if (!showCalc) return;
     const handleKey = (e) => {
@@ -152,12 +188,9 @@ export default function LavanderiaApp() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [showCalc, calcDisplay, calcPrev, calcOp, calcNew]);
-  const [newEmployee, setNewEmployee] = useState({ name: "", pin: "", role: "employee", turno: "mañana" });
-  const [editingEmployee, setEditingEmployee] = useState(null);
-  const [reversarSearch, setReversarSearch] = useState("");
-  const [reversarResults, setReversarResults] = useState(null);
-  const [reversarDone, setReversarDone] = useState(false);
-  const [newColor, setNewColor] = useState("");
+
+  const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
+  const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
 
   const confirmarMultiEntrega = async () => {
     for (const order of selectedEntregas) {
@@ -174,10 +207,7 @@ export default function LavanderiaApp() {
     if (!q) return;
     const byOrder = orders.find(o => o.order_number?.toLowerCase() === q);
     if (byOrder) { setReversarResults([byOrder]); }
-    else {
-      const byPhone = orders.filter(o => o.phone?.toLowerCase().includes(q));
-      setReversarResults(byPhone);
-    }
+    else { setReversarResults(orders.filter(o => o.phone?.toLowerCase().includes(q))); }
     setReversarDone(false);
   };
 
@@ -220,45 +250,6 @@ export default function LavanderiaApp() {
     await db.delete("employees", id);
     setEmployees(prev => prev.filter(e => e.id !== id));
   };
-
-  const calcInput = (val) => {
-    if (calcNew) { setCalcDisplay(String(val)); setCalcNew(false); }
-    else { setCalcDisplay(prev => prev === "0" ? String(val) : prev + val); }
-  };
-  const calcDot = () => {
-    if (calcNew) { setCalcDisplay("0."); setCalcNew(false); return; }
-    if (!calcDisplay.includes(".")) setCalcDisplay(prev => prev + ".");
-  };
-  const calcOperation = (op) => {
-    setCalcPrev(parseFloat(calcDisplay));
-    setCalcOp(op);
-    setCalcNew(true);
-  };
-  const calcEquals = () => {
-    if (calcOp === null || calcPrev === null) return;
-    const cur = parseFloat(calcDisplay);
-    let result = 0;
-    if (calcOp === "+") result = calcPrev + cur;
-    if (calcOp === "-") result = calcPrev - cur;
-    if (calcOp === "×") result = calcPrev * cur;
-    if (calcOp === "÷") result = cur !== 0 ? calcPrev / cur : 0;
-    const str = parseFloat(result.toFixed(6)).toString();
-    setCalcDisplay(str);
-    setCalcPrev(null);
-    setCalcOp(null);
-    setCalcNew(true);
-  };
-  const calcClear = () => { setCalcDisplay("0"); setCalcPrev(null); setCalcOp(null); setCalcNew(true); };
-  const calcBackspace = () => {
-    if (calcNew) return;
-    const next = calcDisplay.slice(0,-1);
-    setCalcDisplay(next.length === 0 || next === "-" ? "0" : next);
-  };
-  const calcToggleSign = () => setCalcDisplay(prev => prev.startsWith("-") ? prev.slice(1) : "-" + prev);
-  const calcPercent = () => setCalcDisplay(prev => String(parseFloat(prev) / 100));
-
-  const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
-  const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
 
   useEffect(() => {
     db.get("employees").then(data => {
@@ -340,7 +331,6 @@ export default function LavanderiaApp() {
   const updateItem = (i, field, val) => {
     setItems(prev => {
       let updated = prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item);
-      // Auto-fill price when garment type changes and has a default
       if (field === "garment_type" && precioDefaults[val]) {
         updated = updated.map((item, idx) => idx === i ? { ...item, price: precioDefaults[val] } : item);
       }
@@ -386,11 +376,6 @@ export default function LavanderiaApp() {
     setEditingClient(null);
   };
 
-  const updateStatus = async (id, status) => {
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-    await db.patch("orders", id, { status });
-  };
-
   const deleteOrder = async (id) => {
     setOrders(prev => prev.filter(o => o.id !== id));
     await db.delete("orders", id);
@@ -399,14 +384,9 @@ export default function LavanderiaApp() {
   const searchEntrega = () => {
     const q = entregaSearch.trim().toLowerCase();
     if (!q) return;
-    // Search by order number (single) or phone (multiple)
     const byOrder = orders.find(o => o.order_number?.toLowerCase() === q);
-    if (byOrder) {
-      setEntregaResults([byOrder]);
-    } else {
-      const byPhone = orders.filter(o => o.phone?.toLowerCase().includes(q));
-      setEntregaResults(byPhone);
-    }
+    if (byOrder) { setEntregaResults([byOrder]); }
+    else { setEntregaResults(orders.filter(o => o.phone?.toLowerCase().includes(q))); }
     setEntregaResult(null);
     setEntregaConfirmed(false);
     setEntregaSinRecibo(false);
@@ -637,15 +617,7 @@ export default function LavanderiaApp() {
                           <span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date || "—"}</span>
                         </td>
                         <td style={{ padding: "12px 14px" }}>
-                          <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
-                    <button onClick={() => {
+                          <button onClick={() => {
                             const pwd = prompt("Contraseña para eliminar:");
                             if (pwd === "9621") { if (window.confirm("¿Eliminar esta orden?")) deleteOrder(o.id); }
                             else if (pwd !== null) alert("❌ Contraseña incorrecta");
@@ -674,7 +646,6 @@ export default function LavanderiaApp() {
                 </div>
               </div>
 
-              {/* No results */}
               {entregaResults !== null && entregaResults.length === 0 && (
                 <div style={{ ...card, textAlign: "center", color: "#EF5350", padding: 32 }}>
                   <div style={{ fontSize: 40, marginBottom: 8 }}>😕</div>
@@ -682,24 +653,14 @@ export default function LavanderiaApp() {
                 </div>
               )}
 
-              {/* Multiple results - show list */}
               {entregaResults !== null && entregaResults.length > 0 && !entregaResult && (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div style={{ fontSize: 13, color: "#8B949E" }}>
                       Se encontraron <strong style={{ color: "#4FC3F7" }}>{entregaResults.length} órdenes</strong> para este cliente
                     </div>
-                    {/* Select all pending */}
                     {entregaResults.some(o => o.status !== "entregado") && (
-                      <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
-                    <button onClick={() => {
+                      <button onClick={() => {
                         const pending = entregaResults.filter(o => o.status !== "entregado");
                         if (selectedEntregas.length === pending.length) setSelectedEntregas([]);
                         else setSelectedEntregas(pending);
@@ -713,10 +674,9 @@ export default function LavanderiaApp() {
                     const isSelected = selectedEntregas.some(s => s.id === o.id);
                     const isPending = o.status !== "entregado";
                     return (
-                      <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${isSelected ? "#66BB6A" : STATUS_LABELS[o.status]?.color||"#30363D"}`, background: isSelected ? "rgba(102,187,106,0.06)" : "#161B22", transition: "all 0.2s" }}>
+                      <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${isSelected ? "#66BB6A" : STATUS_LABELS[o.status]?.color||"#30363D"}`, background: isSelected ? "rgba(102,187,106,0.06)" : "#161B22" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
-                            {/* Checkbox for pending orders */}
                             {isPending && (
                               <input type="checkbox" checked={isSelected}
                                 onChange={() => setSelectedEntregas(prev => isSelected ? prev.filter(s=>s.id!==o.id) : [...prev, o])}
@@ -738,15 +698,7 @@ export default function LavanderiaApp() {
                           <div style={{ textAlign: "right", marginLeft: 12 }}>
                             <div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A", marginBottom: 4 }}>${Math.round(Number(o.price))}</div>
                             {isPending && (
-                              <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
-                    <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(o.payment_method||"efectivo"); }}
+                              <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(o.payment_method||"efectivo"); }}
                                 style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "4px 10px", fontSize: 11 }}>Ver detalle →</button>
                             )}
                           </div>
@@ -755,7 +707,6 @@ export default function LavanderiaApp() {
                     );
                   })}
 
-                  {/* Multi-deliver panel */}
                   {selectedEntregas.length > 0 && (
                     <div style={{ ...card, border: "1px solid #66BB6A", background: "rgba(102,187,106,0.06)", marginTop: 8 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -770,8 +721,6 @@ export default function LavanderiaApp() {
                         </div>
                         <button onClick={() => setSelectedEntregas([])} style={{ ...btn, background: "transparent", color: "#8B949E", padding: "4px 10px", fontSize: 12 }}>✕ Cancelar</button>
                       </div>
-
-                      {/* Payment method */}
                       <div style={{ marginBottom: 12 }}>
                         <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
                         <div style={{ display: "flex", gap: 8 }}>
@@ -782,15 +731,12 @@ export default function LavanderiaApp() {
                           ))}
                         </div>
                       </div>
-
-                      {/* Sin recibo */}
                       <div style={{ marginBottom: 16 }}>
                         <label onClick={() => setEntregaMultiSinRecibo(!entregaMultiSinRecibo)} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", background: entregaMultiSinRecibo?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)", border:`1px solid ${entregaMultiSinRecibo?"#FFD54F":"#30363D"}`, borderRadius:8, padding:"10px 14px" }}>
                           <input type="checkbox" checked={entregaMultiSinRecibo} onChange={e=>setEntregaMultiSinRecibo(e.target.checked)} style={{ width:16,height:16,accentColor:"#FFD54F" }} />
                           <span style={{ fontSize:13, color: entregaMultiSinRecibo?"#FFD54F":"#8B949E" }}>📋 Entregado sin recibo</span>
                         </label>
                       </div>
-
                       <button onClick={confirmarMultiEntrega}
                         style={{ ...btn, width:"100%", background:"linear-gradient(135deg,#66BB6A,#388E3C)", color:"#fff", padding:14, fontSize:15, fontWeight:800, borderRadius:10 }}>
                         ✅ Confirmar {selectedEntregas.length} entrega{selectedEntregas.length>1?"s":""} · ${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}
@@ -799,130 +745,115 @@ export default function LavanderiaApp() {
                   )}
                 </div>
               )}
+
               {entregaResult && (
                 <div>
                   {entregaResults && entregaResults.length > 1 && (
-                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
                     <button onClick={() => { setEntregaResult(null); setEntregaConfirmed(false); }}
                       style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", marginBottom: 16, fontSize: 13, padding: "8px 16px" }}>
                       ← Volver a la lista
                     </button>
                   )}
-                <div style={{ ...card, border: entregaConfirmed ? "1px solid #66BB6A" : "1px solid #4FC3F7" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                        <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 12px", borderRadius: 8, fontSize: 16 }}>{entregaResult.order_number || "—"}</span>
-                        <span style={{ background: STATUS_LABELS[entregaResult.status]?.color+"22", color: STATUS_LABELS[entregaResult.status]?.color, padding: "4px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>{STATUS_LABELS[entregaResult.status]?.label}</span>
+                  <div style={{ ...card, border: entregaConfirmed ? "1px solid #66BB6A" : "1px solid #4FC3F7" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 12px", borderRadius: 8, fontSize: 16 }}>{entregaResult.order_number || "—"}</span>
+                          <span style={{ background: STATUS_LABELS[entregaResult.status]?.color+"22", color: STATUS_LABELS[entregaResult.status]?.color, padding: "4px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>{STATUS_LABELS[entregaResult.status]?.label}</span>
+                        </div>
+                        <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 2 }}>{entregaResult.client_name}</div>
+                        <div style={{ color: "#8B949E", fontSize: 14 }}>📞 {entregaResult.phone}</div>
                       </div>
-                      <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 2 }}>{entregaResult.client_name}</div>
-                      <div style={{ color: "#8B949E", fontSize: 14 }}>📞 {entregaResult.phone}</div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 800, fontSize: 28, color: "#66BB6A" }}>${Math.round(Number(entregaResult.price))}</div>
-                      <div style={{ fontSize: 12, color: "#8B949E" }}>Total a cobrar</div>
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
-                    {[
-                      { label: "SERVICIO", value: getServiceLabel(entregaResult.service) },
-                      { label: "PRENDAS", value: `${entregaResult.garments} prendas` },
-                      { label: "FECHA ENTREGA", value: `📅 ${entregaResult.delivery_date || "—"}`, color: "#FFD54F" },
-                    ].map((item, i) => (
-                      <div key={i} style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px" }}>
-                        <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 2 }}>{item.label}</div>
-                        <div style={{ fontWeight: 600, color: item.color || "#E6EDF3" }}>{item.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {orderItems[entregaResult.id] && (
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 12, color: "#8B949E", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {orderItems[entregaResult.id].map((it, i) => (
-                          <div key={i} style={{ background: "#21262D", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>
-                            {it.service && (() => { const sv=SERVICES.find(s=>s.id===it.service); return sv ? <span style={{ color: sv.color }}>{sv.icon} </span> : null; })()}
-                            <span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>
-                            {it.color && <span style={{ color: "#C792EA" }}> · {it.color}</span>}
-                            <span style={{ color: "#66BB6A", fontWeight: 700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span>
-                          </div>
-                        ))}
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontWeight: 800, fontSize: 28, color: "#66BB6A" }}>${Math.round(Number(entregaResult.price))}</div>
+                        <div style={{ fontSize: 12, color: "#8B949E" }}>Total a cobrar</div>
                       </div>
                     </div>
-                  )}
-                  {entregaResult.notes && (
-                    <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#FFD54F" }}>
-                      📝 {entregaResult.notes}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+                      {[
+                        { label: "SERVICIO", value: getServiceLabel(entregaResult.service) },
+                        { label: "PRENDAS", value: `${entregaResult.garments} prendas` },
+                        { label: "FECHA ENTREGA", value: `📅 ${entregaResult.delivery_date || "—"}`, color: "#FFD54F" },
+                      ].map((item, i) => (
+                        <div key={i} style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px" }}>
+                          <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 2 }}>{item.label}</div>
+                          <div style={{ fontWeight: 600, color: item.color || "#E6EDF3" }}>{item.value}</div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                  {entregaResult.status !== "entregado" && !entregaConfirmed && (
-                    <>
-                      <div style={{ marginBottom: 16 }}>
-                        <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
-                        <div style={{ display: "flex", gap: 10 }}>
-                          {[{ value: "efectivo", label: "💵 Efectivo" },{ value: "nequi", label: "📱 Nequi" },{ value: "daviplata", label: "💜 Daviplata" }].map(opt => (
-                            <label key={opt.value} onClick={() => setEntregaPayment(opt.value)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, fontWeight: 600, background: entregaPayment === opt.value ? "rgba(79,195,247,0.15)" : "rgba(255,255,255,0.04)", border: `2px solid ${entregaPayment === opt.value ? "#4FC3F7" : "#30363D"}`, borderRadius: 10, padding: "10px 6px", color: entregaPayment === opt.value ? "#4FC3F7" : "#8B949E" }}>
-                              {opt.label}
-                            </label>
+                    {orderItems[entregaResult.id] && (
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ fontSize: 12, color: "#8B949E", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {orderItems[entregaResult.id].map((it, i) => (
+                            <div key={i} style={{ background: "#21262D", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>
+                              {it.service && (() => { const sv=SERVICES.find(s=>s.id===it.service); return sv ? <span style={{ color: sv.color }}>{sv.icon} </span> : null; })()}
+                              <span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>
+                              {it.color && <span style={{ color: "#C792EA" }}> · {it.color}</span>}
+                              <span style={{ color: "#66BB6A", fontWeight: 700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span>
+                            </div>
                           ))}
                         </div>
                       </div>
-                      <div style={{ marginBottom: 20 }}>
-                        <label onClick={() => setEntregaSinRecibo(!entregaSinRecibo)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", background: entregaSinRecibo ? "rgba(255,213,79,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${entregaSinRecibo ? "#FFD54F" : "#30363D"}`, borderRadius: 10, padding: "12px 16px" }}>
-                          <input type="checkbox" checked={entregaSinRecibo} onChange={e => setEntregaSinRecibo(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#FFD54F" }} />
-                          <div>
-                            <div style={{ fontWeight: 600, color: entregaSinRecibo ? "#FFD54F" : "#8B949E" }}>📋 Entregado sin recibo</div>
-                            <div style={{ fontSize: 12, color: "#484F58" }}>El cliente no presentó recibo físico</div>
+                    )}
+                    {entregaResult.notes && (
+                      <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#FFD54F" }}>
+                        📝 {entregaResult.notes}
+                      </div>
+                    )}
+                    {entregaResult.status !== "entregado" && !entregaConfirmed && (
+                      <>
+                        <div style={{ marginBottom: 16 }}>
+                          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
+                          <div style={{ display: "flex", gap: 10 }}>
+                            {[{ value: "efectivo", label: "💵 Efectivo" },{ value: "nequi", label: "📱 Nequi" },{ value: "daviplata", label: "💜 Daviplata" }].map(opt => (
+                              <label key={opt.value} onClick={() => setEntregaPayment(opt.value)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, fontWeight: 600, background: entregaPayment === opt.value ? "rgba(79,195,247,0.15)" : "rgba(255,255,255,0.04)", border: `2px solid ${entregaPayment === opt.value ? "#4FC3F7" : "#30363D"}`, borderRadius: 10, padding: "10px 6px", color: entregaPayment === opt.value ? "#4FC3F7" : "#8B949E" }}>
+                                {opt.label}
+                              </label>
+                            ))}
                           </div>
-                        </label>
+                        </div>
+                        <div style={{ marginBottom: 20 }}>
+                          <label onClick={() => setEntregaSinRecibo(!entregaSinRecibo)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", background: entregaSinRecibo ? "rgba(255,213,79,0.1)" : "rgba(255,255,255,0.04)", border: `1px solid ${entregaSinRecibo ? "#FFD54F" : "#30363D"}`, borderRadius: 10, padding: "12px 16px" }}>
+                            <input type="checkbox" checked={entregaSinRecibo} onChange={e => setEntregaSinRecibo(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#FFD54F" }} />
+                            <div>
+                              <div style={{ fontWeight: 600, color: entregaSinRecibo ? "#FFD54F" : "#8B949E" }}>📋 Entregado sin recibo</div>
+                              <div style={{ fontSize: 12, color: "#484F58" }}>El cliente no presentó recibo físico</div>
+                            </div>
+                          </label>
+                        </div>
+                        <button onClick={confirmarEntrega} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff", padding: 16, fontSize: 16, fontWeight: 800, borderRadius: 10 }}>
+                          ✅ Confirmar Entrega · ${Math.round(Number(entregaResult.price))}
+                        </button>
+                      </>
+                    )}
+                    {(entregaResult.status === "entregado" || entregaConfirmed) && (
+                      <div style={{ padding: "16px 0" }}>
+                        <div style={{ textAlign: "center", marginBottom: 20 }}>
+                          <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
+                          <div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>¡Entrega confirmada!</div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                          {[
+                            { label: "📅 FECHA DE ENTREGA", value: entregaResult.delivered_at || today, color: "#66BB6A" },
+                            { label: "💳 MÉTODO DE PAGO", value: entregaResult.payment_method === "nequi" ? "📱 Nequi" : entregaResult.payment_method === "daviplata" ? "💜 Daviplata" : "💵 Efectivo", color: "#4FC3F7" },
+                            { label: "💰 TOTAL COBRADO", value: `$${Math.round(Number(entregaResult.price))}`, color: "#66BB6A" },
+                            { label: "📋 RECIBO", value: entregaResult.sin_recibo ? "⚠️ Sin recibo" : "✅ Con recibo", color: entregaResult.sin_recibo ? "#FFD54F" : "#66BB6A" },
+                            { label: "👤 ENTREGADO POR", value: entregaResult.delivered_by || "—", color: "#C792EA" },
+                          ].map((item, i) => (
+                            <div key={i} style={{ background: "#0D1117", borderRadius: 10, padding: "14px 16px" }}>
+                              <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 4, fontWeight: 600 }}>{item.label}</div>
+                              <div style={{ fontWeight: 800, fontSize: 16, color: item.color }}>{item.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }}
+                          style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", width: "100%", padding: 12 }}>
+                          🔍 Nueva búsqueda
+                        </button>
                       </div>
-                      <button onClick={confirmarEntrega} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff", padding: 16, fontSize: 16, fontWeight: 800, borderRadius: 10 }}>
-                        ✅ Confirmar Entrega · ${Math.round(Number(entregaResult.price))}
-                      </button>
-                    </>
-                  )}
-                  {(entregaResult.status === "entregado" || entregaConfirmed) && (
-                    <div style={{ padding: "16px 0" }}>
-                      <div style={{ textAlign: "center", marginBottom: 20 }}>
-                        <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
-                        <div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>¡Entrega confirmada!</div>
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-                        {[
-                          { label: "📅 FECHA DE ENTREGA", value: entregaResult.delivered_at || today, color: "#66BB6A" },
-                          { label: "💳 MÉTODO DE PAGO", value: entregaResult.payment_method === "nequi" ? "📱 Nequi" : entregaResult.payment_method === "daviplata" ? "💜 Daviplata" : "💵 Efectivo", color: "#4FC3F7" },
-                          { label: "💰 TOTAL COBRADO", value: `$${Math.round(Number(entregaResult.price))}`, color: "#66BB6A" },
-                          { label: "📋 RECIBO", value: entregaResult.sin_recibo ? "⚠️ Sin recibo" : "✅ Con recibo", color: entregaResult.sin_recibo ? "#FFD54F" : "#66BB6A" },
-                          { label: "👤 ENTREGADO POR", value: entregaResult.delivered_by || "—", color: "#C792EA" },
-                        ].map((item, i) => (
-                          <div key={i} style={{ background: "#0D1117", borderRadius: 10, padding: "14px 16px" }}>
-                            <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 4, fontWeight: 600 }}>{item.label}</div>
-                            <div style={{ fontWeight: 800, fontSize: 16, color: item.color }}>{item.value}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
-                    <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }}
-                        style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", width: "100%", padding: 12 }}>
-                        🔍 Nueva búsqueda
-                      </button>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -936,15 +867,8 @@ export default function LavanderiaApp() {
                 <button onClick={() => setModal("newClient")} style={{ ...btn, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff" }}>+ Nuevo Cliente</button>
               </div>
               <div style={{ marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
-                <input
-                  style={{ ...inp, maxWidth: 320 }}
-                  placeholder="🔍 Buscar por nombre o teléfono..."
-                  value={clientSearch}
-                  onChange={e => setClientSearch(e.target.value)}
-                />
-                {clientSearch && (
-                  <button onClick={() => setClientSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 14px", fontSize: 12 }}>✕ Limpiar</button>
-                )}
+                <input style={{ ...inp, maxWidth: 320 }} placeholder="🔍 Buscar por nombre o teléfono..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} />
+                {clientSearch && <button onClick={() => setClientSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 14px", fontSize: 12 }}>✕ Limpiar</button>}
                 <span style={{ fontSize: 13, color: "#8B949E" }}>
                   {clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch)).length} cliente{clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch)).length !== 1 ? "s" : ""}
                 </span>
@@ -956,15 +880,7 @@ export default function LavanderiaApp() {
                       <div style={{ fontSize: 28 }}>👤</div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => setEditingClient({ ...c })} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
-                        <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
-                    <button onClick={() => {
+                        <button onClick={() => {
                           const pwd = prompt("Contraseña para eliminar:");
                           if (pwd === "9621") { if (window.confirm("¿Eliminar este cliente?")) deleteClient(c.id); }
                           else if (pwd !== null) alert("❌ Contraseña incorrecta");
@@ -1023,15 +939,7 @@ export default function LavanderiaApp() {
                       <td style={{ padding: "12px 14px", fontWeight: 700, color: "#EF5350" }}>${e.amount}</td>
                       <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{e.date}</td>
                       <td style={{ padding: "12px 14px" }}>
-                        <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
-                    <button onClick={() => {
+                        <button onClick={() => {
                           const pwd = prompt("Contraseña para eliminar:");
                           if (pwd === "9621") { if (window.confirm("¿Eliminar este gasto?")) deleteExpense(e.id); }
                           else if (pwd !== null) alert("❌ Contraseña incorrecta");
@@ -1124,22 +1032,13 @@ export default function LavanderiaApp() {
                       <tbody>
                         {reversadas.map(o => (
                           <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
-                            <td style={{ padding: "10px 12px" }}>
-                              <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{o.order_number || "—"}</span>
-                            </td>
+                            <td style={{ padding: "10px 12px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{o.order_number || "—"}</span></td>
                             <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.client_name}</td>
                             <td style={{ padding: "10px 12px", color: "#8B949E" }}>{o.phone}</td>
-                            <td style={{ padding: "10px 12px" }}>
-                              {(o.service||"").split(",").map(sid => {
-                                const sv = SERVICES.find(s=>s.id===sid.trim());
-                                return sv ? <span key={sid} style={{ background: sv.color+"22", color: sv.color, padding: "1px 6px", borderRadius: 10, fontSize: 11, marginRight: 3 }}>{sv.icon} {sv.label}</span> : null;
-                              })}
-                            </td>
+                            <td style={{ padding: "10px 12px" }}>{(o.service||"").split(",").map(sid => { const sv=SERVICES.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,marginRight:3 }}>{sv.icon} {sv.label}</span>:null; })}</td>
                             <td style={{ padding: "10px 12px", fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price))}</td>
                             <td style={{ padding: "10px 12px", color: "#8B949E", fontSize: 12 }}>📅 {o.delivered_at}</td>
-                            <td style={{ padding: "10px 12px" }}>
-                              <span style={{ background: "#66BB6A22", color: "#66BB6A", padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>Listo</span>
-                            </td>
+                            <td style={{ padding: "10px 12px" }}><span style={{ background: "#66BB6A22", color: "#66BB6A", padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>Listo</span></td>
                           </tr>
                         ))}
                       </tbody>
@@ -1156,11 +1055,9 @@ export default function LavanderiaApp() {
                     <p style={{ margin: 0, fontSize: 13, color: "#8B949E" }}>Órdenes que aún no han sido entregadas al cliente</p>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    <input type="date" value={inventoryFilter} onChange={e => setInventoryFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13, colorScheme: "dark" }} />
+                    <input type="date" value={inventoryFilter} onChange={e => setInventoryFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 13, colorScheme: "dark" }} />
                     {inventoryFilter && <button onClick={() => setInventoryFilter("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
-                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
+                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 13 }}>
                       <option value="">Todos los días</option>
                       <option value="7">Más de 7 días</option>
                       <option value="30">Más de 30 días</option>
@@ -1170,12 +1067,8 @@ export default function LavanderiaApp() {
                     <button onClick={() => {
                       const rows = orders.filter(o => o.status !== "entregado" && (!inventoryFilter || o.date === inventoryFilter));
                       const days = r => Math.floor((new Date() - new Date(r.date)) / (1000*60*60*24));
-                      const csv = [
-                        ["# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días en local"],
-                        ...rows.map(o => [o.order_number||"",o.client_name,o.phone,getServiceLabel(o.service),o.garments,Math.round(Number(o.price)),STATUS_LABELS[o.status]?.label,o.date,o.delivery_date||"",days(o)])
-                      ].map(r => r.join(",")).join("
-");
-                      const blob = new Blob(["﻿"+csv], { type: "text/csv;charset=utf-8;" });
+                      const csv = [["# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días en local"],...rows.map(o => [o.order_number||"",o.client_name,o.phone,getServiceLabel(o.service),o.garments,Math.round(Number(o.price)),STATUS_LABELS[o.status]?.label,o.date,o.delivery_date||"",days(o)])].map(r => r.join(",")).join("\n");
+                      const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
                       a.href = url; a.download = `inventario_${today}.csv`; a.click();
@@ -1185,8 +1078,6 @@ export default function LavanderiaApp() {
                     </button>
                   </div>
                 </div>
-
-                {/* Summary */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
                   {[
                     { label: "Órdenes pendientes", value: orders.filter(o => o.status !== "entregado" && (!inventoryFilter || o.date === inventoryFilter)).length, color: "#4FC3F7" },
@@ -1200,18 +1091,13 @@ export default function LavanderiaApp() {
                     </div>
                   ))}
                 </div>
-
-                {/* Filter by status */}
                 {(() => {
                   const pendingOrders = orders.filter(o => {
                     if (o.status === "entregado") return false;
                     if (inventoryFilter && o.date !== inventoryFilter) return false;
                     if (inventoryDaysFilter) {
                       const days = Math.floor((new Date() - new Date(o.date)) / (1000*60*60*24));
-                      if (inventoryDaysFilter === "7" && days < 7) return false;
-                      if (inventoryDaysFilter === "30" && days < 30) return false;
-                      if (inventoryDaysFilter === "60" && days < 60) return false;
-                      if (inventoryDaysFilter === "90" && days < 90) return false;
+                      if (Number(inventoryDaysFilter) > 0 && days < Number(inventoryDaysFilter)) return false;
                     }
                     return true;
                   }).sort((a,b) => new Date(a.delivery_date||"9999") - new Date(b.delivery_date||"9999"));
@@ -1236,37 +1122,20 @@ export default function LavanderiaApp() {
                             const isLate = o.delivery_date && new Date(o.delivery_date) < new Date() && o.status !== "entregado";
                             return (
                               <tr key={o.id} style={{ borderBottom: "1px solid #21262D", background: isLate ? "rgba(239,83,80,0.05)" : "transparent" }}>
-                                <td style={{ padding: "10px 12px" }}>
-                                  <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 8px", borderRadius: 6, fontSize: 12 }}>{o.order_number || "—"}</span>
-                                </td>
+                                <td style={{ padding: "10px 12px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 8px", borderRadius: 6, fontSize: 12 }}>{o.order_number || "—"}</span></td>
                                 <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.client_name}</td>
                                 <td style={{ padding: "10px 12px", color: "#8B949E", fontSize: 12 }}>{o.phone}</td>
                                 <td style={{ padding: "10px 12px" }}>
                                   <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                                    {(o.service||"").split(",").map(sid => {
-                                      const sv = SERVICES.find(s=>s.id===sid.trim());
-                                      return sv ? <span key={sid} style={{ background: sv.color+"22", color: sv.color, padding: "1px 6px", borderRadius: 10, fontSize: 11, whiteSpace: "nowrap" }}>{sv.icon} {sv.label}</span> : null;
-                                    })}
+                                    {(o.service||"").split(",").map(sid => { const sv=SERVICES.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,whiteSpace:"nowrap" }}>{sv.icon} {sv.label}</span>:null; })}
                                   </div>
                                 </td>
                                 <td style={{ padding: "10px 12px", fontWeight: 600, textAlign: "center" }}>{o.garments}</td>
                                 <td style={{ padding: "10px 12px", fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price))}</td>
-                                <td style={{ padding: "10px 12px" }}>
-                                  <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>
-                                    {STATUS_LABELS[o.status]?.label}
-                                  </span>
-                                </td>
+                                <td style={{ padding: "10px 12px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{STATUS_LABELS[o.status]?.label}</span></td>
                                 <td style={{ padding: "10px 12px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
-                                <td style={{ padding: "10px 12px", fontSize: 12 }}>
-                                  <span style={{ color: isLate ? "#EF5350" : "#FFD54F", fontWeight: isLate ? 700 : 400 }}>
-                                    {isLate ? "⚠️ " : "📅 "}{o.delivery_date || "—"}
-                                  </span>
-                                </td>
-                                <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                                  <span style={{ fontWeight: 700, color: daysIn > 7 ? "#EF5350" : daysIn > 3 ? "#FFD54F" : "#8B949E", fontSize: 13 }}>
-                                    {daysIn}d
-                                  </span>
-                                </td>
+                                <td style={{ padding: "10px 12px", fontSize: 12 }}><span style={{ color: isLate ? "#EF5350" : "#FFD54F", fontWeight: isLate ? 700 : 400 }}>{isLate ? "⚠️ " : "📅 "}{o.delivery_date || "—"}</span></td>
+                                <td style={{ padding: "10px 12px", textAlign: "center" }}><span style={{ fontWeight: 700, color: daysIn > 7 ? "#EF5350" : daysIn > 3 ? "#FFD54F" : "#8B949E", fontSize: 13 }}>{daysIn}d</span></td>
                               </tr>
                             );
                           })}
@@ -1276,7 +1145,6 @@ export default function LavanderiaApp() {
                   );
                 })()}
               </div>
-
             </div>
           )}
 
@@ -1284,63 +1152,35 @@ export default function LavanderiaApp() {
           {tab === "reversar" && (
             <div>
               <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>↩️ Reversar Entrega</h2>
-              <p style={{ color: "#8B949E", fontSize: 13, marginBottom: 24 }}>Busca una orden entregada y devuélvela a estado "Listo" si hubo un error.</p>
-
+              <p style={{ color: "#8B949E", fontSize: 13, marginBottom: 24 }}>Busca una orden y devuélvela a estado "Listo" si hubo un error.</p>
               <div style={{ ...card, marginBottom: 20 }}>
                 <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>BUSCAR POR TELÉFONO O NÚMERO DE ORDEN</label>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <input style={{ ...inp, flex: 1, fontSize: 16 }} placeholder="Ej: 3105604421 o S0001"
-                    value={reversarSearch}
+                  <input style={{ ...inp, flex: 1, fontSize: 16 }} placeholder="Ej: 3105604421 o S0001" value={reversarSearch}
                     onChange={e => { setReversarSearch(e.target.value); setReversarResults(null); setReversarDone(false); }}
                     onKeyDown={e => e.key === "Enter" && searchReversar()} />
-                  <button onClick={searchReversar} style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: "10px 24px", fontWeight: 800 }}>
-                    🔍 Buscar
-                  </button>
+                  <button onClick={searchReversar} style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: "10px 24px", fontWeight: 800 }}>🔍 Buscar</button>
                 </div>
-                <div style={{ fontSize: 12, color: "#484F58", marginTop: 8 }}>Busca por teléfono para ver todas las órdenes del cliente</div>
               </div>
-
-              {/* No results */}
               {reversarResults !== null && reversarResults.length === 0 && (
                 <div style={{ ...card, textAlign: "center", padding: 32 }}>
                   <div style={{ fontSize: 40, marginBottom: 8 }}>😕</div>
-                  <div style={{ fontWeight: 600, color: "#8B949E" }}>No se encontraron órdenes entregadas</div>
-                  <div style={{ fontSize: 13, color: "#484F58", marginTop: 4 }}>Verifica el teléfono o número de orden</div>
+                  <div style={{ fontWeight: 600, color: "#8B949E" }}>No se encontraron órdenes</div>
                 </div>
               )}
-
-              {/* Success message */}
-              {reversarDone && reversarResults !== null && reversarResults.length === 0 && (
-                <div style={{ ...card, textAlign: "center", padding: 32, border: "1px solid #66BB6A" }}>
-                  <div style={{ fontSize: 48, marginBottom: 8 }}>✅</div>
-                  <div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A" }}>¡Orden reversada correctamente!</div>
-                  <div style={{ fontSize: 13, color: "#8B949E", marginTop: 4 }}>La orden volvió a estado "Listo"</div>
-                  <button onClick={() => { setReversarSearch(""); setReversarResults(null); setReversarDone(false); }}
-                    style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", marginTop: 16, padding: "10px 24px" }}>
-                    🔍 Nueva búsqueda
-                  </button>
-                </div>
-              )}
-
-              {/* Results list */}
+              {reversarDone && <div style={{ ...card, textAlign: "center", padding: 24, border: "1px solid #66BB6A", marginBottom: 16 }}><div style={{ fontSize: 36, marginBottom: 6 }}>✅</div><div style={{ fontWeight: 800, fontSize: 16, color: "#66BB6A" }}>¡Orden reversada correctamente!</div></div>}
               {reversarResults !== null && reversarResults.length > 0 && (
                 <div>
-                  <div style={{ marginBottom: 12, fontSize: 13, color: "#8B949E" }}>
-                    <strong style={{ color: "#FFD54F" }}>{reversarResults.length} orden{reversarResults.length > 1 ? "es" : ""}</strong> entregada{reversarResults.length > 1 ? "s" : ""} encontrada{reversarResults.length > 1 ? "s" : ""}
-                  </div>
                   {reversarResults.map(o => (
-                    <div key={o.id} style={{ ...card, marginBottom: 12, borderLeft: "4px solid #9E9E9E" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div key={o.id} style={{ ...card, marginBottom: 12, borderLeft: `4px solid ${STATUS_LABELS[o.status]?.color||"#30363D"}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                             <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number || "—"}</span>
                             <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
                           </div>
                           <div style={{ fontWeight: 700, fontSize: 16 }}>{o.client_name}</div>
-                          <div style={{ fontSize: 13, color: "#8B949E" }}>📞 {o.phone}</div>
-                          <div style={{ fontSize: 12, color: "#8B949E", marginTop: 4 }}>
-                            {getServiceLabel(o.service)} · {o.garments} prendas
-                          </div>
+                          <div style={{ fontSize: 13, color: "#8B949E" }}>📞 {o.phone} · {getServiceLabel(o.service)} · {o.garments} prendas</div>
                           <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "#484F58" }}>
                             <span>📅 Ingreso: {o.date}</span>
                             {o.delivered_at && <span>✅ Entregado: {o.delivered_at}</span>}
@@ -1349,17 +1189,11 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
                           <div style={{ fontWeight: 800, fontSize: 22, color: "#66BB6A", marginBottom: 8 }}>${Math.round(Number(o.price))}</div>
-                          <button onClick={() => confirmarReversar(o)}
-                            style={{ ...btn, background: o.status === "entregado" ? "linear-gradient(135deg,#FFD54F,#F57F17)" : "rgba(255,255,255,0.08)", color: o.status === "entregado" ? "#000" : "#8B949E", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
-                            ↩️ {o.status === "entregado" ? "Reversar" : "Eliminar orden"}
+                          <button onClick={() => confirmarReversar(o)} style={{ ...btn, background: o.status === "entregado" ? "linear-gradient(135deg,#FFD54F,#F57F17)" : "rgba(255,255,255,0.08)", color: o.status === "entregado" ? "#000" : "#8B949E", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
+                            ↩️ {o.status === "entregado" ? "Reversar" : "Cambiar a Listo"}
                           </button>
                         </div>
                       </div>
-                      {o.sin_recibo && (
-                        <div style={{ fontSize: 12, color: "#FFD54F", background: "rgba(255,213,79,0.08)", borderRadius: 6, padding: "4px 10px", display: "inline-block" }}>
-                          ⚠️ Fue entregado sin recibo
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1372,21 +1206,11 @@ export default function LavanderiaApp() {
             <div>
               <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 800 }}>⚙️ Configuración</h2>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-
-                {/* PRENDAS */}
                 <div style={card}>
                   <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#4FC3F7" }}>👕 Tipos de Prenda</h3>
                   <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                     <input style={{ ...inp, flex: 1 }} placeholder="Nueva prenda..." value={newGarment} onChange={e => setNewGarment(e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter" && newGarment.trim()) { saveGarmentTypes([...garmentTypes, newGarment.trim()]); setNewGarment(""); } }} />
-                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
                     <button onClick={() => { if (newGarment.trim()) { saveGarmentTypes([...garmentTypes, newGarment.trim()]); setNewGarment(""); } }}
                       style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
                   </div>
@@ -1394,15 +1218,7 @@ export default function LavanderiaApp() {
                     {garmentTypes.map((g, i) => (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0D1117", borderRadius: 8, padding: "8px 12px" }}>
                         <span>{GARMENT_ICONS[g] || "👕"} {g}</span>
-                        <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
-                    <button onClick={() => { if (window.confirm(`¿Eliminar "${g}"?`)) saveGarmentTypes(garmentTypes.filter((_,idx) => idx !== i)); }}
+                        <button onClick={() => { if (window.confirm(`¿Eliminar "${g}"?`)) saveGarmentTypes(garmentTypes.filter((_,idx) => idx !== i)); }}
                           style={{ background: "rgba(239,83,80,0.15)", color: "#EF5350", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>✕</button>
                       </div>
                     ))}
@@ -1413,20 +1229,11 @@ export default function LavanderiaApp() {
                   </button>
                 </div>
 
-                {/* COLORES */}
                 <div style={card}>
                   <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#C792EA" }}>🎨 Colores</h3>
                   <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                     <input style={{ ...inp, flex: 1 }} placeholder="Nuevo color..." value={newColor} onChange={e => setNewColor(e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter" && newColor.trim()) { saveColors([...colors, newColor.trim()]); setNewColor(""); } }} />
-                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
                     <button onClick={() => { if (newColor.trim()) { saveColors([...colors, newColor.trim()]); setNewColor(""); } }}
                       style={{ ...btn, background: "linear-gradient(135deg,#C792EA,#9B59B6)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
                   </div>
@@ -1434,15 +1241,7 @@ export default function LavanderiaApp() {
                     {colors.map((c, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(199,146,234,0.1)", border: "1px solid rgba(199,146,234,0.3)", borderRadius: 20, padding: "4px 10px" }}>
                         <span style={{ fontSize: 13, color: "#C792EA" }}>🎨 {c}</span>
-                        <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)}
-                      style={{ ...inp, width: 160, fontSize: 13 }}>
-                      <option value="">Todos los días</option>
-                      <option value="7">Más de 7 días</option>
-                      <option value="30">Más de 30 días</option>
-                      <option value="60">Más de 60 días</option>
-                      <option value="90">Más de 90 días</option>
-                    </select>
-                    <button onClick={() => { if (window.confirm(`¿Eliminar "${c}"?`)) saveColors(colors.filter((_,idx) => idx !== i)); }}
+                        <button onClick={() => { if (window.confirm(`¿Eliminar "${c}"?`)) saveColors(colors.filter((_,idx) => idx !== i)); }}
                           style={{ background: "none", color: "#EF5350", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: "0 2px" }}>×</button>
                       </div>
                     ))}
@@ -1493,16 +1292,12 @@ export default function LavanderiaApp() {
                                 <span style={{ fontSize: 11, background: e.role === "admin" ? "rgba(255,213,79,0.15)" : "rgba(255,255,255,0.05)", color: e.role === "admin" ? "#FFD54F" : "#8B949E", padding: "2px 8px", borderRadius: 10 }}>
                                   {e.role === "admin" ? "👑 Admin" : "👤 Empleado"}
                                 </span>
-                                <span style={{ fontSize: 11, background: "rgba(102,187,106,0.1)", color: "#66BB6A", padding: "2px 8px", borderRadius: 10 }}>
-                                  🕐 {e.turno || "mañana"}
-                                </span>
+                                <span style={{ fontSize: 11, background: "rgba(102,187,106,0.1)", color: "#66BB6A", padding: "2px 8px", borderRadius: 10 }}>🕐 {e.turno || "mañana"}</span>
                               </div>
                             </div>
                             <div style={{ display: "flex", gap: 6 }}>
                               <button onClick={() => setEditingEmployee({ ...e })} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>✏️</button>
-                              {e.id !== user.id && (
-                                <button onClick={() => deleteEmployee(e.id)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
-                              )}
+                              {e.id !== user.id && <button onClick={() => deleteEmployee(e.id)} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>}
                             </div>
                           </div>
                         </div>
@@ -1536,7 +1331,6 @@ export default function LavanderiaApp() {
                   </div>
                 </div>
               </div>
-
             </div>
           )}
 
@@ -1552,8 +1346,6 @@ export default function LavanderiaApp() {
               <>
                 <h3 style={{ margin: "0 0 20px", fontSize: 18 }}>➕ Nueva Orden</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-
-                  {/* TELÉFONO */}
                   <div style={{ position: "relative" }}>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>TELÉFONO</label>
                     <input style={{ ...inp, borderColor: clients.find(c => c.phone === newOrder.phone) ? "#66BB6A" : "#30363D" }}
@@ -1585,7 +1377,6 @@ export default function LavanderiaApp() {
                     )}
                   </div>
 
-                  {/* NOMBRE */}
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOMBRE DEL CLIENTE</label>
                     <input style={{ ...inp, background: newOrder.client_name && clients.find(c=>c.phone===newOrder.phone) ? "rgba(102,187,106,0.08)" : "#0D1117", borderColor: newOrder.client_name && clients.find(c=>c.phone===newOrder.phone) ? "#66BB6A" : "#30363D" }}
@@ -1595,7 +1386,6 @@ export default function LavanderiaApp() {
                     {newOrder.client_name && clients.find(c=>c.phone===newOrder.phone) && <div style={{ fontSize: 11, color: "#66BB6A", marginTop: 4 }}>✅ Cliente existente</div>}
                   </div>
 
-                  {/* PENDIENTES */}
                   {(() => {
                     const pendientes = orders.filter(o => o.phone === newOrder.phone && (o.status === "listo" || o.status === "en_proceso" || o.status === "recibido"));
                     return pendientes.length > 0 ? (
@@ -1624,7 +1414,6 @@ export default function LavanderiaApp() {
                     ) : null;
                   })()}
 
-                  {/* PRENDAS */}
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <label style={{ fontSize: 12, color: "#8B949E", fontWeight: 600 }}>PRENDAS</label>
@@ -1637,7 +1426,6 @@ export default function LavanderiaApp() {
                     </div>
                     {items.map((item, i) => (
                       <div key={i} style={{ marginBottom: 10, background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: 10, border: "1px solid #21262D" }}>
-                        {/* Service buttons */}
                         <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
                           {SERVICES.map(sv => {
                             const sel = item.service === sv.id;
@@ -1648,7 +1436,6 @@ export default function LavanderiaApp() {
                             );
                           })}
                         </div>
-                        {/* Item fields */}
                         <div style={{ display: "grid", gridTemplateColumns: "2fr 55px 75px 1fr 30px", gap: 6, alignItems: "center", marginBottom: 8 }}>
                           <select value={item.garment_type} onChange={e => updateItem(i,"garment_type",e.target.value)} style={{ ...inp, padding: "8px 10px" }}>
                             {garmentTypes.map(g => <option key={g} value={g} style={{ background: "#1a1a2e" }}>{GARMENT_ICONS[g]||"👕"} {g}</option>)}
@@ -1660,8 +1447,7 @@ export default function LavanderiaApp() {
                               <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 3 }}>
                                 {(item.colors||[]).map((c,ci) => (
                                   <span key={ci} style={{ fontSize: 10, background: "rgba(199,146,234,0.2)", color: "#C792EA", border: "1px solid rgba(199,146,234,0.4)", borderRadius: 10, padding: "1px 6px", display: "flex", alignItems: "center", gap: 2 }}>
-                                    {c}
-                                    <span onMouseDown={() => updateItem(i,"colors",(item.colors||[]).filter((_,idx)=>idx!==ci))} style={{ cursor: "pointer", color: "#EF5350", fontWeight: 700 }}>×</span>
+                                    {c}<span onMouseDown={() => updateItem(i,"colors",(item.colors||[]).filter((_,idx)=>idx!==ci))} style={{ cursor: "pointer", color: "#EF5350", fontWeight: 700 }}>×</span>
                                   </span>
                                 ))}
                               </div>
@@ -1671,11 +1457,9 @@ export default function LavanderiaApp() {
                             )}
                             {(item.colors||[]).length >= Number(item.quantity) && Number(item.quantity) > 0
                               ? <div style={{ fontSize: 10, color: "#66BB6A" }}>✅ {item.quantity} color{Number(item.quantity)>1?"es":""} asignado{Number(item.quantity)>1?"s":""}</div>
-                              : (
-                                <input type="text" placeholder="Color..." value={item.colorInput||""} onChange={e => updateItem(i,"colorInput",e.target.value)}
+                              : <input type="text" placeholder="Color..." value={item.colorInput||""} onChange={e => updateItem(i,"colorInput",e.target.value)}
                                   onFocus={() => setColorFocusIdx(i)} onBlur={() => setTimeout(()=>setColorFocusIdx(null),150)}
                                   style={{ ...inp, padding: "6px 8px", fontSize: 12 }} autoComplete="off" />
-                              )
                             }
                             {colorFocusIdx === i && (item.colors||[]).length < Number(item.quantity) && (() => {
                               const val = item.colorInput||"";
@@ -1698,7 +1482,6 @@ export default function LavanderiaApp() {
                             : <div />
                           }
                         </div>
-                        {/* Conditions */}
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                           {[{key:"decolorado",label:"Decolorado",color:"#FFD54F"},{key:"percudido",label:"Percudido",color:"#EF5350"},{key:"roto",label:"Roto",color:"#EF5350"},{key:"manchado",label:"Manchado",color:"#FF8A65"}].map(cond => (
                             <label key={cond.key} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 11, background: item[cond.key] ? cond.color+"22" : "rgba(255,255,255,0.04)", border: `1px solid ${item[cond.key] ? cond.color : "#30363D"}`, borderRadius: 20, padding: "3px 10px", userSelect: "none" }}>
@@ -1715,14 +1498,12 @@ export default function LavanderiaApp() {
                     </div>
                   </div>
 
-                  {/* NOTES */}
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>NOTAS <span style={{ color: "#484F58", fontWeight: 400 }}>(se llena automáticamente)</span></label>
                     <textarea style={{ ...inp, height: 60, resize: "none", borderColor: newOrder.notes ? "rgba(255,213,79,0.4)" : "#30363D" }}
                       placeholder="Marca condiciones arriba para llenar automáticamente..." value={newOrder.notes} onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))} />
                   </div>
 
-                  {/* DELIVERY DATE */}
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4 }}>📅 FECHA DE ENTREGA</label>
                     <input type="date" style={{ ...inp, colorScheme: 'dark', borderColor: "#FFD54F44" }} value={newOrder.delivery_date} onChange={e => setNewOrder(p => ({ ...p, delivery_date: e.target.value }))} />
@@ -1779,7 +1560,6 @@ export default function LavanderiaApp() {
                 </div>
               </>
             )}
-
           </div>
         </div>
       )}
@@ -1828,8 +1608,6 @@ export default function LavanderiaApp() {
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#E6EDF3" }}>Total de Prendas del Día</h2>
               <p style={{ margin: "6px 0 0", fontSize: 13, color: "#8B949E" }}>{filterDate}</p>
             </div>
-
-            {/* Calculation */}
             <div style={{ background: "#0D1117", borderRadius: 14, padding: 20, marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #21262D" }}>
                 <span style={{ color: "#8B949E", fontSize: 13 }}>Ingresos del día</span>
@@ -1841,18 +1619,12 @@ export default function LavanderiaApp() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ color: "#8B949E", fontSize: 13 }}>Total prendas estimado</span>
-                <span style={{ fontWeight: 800, color: "#4FC3F7", fontSize: 28 }}>
-                  {precioPrend > 0 ? Math.round(todayRevenue / precioPrend) : 0}
-                </span>
+                <span style={{ fontWeight: 800, color: "#4FC3F7", fontSize: 28 }}>{precioPrend > 0 ? Math.round(todayRevenue / precioPrend) : 0}</span>
               </div>
             </div>
-
-            {/* Formula */}
             <div style={{ background: "rgba(79,195,247,0.06)", border: "1px solid rgba(79,195,247,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 20, textAlign: "center", fontSize: 13, color: "#8B949E" }}>
               ${Math.round(todayRevenue)} ÷ ${precioPrend.toLocaleString()} = <strong style={{ color: "#4FC3F7" }}>{precioPrend > 0 ? Math.round(todayRevenue / precioPrend) : 0} prendas</strong>
             </div>
-
-            {/* Edit price */}
             {!editingPrecio ? (
               <button onClick={() => { setEditingPrecio(true); setTempPrecio(String(precioPrend)); }}
                 style={{ width: "100%", padding: "10px", borderRadius: 10, border: "1px solid #30363D", background: "transparent", color: "#8B949E", cursor: "pointer", fontSize: 13, marginBottom: 12 }}>
@@ -1863,26 +1635,13 @@ export default function LavanderiaApp() {
                 <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6 }}>NUEVO PRECIO POR PRENDA</label>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input type="number" value={tempPrecio} onChange={e => setTempPrecio(e.target.value)}
-                    style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #FFD54F", background: "#0D1117", color: "#E6EDF3", fontSize: 16, fontWeight: 700 }}
-                    autoFocus />
-                  <button onClick={() => {
-                    const val = Number(tempPrecio);
-                    if (val > 0) {
-                      setPrecioPrend(val);
-                      try { localStorage.setItem("precioPrend", String(val)); } catch {}
-                    }
-                    setEditingPrecio(false);
-                  }} style={{ padding: "10px 16px", borderRadius: 8, border: "none", background: "#FFD54F", color: "#000", fontWeight: 800, cursor: "pointer" }}>
-                    Guardar
-                  </button>
-                  <button onClick={() => setEditingPrecio(false)}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "none", background: "rgba(255,255,255,0.05)", color: "#8B949E", cursor: "pointer" }}>
-                    ✕
-                  </button>
+                    style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #FFD54F", background: "#0D1117", color: "#E6EDF3", fontSize: 16, fontWeight: 700 }} autoFocus />
+                  <button onClick={() => { const val = Number(tempPrecio); if (val > 0) { setPrecioPrend(val); try { localStorage.setItem("precioPrend", String(val)); } catch {} } setEditingPrecio(false); }}
+                    style={{ padding: "10px 16px", borderRadius: 8, border: "none", background: "#FFD54F", color: "#000", fontWeight: 800, cursor: "pointer" }}>Guardar</button>
+                  <button onClick={() => setEditingPrecio(false)} style={{ padding: "10px 12px", borderRadius: 8, border: "none", background: "rgba(255,255,255,0.05)", color: "#8B949E", cursor: "pointer" }}>✕</button>
                 </div>
               </div>
             )}
-
             <button onClick={() => setShowTotalPrendas(false)}
               style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", fontWeight: 800, cursor: "pointer", fontSize: 14 }}>
               Cerrar
@@ -1902,52 +1661,26 @@ export default function LavanderiaApp() {
       }}>🧮</button>
 
       {showCalc && (
-        <div style={{
-          position: "fixed", bottom: 96, right: 28, zIndex: 300,
-          background: "#1C2128", borderRadius: 20, padding: 16,
-          border: "1px solid #30363D", boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
-          width: 260, fontFamily: "'Segoe UI', sans-serif"
-        }}>
-          {/* Header */}
+        <div style={{ position: "fixed", bottom: 96, right: 28, zIndex: 300, background: "#1C2128", borderRadius: 20, padding: 16, border: "1px solid #30363D", boxShadow: "0 8px 40px rgba(0,0,0,0.6)", width: 260, fontFamily: "'Segoe UI', sans-serif" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ color: "#8B949E", fontSize: 13, fontWeight: 600 }}>Calculadora</span>
+            <span style={{ color: "#8B949E", fontSize: 13, fontWeight: 600 }}>Calculadora <span style={{ fontSize: 10, color: "#484F58" }}>(teclado activado)</span></span>
             <button onClick={() => setShowCalc(false)} style={{ background: "none", border: "none", color: "#8B949E", fontSize: 18, cursor: "pointer" }}>✕</button>
           </div>
-
-          {/* Display */}
           <div style={{ background: "#0D1117", borderRadius: 12, padding: "12px 16px", marginBottom: 12, textAlign: "right" }}>
             {calcOp && <div style={{ fontSize: 12, color: "#8B949E", marginBottom: 2 }}>{calcPrev} {calcOp}</div>}
             <div style={{ fontSize: 32, fontWeight: 700, color: "#E6EDF3", overflowX: "auto", whiteSpace: "nowrap" }}>{calcDisplay}</div>
           </div>
-
-          {/* Buttons */}
           {[
-            [{ l: "AC", fn: calcClear, style: { background: "#EF5350", color: "#fff" } },
-             { l: "+/-", fn: calcToggleSign, style: { background: "#30363D", color: "#E6EDF3" } },
-             { l: "%", fn: calcPercent, style: { background: "#30363D", color: "#E6EDF3" } },
-             { l: "÷", fn: () => calcOperation("÷"), style: { background: "#4FC3F7", color: "#000" } }],
-            [{ l: "7", fn: () => calcInput("7") }, { l: "8", fn: () => calcInput("8") }, { l: "9", fn: () => calcInput("9") },
-             { l: "×", fn: () => calcOperation("×"), style: { background: "#4FC3F7", color: "#000" } }],
-            [{ l: "4", fn: () => calcInput("4") }, { l: "5", fn: () => calcInput("5") }, { l: "6", fn: () => calcInput("6") },
-             { l: "-", fn: () => calcOperation("-"), style: { background: "#4FC3F7", color: "#000" } }],
-            [{ l: "1", fn: () => calcInput("1") }, { l: "2", fn: () => calcInput("2") }, { l: "3", fn: () => calcInput("3") },
-             { l: "+", fn: () => calcOperation("+"), style: { background: "#4FC3F7", color: "#000" } }],
-            [{ l: "⌫", fn: calcBackspace, style: { background: "#30363D", color: "#FFD54F" } },
-             { l: "0", fn: () => calcInput("0") },
-             { l: ".", fn: calcDot },
-             { l: "=", fn: calcEquals, style: { background: "#66BB6A", color: "#fff" } }],
+            [{ l: "AC", fn: calcClear, style: { background: "#EF5350", color: "#fff" } }, { l: "+/-", fn: calcToggleSign, style: { background: "#30363D", color: "#E6EDF3" } }, { l: "%", fn: calcPercent, style: { background: "#30363D", color: "#E6EDF3" } }, { l: "÷", fn: () => calcOperation("÷"), style: { background: "#4FC3F7", color: "#000" } }],
+            [{ l: "7", fn: () => calcInput("7") }, { l: "8", fn: () => calcInput("8") }, { l: "9", fn: () => calcInput("9") }, { l: "×", fn: () => calcOperation("×"), style: { background: "#4FC3F7", color: "#000" } }],
+            [{ l: "4", fn: () => calcInput("4") }, { l: "5", fn: () => calcInput("5") }, { l: "6", fn: () => calcInput("6") }, { l: "-", fn: () => calcOperation("-"), style: { background: "#4FC3F7", color: "#000" } }],
+            [{ l: "1", fn: () => calcInput("1") }, { l: "2", fn: () => calcInput("2") }, { l: "3", fn: () => calcInput("3") }, { l: "+", fn: () => calcOperation("+"), style: { background: "#4FC3F7", color: "#000" } }],
+            [{ l: "⌫", fn: calcBackspace, style: { background: "#30363D", color: "#FFD54F" } }, { l: "0", fn: () => calcInput("0") }, { l: ".", fn: calcDot }, { l: "=", fn: calcEquals, style: { background: "#66BB6A", color: "#fff" } }],
           ].map((row, ri) => (
             <div key={ri} style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 8 }}>
               {row.map((b, bi) => (
-                <button key={bi} onClick={b.fn} style={{
-                  padding: "14px 0", borderRadius: 10, border: "none", cursor: "pointer",
-                  fontWeight: 700, fontSize: 16,
-                  background: b.style?.background || "#21262D",
-                  color: b.style?.color || "#E6EDF3",
-                  transition: "opacity 0.1s"
-                }}
-                onMouseEnter={e => e.currentTarget.style.opacity="0.8"}
-                onMouseLeave={e => e.currentTarget.style.opacity="1"}>
+                <button key={bi} onClick={b.fn} style={{ padding: "14px 0", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 16, background: b.style?.background || "#21262D", color: b.style?.color || "#E6EDF3" }}
+                  onMouseEnter={e => e.currentTarget.style.opacity="0.8"} onMouseLeave={e => e.currentTarget.style.opacity="1"}>
                   {b.l}
                 </button>
               ))}
