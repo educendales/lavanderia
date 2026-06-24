@@ -218,7 +218,7 @@ export default function LavanderiaApp() {
     if (order.status === "entregado") {
       if (!window.confirm(`¿Reversar la orden ${order.order_number} a estado "Listo"?`)) return;
       await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null });
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null } : o));
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null, delivered_by: o.delivered_by } : o));
     } else {
       if (!window.confirm(`¿Cambiar la orden ${order.order_number} a estado "Listo"?`)) return;
       await db.patch("orders", order.id, { status: "listo" });
