@@ -871,7 +871,19 @@ export default function LavanderiaApp() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Clientes</h2>
-                <button onClick={() => setModal("newClient")} style={{ ...btn, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff" }}>+ Nuevo Cliente</button>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => {
+                    const rows = clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch));
+                    const csv = [["Nombre","Teléfono","Email","Total Órdenes"],...rows.map(c=>[c.name||"",c.phone||"",c.email||"",c.total_orders||0])].map(r=>r.join(",")).join("
+");
+                    const blob = new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href=url; a.download=`clientes_${today}.csv`; a.click();
+                    URL.revokeObjectURL(url);
+                  }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "8px 14px", fontSize: 12 }}>📥 Exportar Excel</button>
+                  <button onClick={() => setModal("newClient")} style={{ ...btn, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff" }}>+ Nuevo Cliente</button>
+                </div>
               </div>
               <div style={{ marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
                 <input style={{ ...inp, maxWidth: 320 }} placeholder="🔍 Buscar por nombre o teléfono..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} />
