@@ -213,18 +213,19 @@ export default function LavanderiaApp() {
   };
 
   const confirmarReversar = async (order) => {
-    const pwd = prompt("Ingresa la clave para reversar:");
+    const pwd = prompt("Ingresa la clave:");
     if (pwd !== "9621") { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (order.status === "entregado") {
-      if (!window.confirm(`¿Reversar la orden ${order.order_number} a estado "Listo"?`)) return;
+      if (!window.confirm(`¿Reversar la orden ${order.order_number} a "Listo"?`)) return;
       await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null, reversada: true });
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null, reversada: true } : o));
+      setReversarResults(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", reversada: true } : o));
     } else {
-      if (!window.confirm(`¿Cambiar la orden ${order.order_number} a estado "Listo"?`)) return;
-      await db.patch("orders", order.id, { status: "listo" });
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo" } : o));
+      if (!window.confirm(`¿Eliminar la orden ${order.order_number}? El cliente no dejó las prendas.`)) return;
+      await db.delete("orders", order.id);
+      setOrders(prev => prev.filter(o => o.id !== order.id));
+      setReversarResults(prev => prev.filter(o => o.id !== order.id));
     }
-    setReversarResults(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null } : o));
     setReversarDone(true);
   };
 
@@ -1224,8 +1225,8 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
                           <div style={{ fontWeight: 800, fontSize: 22, color: "#66BB6A", marginBottom: 8 }}>${Math.round(Number(o.price))}</div>
-                          <button onClick={() => confirmarReversar(o)} style={{ ...btn, background: o.status === "entregado" ? "linear-gradient(135deg,#FFD54F,#F57F17)" : "rgba(255,255,255,0.08)", color: o.status === "entregado" ? "#000" : "#8B949E", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
-                            ↩️ {o.status === "entregado" ? "Reversar" : "Cambiar a Listo"}
+                          <button onClick={() => confirmarReversar(o)} style={{ ...btn, background: o.status === "entregado" ? "linear-gradient(135deg,#FFD54F,#F57F17)" : "linear-gradient(135deg,#EF5350,#B71C1C)", color: o.status === "entregado" ? "#000" : "#fff", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
+                            {o.status === "entregado" ? "↩️ Reversar" : "🗑 Eliminar orden"}
                           </button>
                         </div>
                       </div>
