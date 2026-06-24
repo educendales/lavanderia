@@ -320,13 +320,17 @@ export default function LavanderiaApp() {
       }
     }
     setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
-    setItems([{ ...emptyItem }]);
+    setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
     setModal(null);
     setSaving(false);
     loadData();
   };
 
-  const addItem = () => setItems(prev => [...prev, { ...emptyItem }]);
+  const addItem = () => {
+    const defaultType = emptyItem.garment_type;
+    const defaultPrice = precioDefaults[defaultType] || "";
+    setItems(prev => [...prev, { ...emptyItem, price: defaultPrice }]);
+  };
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
   const updateItem = (i, field, val) => {
     setItems(prev => {
