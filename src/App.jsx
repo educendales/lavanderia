@@ -1146,14 +1146,14 @@ export default function LavanderiaApp() {
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>SUBTÍTULO (debajo de la dirección)</label>
                     <div style={{ display: "flex", gap: 8 }}>
                       <input style={{ ...inp, flex: 1 }} value={reciboSubtitulo} onChange={e => setReciboSubtitulo(e.target.value)} placeholder="Ej: PRENDAS EL DIA INDICADO DESPUES DE LAS 5" />
-                      <button onClick={() => { try { localStorage.setItem("reciboSubtitulo", reciboSubtitulo); } catch {} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", whiteSpace: "nowrap" }}>Guardar</button>
+                      <button onClick={() => { const pwd=prompt("Clave para guardar:"); if(pwd!=="9621"){if(pwd!==null)alert("❌ Clave incorrecta");return;} try{localStorage.setItem("reciboSubtitulo",reciboSubtitulo);}catch{} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", whiteSpace: "nowrap" }}>Guardar</button>
                     </div>
                   </div>
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>TEXTO LEGAL (al final del recibo)</label>
                     <textarea value={reciboLegal} onChange={e => setReciboLegal(e.target.value)}
                       style={{ ...inp, height: 120, resize: "vertical", fontSize: 12, lineHeight: 1.5 }} />
-                    <button onClick={() => { try { localStorage.setItem("reciboLegal", reciboLegal); } catch {} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", marginTop: 8, width: "100%" }}>💾 Guardar texto legal</button>
+                    <button onClick={() => { const pwd=prompt("Clave para guardar:"); if(pwd!=="9621"){if(pwd!==null)alert("❌ Clave incorrecta");return;} try{localStorage.setItem("reciboLegal",reciboLegal);}catch{} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", marginTop: 8, width: "100%" }}>💾 Guardar texto legal</button>
                   </div>
                 </div>
               </div>
