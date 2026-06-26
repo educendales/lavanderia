@@ -336,8 +336,11 @@ export default function LavanderiaApp() {
   const printOrder = (order) => {
     const its = orderItems[order.id] || [];
     const w = window.open("", "_blank", "width=320,height=600");
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recibo ${order.order_number||""}</title><style>
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recibo ${order.order_number||""}</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/barcodes/JsBarcode.code128.min.js"><\/script>
+    <style>
       * { margin:0; padding:0; box-sizing:border-box; }
+      #barcode { display: block; margin: 4px auto; }
       body { font-family: 'Courier New', monospace; font-size: 11px; width: 80mm; padding: 4mm; color: #000; }
       .center { text-align: center; }
       .bold { font-weight: bold; }
@@ -361,7 +364,17 @@ export default function LavanderiaApp() {
         <div>${reciboSubtitulo}</div>
         <br/>
         <div class="huge">*${order.order_number||""}*</div>
+        <svg id="barcode" style="width:100%;max-width:200px"></svg>
       </div>
+      <script>
+        JsBarcode("#barcode", "${order.order_number||''}", {
+          format: "CODE128",
+          width: 2,
+          height: 50,
+          displayValue: false,
+          margin: 4
+        });
+      <\/script>
       <div class="line"></div>
       <table>
         <tr><td class="bold">Atendido Por:</td><td>${order.employee||"—"}</td></tr>
