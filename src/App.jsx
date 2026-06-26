@@ -121,6 +121,7 @@ export default function LavanderiaApp() {
   });
   const [newCondition, setNewCondition] = useState("");
   const [showCambiarClave, setShowCambiarClave] = useState(false);
+  const [waMensaje, setWaMensaje] = useState(() => { try { return localStorage.getItem("waMensaje") || "Hola {nombre}, le informamos que su(s) prenda(s) en Lavanderías Shaddai ya están listas para retirar. Recuerde que puede recogerlas después de las 5pm. Orden: {orden}. ¡Gracias por preferirnos!"; } catch { return ""; } });
   const [claveActual, setClaveActual] = useState("");
   const [claveNueva, setClaveNueva] = useState("");
   const [claveConfirm, setClaveConfirm] = useState("");
@@ -1012,7 +1013,7 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"#FFD54F":"#8B949E",fontSize:13 }}>{daysIn}d</span></td>
                               <td style={{ padding:"8px 10px" }}>
                                 {o.phone && o.status === "listo" && (
-                                  <a href={`https://wa.me/57${o.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(`Hola ${o.client_name}, le informamos que su(s) prenda(s) en Lavanderías Shaddai ya están listas para retirar. Recuerde que puede recogerlas después de las 5pm. Orden: ${o.order_number}. ¡Gracias por preferirnos!`)}`}
+                                  <a href={`https://wa.me/57${o.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))}`}
                                     target="_blank" rel="noreferrer"
                                     style={{ ...btn, background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:11,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>
                                     📱 WA
@@ -1186,6 +1187,16 @@ export default function LavanderiaApp() {
                 <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#4FC3F7" }}>🖨️ Texto del Recibo</h3>
                 <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Personaliza los textos que aparecen en el recibo impreso</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div>
+                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>MENSAJE DE WHATSAPP 📱</label>
+                    <p style={{ fontSize: 11, color: "#484F58", marginBottom: 8 }}>Usa <strong style={{color:"#25D366"}}>{"{nombre}"}</strong> para el nombre del cliente y <strong style={{color:"#25D366"}}>{"{orden}"}</strong> para el número de orden</p>
+                    <textarea value={waMensaje} onChange={e => setWaMensaje(e.target.value)}
+                      style={{ ...inp, height: 90, resize: "vertical", fontSize: 12, lineHeight: 1.5, borderColor: "rgba(37,211,102,0.3)" }} />
+                    <button onClick={async() => { const ok=await checkClave("guardar"); if(!ok)return; try{localStorage.setItem("waMensaje",waMensaje);}catch{} alert("✅ Mensaje guardado"); }}
+                      style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", border: "1px solid rgba(37,211,102,0.3)", padding: "8px 16px", marginTop: 8, fontSize: 12 }}>
+                      💾 Guardar mensaje
+                    </button>
+                  </div>
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>SUBTÍTULO (debajo de la dirección)</label>
                     <div style={{ display: "flex", gap: 8 }}>
