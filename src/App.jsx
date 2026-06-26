@@ -116,6 +116,10 @@ export default function LavanderiaApp() {
   const [reversarResults, setReversarResults] = useState(null);
   const [reversarDone, setReversarDone] = useState(false);
   const [newColor, setNewColor] = useState("");
+  const [conditions, setConditions] = useState(() => {
+    try { const s = localStorage.getItem("conditions"); return s ? JSON.parse(s) : ["Decolorado","Percudido","Roto","Manchado"]; } catch { return ["Decolorado","Percudido","Roto","Manchado"]; }
+  });
+  const [newCondition, setNewCondition] = useState("");
 
   const calcInput = (val) => { if (calcNew) { setCalcDisplay(String(val)); setCalcNew(false); } else { setCalcDisplay(prev => prev === "0" ? String(val) : prev + val); } };
   const calcDot = () => { if (calcNew) { setCalcDisplay("0."); setCalcNew(false); return; } if (!calcDisplay.includes(".")) setCalcDisplay(prev => prev + "."); };
@@ -155,6 +159,7 @@ export default function LavanderiaApp() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [showCalc, calcDisplay, calcPrev, calcOp, calcNew]);
 
+  const saveConditions = (list) => { setConditions(list); try { localStorage.setItem("conditions", JSON.stringify(list)); } catch {} };
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
 
@@ -225,7 +230,7 @@ export default function LavanderiaApp() {
   const handleLogin = () => { if (selectedEmp && pin === selectedEmp.pin) { setUser(selectedEmp); setPinError(false); } else { setPinError(true); setPin(""); } };
   const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity), 0);
   const totalPrice = (its) => its.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0);
-  const buildNotes = (its) => { const lines = its.map(it => { const conds = []; if (it.decolorado) conds.push("decolorado"); if (it.percudido) conds.push("percudido"); if (it.roto) conds.push("roto"); if (it.manchado) conds.push("manchado"); if (!conds.length) return null; return `${it.garment_type}${it.colors?.length ? " "+it.colors[0] : ""}: ${conds.join(", ")}`; }).filter(Boolean); return lines.join(" | "); };
+  const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length) return null; return `${it.garment_type}${it.colors?.length ? " "+it.colors[0] : ""}: ${found.join(", ")}`; }).filter(Boolean); return lines.join(" | "); };
 
   const addOrder = async () => {
     if (!newOrder.client_name || items.length === 0) return;
@@ -944,6 +949,33 @@ export default function LavanderiaApp() {
                   <button onClick={() => { if(window.confirm("¿Restaurar colores por defecto?"))saveColors(DEFAULT_COLORS); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid #30363D",background:"transparent",color:"#8B949E",cursor:"pointer",fontSize:12 }}>🔄 Restaurar por defecto</button>
                 </div>
               </div>
+              {/* CONDICIONES */}
+              <div style={{ marginTop: 20, ...card }}>
+                <h3 style={{ margin: "0 0 14px", fontSize: 16, color: "#FF8A65" }}>⚠️ Condiciones de prendas</h3>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  <input style={{ ...inp, flex: 1 }} placeholder="Nueva condición... ej: Quemado" value={newCondition} onChange={e => setNewCondition(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && newCondition.trim()) { saveConditions([...conditions, newCondition.trim()]); setNewCondition(""); } }} />
+                  <button onClick={() => { if (newCondition.trim()) { saveConditions([...conditions, newCondition.trim()]); setNewCondition(""); } }}
+                    style={{ ...btn, background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {conditions.map((c, i) => {
+                    const colors = ["#FFD54F","#EF5350","#FF8A65","#C792EA","#4FC3F7","#66BB6A","#F06292","#FFB74D"];
+                    const color = colors[i % colors.length];
+                    const isDefault = ["Decolorado","Percudido","Roto","Manchado"].includes(c);
+                    return (
+                      <div key={i} style={{ display:"flex",alignItems:"center",gap:6,background:color+"15",border:`1px solid ${color}40`,borderRadius:20,padding:"6px 12px" }}>
+                        <span style={{ fontSize:13,color:color,fontWeight:600 }}>{c}</span>
+                        {!isDefault && <button onClick={() => { if(window.confirm(`¿Eliminar "${c}"?`)) saveConditions(conditions.filter((_,idx)=>idx!==i)); }}
+                          style={{ background:"none",color:"#EF5350",border:"none",cursor:"pointer",fontSize:14,fontWeight:700,padding:"0 2px" }}>×</button>}
+                        {isDefault && <span style={{ fontSize:10,color:color,opacity:0.6 }}>●</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize:11,color:"#484F58",marginTop:10 }}>● Las condiciones base (Decolorado, Percudido, Roto, Manchado) no se pueden eliminar</div>
+              </div>
+
               <div style={{ marginTop: 20, ...card }}>
                 <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#66BB6A" }}>💰 Precios por defecto de prendas</h3>
                 <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Al seleccionar una prenda en nueva orden se llenará el precio automáticamente</p>
@@ -1044,7 +1076,12 @@ export default function LavanderiaApp() {
                           </div>
                           {items.length>1?<button onClick={()=>removeItem(i)} style={{ background:"rgba(239,83,80,0.2)",color:"#EF5350",border:"none",borderRadius:6,padding:"6px 8px",cursor:"pointer",fontSize:12 }}>✕</button>:<div/>}
                         </div>
-                        <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>{[{key:"decolorado",label:"Decolorado",color:"#FFD54F"},{key:"percudido",label:"Percudido",color:"#EF5350"},{key:"roto",label:"Roto",color:"#EF5350"},{key:"manchado",label:"Manchado",color:"#FF8A65"}].map(cond=><label key={cond.key} style={{ display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,background:item[cond.key]?cond.color+"22":"rgba(255,255,255,0.04)",border:`1px solid ${item[cond.key]?cond.color:"#30363D"}`,borderRadius:20,padding:"3px 10px",userSelect:"none" }}><input type="checkbox" checked={!!item[cond.key]} onChange={e=>updateItem(i,cond.key,e.target.checked)} style={{ accentColor:cond.color,cursor:"pointer" }} /><span style={{ color:item[cond.key]?cond.color:"#8B949E" }}>{cond.label}</span></label>)}</div>
+                        <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>{conditions.map((condLabel,ci) => {
+                          const condKey = condLabel.toLowerCase().replace(/\s+/g,"_");
+                          const colors = ["#FFD54F","#EF5350","#FF8A65","#C792EA","#4FC3F7","#66BB6A","#F06292","#FFB74D"];
+                          const color = colors[ci % colors.length];
+                          return <label key={condKey} style={{ display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,background:item[condKey]?color+"22":"rgba(255,255,255,0.04)",border:`1px solid ${item[condKey]?color:"#30363D"}`,borderRadius:20,padding:"3px 10px",userSelect:"none" }}><input type="checkbox" checked={!!item[condKey]} onChange={e=>updateItem(i,condKey,e.target.checked)} style={{ accentColor:color,cursor:"pointer" }} /><span style={{ color:item[condKey]?color:"#8B949E" }}>{condLabel}</span></label>;
+                        })}</div>
                       </div>
                     ))}
                     <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",marginTop:8 }}>
