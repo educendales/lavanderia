@@ -309,6 +309,84 @@ export default function LavanderiaApp() {
     setEntregaConfirmed(true);
   };
 
+  const printOrder = (order) => {
+    const its = orderItems[order.id] || [];
+    const w = window.open("", "_blank", "width=320,height=600");
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recibo ${order.order_number||""}</title><style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family: 'Courier New', monospace; font-size: 11px; width: 80mm; padding: 4mm; color: #000; }
+      .center { text-align: center; }
+      .bold { font-weight: bold; }
+      .big { font-size: 16px; font-weight: bold; }
+      .huge { font-size: 22px; font-weight: bold; letter-spacing: 2px; margin: 6px 0; }
+      .line { border-top: 1px dashed #000; margin: 6px 0; }
+      .line-solid { border-top: 1px solid #000; margin: 4px 0; }
+      table { width: 100%; border-collapse: collapse; font-size: 10px; }
+      td { padding: 2px 0; vertical-align: top; }
+      .right { text-align: right; }
+      .small { font-size: 9px; }
+      .legal { font-size: 8px; text-align: center; margin-top: 6px; line-height: 1.3; }
+      @media print { body { margin: 0; } }
+    </style></head><body>
+      <div class="center">
+        <div class="bold" style="font-size:13px">Factura No. : &nbsp;&nbsp;&nbsp; ${order.order_number?.replace("S","") || ""}</div>
+        <br/>
+        <div class="big">LAVANDERIAS SHADDAI</div>
+        <br/>
+        <div>CARRERA 113 # 75-56</div>
+        <div>PRENDAS EL DIA INDICADO DESPUES DE LAS 5</div>
+        <br/>
+        <div class="huge">*${order.order_number||""}*</div>
+      </div>
+      <div class="line"></div>
+      <table>
+        <tr><td class="bold">Atendido Por:</td><td>${order.employee||"—"}</td></tr>
+        <tr><td class="bold">Fecha Entrada:</td><td>${order.date||"—"}</td></tr>
+        <tr><td class="bold">Fecha Entrega:</td><td>${order.delivery_date||"—"}</td></tr>
+        <tr><td class="bold">Cliente</td><td>${order.client_name||"—"}</td></tr>
+        <tr><td class="bold">Telefono</td><td>${order.phone||"—"}</td></tr>
+      </table>
+      <div class="line"></div>
+      <table>
+        <tr>
+          <td class="bold" style="width:35%">Prenda</td>
+          <td class="bold" style="width:30%">Servicio</td>
+          <td class="bold right" style="width:10%">Cant</td>
+          <td class="bold right" style="width:25%">Total</td>
+        </tr>
+        <tr><td colspan="4"><div class="line-solid"></div></td></tr>
+        ${its.map(it => {
+          const svcLabel = it.service ? (it.service === 'lavado_normal' ? 'LAV. NORMAL' : it.service === 'planchado' ? 'PLANCHADO' : it.service === 'lavado_express' ? 'EXPRESS' : it.service === 'secado' ? 'SECADO' : it.service.toUpperCase()) : '';
+          const total = Math.round(Number(it.price) * Number(it.quantity));
+          const color = it.color ? it.color.toUpperCase().substring(0,12) : '';
+          return `<tr>
+            <td>${(it.garment_type||"").toUpperCase().substring(0,12)}</td>
+            <td>${svcLabel}</td>
+            <td class="right">${it.quantity}</td>
+            <td class="right">$ ${total.toLocaleString('es-CO')}</td>
+          </tr>
+          ${color ? `<tr><td colspan="2" class="small">${color}</td><td colspan="2"></td></tr>` : ''}
+          <tr><td colspan="4"><div style="border-top:1px dashed #ccc;margin:1px 0"></div></td></tr>`;
+        }).join('')}
+      </table>
+      <div class="line"></div>
+      <table>
+        <tr><td class="bold big">Total a Pagar</td><td class="right bold big">$ ${Math.round(Number(order.price)).toLocaleString('es-CO')}</td></tr>
+        <tr><td class="bold">No. Piezas</td><td class="right bold">${order.garments}</td></tr>
+      </table>
+      ${order.notes ? `<div class="line"></div><div class="small"><b>Obs:</b> ${order.notes}</div>` : ''}
+      <div class="line"></div>
+      <div class="small center">RESPONDEMOS POR SUS PRENDAS SOLO POR 30 DIAS</div>
+      <div class="legal">
+        CONTRATO DE SERVICIO ENTRE LA EMPRESA Y EL CLIENTE. Para entregar el trabajo exigimos este recibo. Toda perdida ocasionada por caso fortuito como robo, incendios, etc estan a riesgo del cliente. Pasados 30 dias de la fecha de este recibo cesa la responsabilidad de la empresa. NO respondemos por perdidas de dinero, joyas y demas objetos dejados en los vestidos, ni por las telas, paños y colores debido a la inconsistencia encogimiento ni de coloramiento de las mismas en los procesos de lavado anterior a este servicio. Toda prenda que se perdio o cambio se respondera por diez (10) veces el valor de su lavado anterior a este servicio.
+      </div>
+      <br/><br/><br/>
+    </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 400);
+  };
+
   const exportClients = () => {
     const csv = [["Nombre","Telefono","Email","Total Ordenes"],...clients.map(c=>[c.name||"",c.phone||"",c.email||"",c.total_orders||0])].map(r=>r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
@@ -483,7 +561,12 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(Number(o.price))}</td>
                         <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
                         <td style={{ padding: "12px 14px" }}><span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date||"—"}</span></td>
-                        <td style={{ padding: "12px 14px" }}><button onClick={() => { const pwd=prompt("Contraseña para eliminar:"); if(pwd==="9621"){if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id);}else if(pwd!==null)alert("❌ Contraseña incorrecta"); }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button></td>
+                        <td style={{ padding: "12px 14px" }}>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => printOrder(o)} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
+                            <button onClick={() => { const pwd=prompt("Contraseña para eliminar:"); if(pwd==="9621"){if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id);}else if(pwd!==null)alert("❌ Contraseña incorrecta"); }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -629,7 +712,10 @@ export default function LavanderiaApp() {
                             </div>
                           ))}
                         </div>
-                        <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", width: "100%", padding: 12 }}>🔍 Nueva búsqueda</button>
+                        <div style={{ display: "flex", gap: 10, marginBottom: 0 }}>
+                          <button onClick={() => printOrder(entregaResult)} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
+                          <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
+                        </div>
                       </div>
                     )}
                   </div>
