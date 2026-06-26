@@ -120,11 +120,6 @@ export default function LavanderiaApp() {
     try { const s = localStorage.getItem("conditions"); return s ? JSON.parse(s) : ["Decolorado","Percudido","Roto","Manchado"]; } catch { return ["Decolorado","Percudido","Roto","Manchado"]; }
   });
   const [newCondition, setNewCondition] = useState("");
-  const [adminClave, setAdminClave] = useState(() => { try { return localStorage.getItem("adminClave") || adminClave; } catch { return adminClave; } });
-  const [showCambiarClave, setShowCambiarClave] = useState(false);
-  const [claveActual, setClaveActual] = useState("");
-  const [claveNueva, setClaveNueva] = useState("");
-  const [claveConfirm, setClaveConfirm] = useState("");
   const [reciboSubtitulo, setReciboSubtitulo] = useState(() => { try { return localStorage.getItem("reciboSubtitulo") || "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } catch { return "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } });
   const [reciboLegal, setReciboLegal] = useState(() => { try { return localStorage.getItem("reciboLegal") || "CONTRATO DE SERVICIO ENTRE LA EMPRESA Y EL CLIENTE. Para entregar el trabajo exigimos este recibo. Toda perdida ocasionada por caso fortuito como robo, incendios, etc estan a riesgo del cliente. Pasados 30 dias de la fecha de este recibo cesa la responsabilidad de la empresa. NO respondemos por perdidas de dinero, joyas y demas objetos dejados en los vestidos, ni por las telas, paños y colores debido a la inconsistencia encogimiento ni de coloramiento de las mismas en los procesos de lavado anterior a este servicio. Toda prenda que se perdio o cambio se respondera por diez (10) veces el valor de su lavado anterior a este servicio."; } catch { return ""; } });
 
@@ -168,7 +163,7 @@ export default function LavanderiaApp() {
 
   const resetOrderCounter = async () => {
     const pwd = prompt("Clave para reiniciar contador:");
-    if (pwd !== adminClave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
+    if (pwd !== "9621") { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (!window.confirm("¿Reiniciar el contador de recibos a S0001? Esto no afecta las órdenes existentes.")) return;
     await fetch(`${SUPABASE_URL}/rest/v1/rpc/reset_order_seq`, {
       method: "POST",
@@ -180,7 +175,7 @@ export default function LavanderiaApp() {
 
   const deleteAllClients = async () => {
     const pwd = prompt("Clave para eliminar clientes:");
-    if (pwd !== adminClave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
+    if (pwd !== "9621") { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (!window.confirm("⚠️ ¿Eliminar TODOS los clientes? Esta acción no se puede deshacer.")) return;
     if (!window.confirm("¿Estás seguro? Se borrarán todos los clientes registrados.")) return;
     const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=neq.00000000-0000-0000-0000-000000000000`, {
@@ -216,7 +211,7 @@ export default function LavanderiaApp() {
 
   const confirmarReversar = async (order) => {
     const pwd = prompt("Ingresa la clave:");
-    if (pwd !== adminClave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
+    if (pwd !== "9621") { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (order.status === "entregado") {
       if (!window.confirm(`¿Reversar la orden ${order.order_number} a "Listo"?`)) return;
       await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null, reversada: true });
@@ -243,7 +238,7 @@ export default function LavanderiaApp() {
     setEditingEmployee(null);
   };
   const deleteEmployee = async (id) => {
-    const pwd = prompt("Contraseña para eliminar:"); if (pwd !== adminClave) { if (pwd !== null) alert("❌ Contraseña incorrecta"); return; }
+    const pwd = prompt("Contraseña para eliminar:"); if (pwd !== "9621") { if (pwd !== null) alert("❌ Contraseña incorrecta"); return; }
     if (!window.confirm("¿Eliminar este usuario?")) return;
     await db.delete("employees", id); setEmployees(prev => prev.filter(e => e.id !== id));
   };
@@ -571,7 +566,7 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button onClick={() => printOrder(o)} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
-                            <button onClick={() => { const pwd=prompt("Contraseña para eliminar:"); if(pwd===adminClave){if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id);}else if(pwd!==null)alert("❌ Contraseña incorrecta"); }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                            <button onClick={() => { const pwd=prompt("Contraseña para eliminar:"); if(pwd==="9621"){if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id);}else if(pwd!==null)alert("❌ Contraseña incorrecta"); }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
                           </div>
                         </td>
                       </tr>
@@ -753,7 +748,7 @@ export default function LavanderiaApp() {
                       <div style={{ fontSize: 28 }}>👤</div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => setEditingClient({ ...c })} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
-                        <button onClick={() => { const pwd=prompt("Contraseña para eliminar:"); if(pwd===adminClave){if(window.confirm("¿Eliminar este cliente?"))deleteClient(c.id);}else if(pwd!==null)alert("❌ Contraseña incorrecta"); }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
+                        <button onClick={() => { const pwd=prompt("Contraseña para eliminar:"); if(pwd==="9621"){if(window.confirm("¿Eliminar este cliente?"))deleteClient(c.id);}else if(pwd!==null)alert("❌ Contraseña incorrecta"); }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
                       </div>
                     </div>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{c.name}</div>
@@ -833,7 +828,7 @@ export default function LavanderiaApp() {
                         <td style={{ padding:"12px 14px" }}><PayMethod m={e.payment_method} /></td>
                         <td style={{ padding:"12px 14px",fontWeight:700,color:"#EF5350" }}>${e.amount}</td>
                         <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{e.date}</td>
-                        <td style={{ padding:"12px 14px" }}><button onClick={()=>{ const pwd=prompt("Contraseña para eliminar:"); if(pwd===adminClave){if(window.confirm("¿Eliminar este gasto?"))deleteExpense(e.id);}else if(pwd!==null)alert("❌ Contraseña incorrecta"); }} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
+                        <td style={{ padding:"12px 14px" }}><button onClick={()=>{ const pwd=prompt("Contraseña para eliminar:"); if(pwd==="9621"){if(window.confirm("¿Eliminar este gasto?"))deleteExpense(e.id);}else if(pwd!==null)alert("❌ Contraseña incorrecta"); }} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1105,43 +1100,7 @@ export default function LavanderiaApp() {
                 </div>
               </div>
               <div style={{ marginTop: 20, ...card }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, color: "#FFD54F" }}>👥 Usuarios y Turnos</h3>
-                  <button onClick={() => setShowCambiarClave(!showCambiarClave)} style={{ ...btn, background: showCambiarClave ? "rgba(255,213,79,0.2)" : "rgba(255,255,255,0.05)", color: "#FFD54F", padding: "6px 14px", fontSize: 12, border: "1px solid rgba(255,213,79,0.3)" }}>
-                    🔑 Cambiar clave admin
-                  </button>
-                </div>
-                {showCambiarClave && (
-                  <div style={{ background: "#0D1117", borderRadius: 12, padding: 20, marginBottom: 20, border: "1px solid rgba(255,213,79,0.3)" }}>
-                    <h4 style={{ margin: "0 0 14px", fontSize: 14, color: "#FFD54F" }}>🔑 Cambiar clave de administrador</h4>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div>
-                        <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>CLAVE ACTUAL</label>
-                        <input type="password" style={{ ...inp, borderColor: "#30363D" }} placeholder="••••" value={claveActual} onChange={e => setClaveActual(e.target.value)} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>NUEVA CLAVE</label>
-                        <input type="password" style={{ ...inp, borderColor: "#30363D" }} placeholder="••••" value={claveNueva} onChange={e => setClaveNueva(e.target.value)} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>CONFIRMAR NUEVA CLAVE</label>
-                        <input type="password" style={{ ...inp, borderColor: "#30363D" }} placeholder="••••" value={claveConfirm} onChange={e => setClaveConfirm(e.target.value)} />
-                      </div>
-                      <button onClick={() => {
-                        if (claveActual !== adminClave) { alert("❌ La clave actual es incorrecta"); return; }
-                        if (claveNueva.length < 4) { alert("❌ La nueva clave debe tener al menos 4 caracteres"); return; }
-                        if (claveNueva !== claveConfirm) { alert("❌ Las claves nuevas no coinciden"); return; }
-                        setAdminClave(claveNueva);
-                        try { localStorage.setItem("adminClave", claveNueva); } catch {}
-                        setClaveActual(""); setClaveNueva(""); setClaveConfirm("");
-                        setShowCambiarClave(false);
-                        alert("✅ Clave cambiada correctamente");
-                      }} style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: 12, fontWeight: 800 }}>
-                        💾 Guardar nueva clave
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <h3 style={{ margin: "0 0 20px", fontSize: 16, color: "#FFD54F" }}>👥 Usuarios y Turnos</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
                   <div>
                     <h4 style={{ margin: "0 0 12px", fontSize: 13, color: "#8B949E", fontWeight: 600 }}>USUARIOS REGISTRADOS</h4>
@@ -1187,14 +1146,14 @@ export default function LavanderiaApp() {
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>SUBTÍTULO (debajo de la dirección)</label>
                     <div style={{ display: "flex", gap: 8 }}>
                       <input style={{ ...inp, flex: 1 }} value={reciboSubtitulo} onChange={e => setReciboSubtitulo(e.target.value)} placeholder="Ej: PRENDAS EL DIA INDICADO DESPUES DE LAS 5" />
-                      <button onClick={() => { const pwd=prompt("Clave para guardar:"); if(pwd!==adminClave){if(pwd!==null)alert("❌ Clave incorrecta");return;} try{localStorage.setItem("reciboSubtitulo",reciboSubtitulo);}catch{} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", whiteSpace: "nowrap" }}>Guardar</button>
+                      <button onClick={() => { const pwd=prompt("Clave para guardar:"); if(pwd!=="9621"){if(pwd!==null)alert("❌ Clave incorrecta");return;} try{localStorage.setItem("reciboSubtitulo",reciboSubtitulo);}catch{} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", whiteSpace: "nowrap" }}>Guardar</button>
                     </div>
                   </div>
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>TEXTO LEGAL (al final del recibo)</label>
                     <textarea value={reciboLegal} onChange={e => setReciboLegal(e.target.value)}
                       style={{ ...inp, height: 120, resize: "vertical", fontSize: 12, lineHeight: 1.5 }} />
-                    <button onClick={() => { const pwd=prompt("Clave para guardar:"); if(pwd!==adminClave){if(pwd!==null)alert("❌ Clave incorrecta");return;} try{localStorage.setItem("reciboLegal",reciboLegal);}catch{} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", marginTop: 8, width: "100%" }}>💾 Guardar texto legal</button>
+                    <button onClick={() => { const pwd=prompt("Clave para guardar:"); if(pwd!=="9621"){if(pwd!==null)alert("❌ Clave incorrecta");return;} try{localStorage.setItem("reciboLegal",reciboLegal);}catch{} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", marginTop: 8, width: "100%" }}>💾 Guardar texto legal</button>
                   </div>
                 </div>
               </div>
