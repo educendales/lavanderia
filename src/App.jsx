@@ -995,7 +995,7 @@ export default function LavanderiaApp() {
                     ? <div style={{ textAlign:"center",padding:32,color:"#484F58" }}><div style={{ fontSize:40,marginBottom:8 }}>✅</div><div>No hay prendas pendientes de retiro</div></div>
                     : <div style={{ overflowX:"auto" }}>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                          <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11,whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                          <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días","📱"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11,whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
                           <tbody>{pendingOrders.map(o => {
                             const daysIn=Math.floor((new Date()-new Date(o.date))/(1000*60*60*24));
                             const isLate=o.delivery_date&&new Date(o.delivery_date)<new Date()&&o.status!=="entregado";
@@ -1010,6 +1010,15 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.date}</td>
                               <td style={{ padding:"10px 12px",fontSize:12 }}><span style={{ color:isLate?"#EF5350":"#FFD54F",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
                               <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"#FFD54F":"#8B949E",fontSize:13 }}>{daysIn}d</span></td>
+                              <td style={{ padding:"8px 10px" }}>
+                                {o.phone && o.status === "listo" && (
+                                  <a href={`https://wa.me/57${o.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(`Hola ${o.client_name}, le informamos que su(s) prenda(s) en Lavanderías Shaddai ya están listas para retirar. Recuerde que puede recogerlas después de las 5pm. Orden: ${o.order_number}. ¡Gracias por preferirnos!`)}`}
+                                    target="_blank" rel="noreferrer"
+                                    style={{ ...btn, background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:11,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>
+                                    📱 WA
+                                  </a>
+                                )}
+                              </td>
                             </tr>;
                           })}</tbody>
                         </table>
