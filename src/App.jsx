@@ -334,8 +334,8 @@ export default function LavanderiaApp() {
     setEntregaConfirmed(true);
   };
 
-  const printOrder = (order) => {
-    const its = orderItems[order.id] || [];
+  const printOrder = (order, itemsMap) => {
+    const its = (itemsMap || orderItems)[order.id] || [];
     const w = window.open("", "_blank", "width=320,height=600");
     w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recibo ${order.order_number||""}</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/barcodes/JsBarcode.code128.min.js"><\/script>
@@ -1356,7 +1356,40 @@ export default function LavanderiaApp() {
                     <input type="date" style={{ ...inp,colorScheme:"dark",borderColor:"#FFD54F44" }} value={newOrder.delivery_date} onChange={e=>setNewOrder(p=>({...p,delivery_date:e.target.value}))} />
                     <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>Por defecto: 2 días después de hoy. Puedes cambiarla.</div>
                   </div>
-                  <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",padding:14,fontSize:15,opacity:saving||!newOrder.client_name?0.6:1 }}>{saving?"Guardando...":`Guardar Orden · $${Math.round(totalPrice(items))}`}</button>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:14,fontSize:14,opacity:saving||!newOrder.client_name?0.6:1 }}>
+                      {saving?"Guardando...":"💾 Solo Guardar"}
+                    </button>
+                    <button onClick={async () => {
+                      if (!newOrder.client_name || items.length === 0) return;
+                      setSaving(true);
+                      const garments = totalGarments(items), price = totalPrice(items);
+                      const uniqueServices = [...new Set(items.map(it => it.service))];
+                      const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price };
+                      const res = await db.post("orders", o);
+                      if (Array.isArray(res) && res[0]) {
+                        const savedOrder = res[0];
+                        const orderId = savedOrder.id;
+                        for (const item of items) await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors||[]).join(", "), service: item.service });
+                        const existing = clients.find(c => c.phone === newOrder.phone);
+                        if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
+                        else if (newOrder.client_name) { const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 }); if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]); }
+                        // Wait a moment for order_number to be assigned then reload and print
+                        await loadData();
+                        const freshOrders = await db.get("orders");
+                        const freshOrder = Array.isArray(freshOrders) ? freshOrders.find(ord => ord.id === orderId) : null;
+                        const freshItems = await db.get("order_items", `&order_id=eq.${orderId}`);
+                        const itemsMap = { [orderId]: Array.isArray(freshItems) ? freshItems : [] };
+                        setOrderItems(prev => ({ ...prev, ...itemsMap }));
+                        if (freshOrder) printOrder({ ...freshOrder }, itemsMap);
+                      }
+                      setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
+                      setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
+                      setModal(null); setSaving(false); loadData();
+                    }} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:2,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:14,fontWeight:800,opacity:saving||!newOrder.client_name?0.6:1 }}>
+                      {saving?"Guardando...":"🖨️ Guardar e Imprimir"}
+                    </button>
+                  </div>
                 </div>
               </>
             )}
