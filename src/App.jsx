@@ -159,6 +159,31 @@ export default function LavanderiaApp() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [showCalc, calcDisplay, calcPrev, calcOp, calcNew]);
 
+  const resetOrderCounter = async () => {
+    const pwd = prompt("Clave para reiniciar contador:");
+    if (pwd !== "9621") { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
+    if (!window.confirm("¿Reiniciar el contador de recibos a S0001? Esto no afecta las órdenes existentes.")) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/rpc/reset_order_seq`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    alert("✅ Contador reiniciado. La próxima orden será S0001.");
+  };
+
+  const deleteAllClients = async () => {
+    const pwd = prompt("Clave para eliminar clientes:");
+    if (pwd !== "9621") { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
+    if (!window.confirm("⚠️ ¿Eliminar TODOS los clientes? Esta acción no se puede deshacer.")) return;
+    if (!window.confirm("¿Estás seguro? Se borrarán todos los clientes registrados.")) return;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=neq.00000000-0000-0000-0000-000000000000`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    setClients([]);
+    alert("✅ Todos los clientes han sido eliminados.");
+  };
+
   const saveConditions = (list) => { setConditions(list); try { localStorage.setItem("conditions", JSON.stringify(list)); } catch {} };
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
@@ -1024,6 +1049,30 @@ export default function LavanderiaApp() {
                   </div>
                 </div>
               </div>
+              {/* ZONA DE PELIGRO */}
+              <div style={{ marginTop: 20, ...card, border: "1px solid rgba(239,83,80,0.4)" }}>
+                <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#EF5350" }}>⚠️ Zona de Peligro</h3>
+                <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8B949E" }}>Acciones irreversibles. Se requiere clave para ejecutar.</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div style={{ background: "#0D1117", borderRadius: 12, padding: 20, border: "1px solid #21262D" }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>🔢</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Reiniciar contador de recibos</div>
+                    <div style={{ fontSize: 13, color: "#8B949E", marginBottom: 16 }}>La próxima orden comenzará desde S0001. Las órdenes existentes no se borran.</div>
+                    <button onClick={resetOrderCounter} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", border: "1px solid rgba(239,83,80,0.3)", width: "100%", padding: 10, fontSize: 13 }}>
+                      🔢 Reiniciar contador
+                    </button>
+                  </div>
+                  <div style={{ background: "#0D1117", borderRadius: 12, padding: 20, border: "1px solid #21262D" }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>👤</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Eliminar todos los clientes</div>
+                    <div style={{ fontSize: 13, color: "#8B949E", marginBottom: 16 }}>Borra toda la base de datos de clientes. Las órdenes no se eliminan.</div>
+                    <button onClick={deleteAllClients} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", border: "1px solid rgba(239,83,80,0.3)", width: "100%", padding: 10, fontSize: 13 }}>
+                      🗑 Eliminar todos los clientes
+                    </button>
+                  </div>
+                </div>
+              </div>
+
             </div>
           )}
 
