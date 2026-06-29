@@ -307,6 +307,7 @@ export default function LavanderiaApp() {
     setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
     setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
     setSaving(false);
+    setModal(null);
     await loadData();
     // Show recibo options modal
     if (Array.isArray(res) && res[0]) {
@@ -318,7 +319,6 @@ export default function LavanderiaApp() {
       setSavedOrder({ order: fresh || res[0], itemsMap: imap });
       setReciboModal(true);
     }
-    setModal(null);
   };
 
   const addItem = () => { const defaultType = emptyItem.garment_type; const defaultPrice = precioDefaults[defaultType] || ""; setItems(prev => [...prev, { ...emptyItem, price: defaultPrice }]); };
