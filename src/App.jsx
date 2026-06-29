@@ -101,6 +101,9 @@ export default function LavanderiaApp() {
   const [editingPrecio, setEditingPrecio] = useState(false);
   const [tempPrecio, setTempPrecio] = useState("");
   const [inventoryFilter, setInventoryFilter] = useState("");
+  const [reportFrom, setReportFrom] = useState(() => { const d = new Date(); d.setDate(1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; });
+  const [reportTo, setReportTo] = useState(today);
+  const [reportView, setReportView] = useState("dia");
   const [inventoryDaysFilter, setInventoryDaysFilter] = useState("");
   const [expenseFilterDate, setExpenseFilterDate] = useState(today);
   const [showEliminados, setShowEliminados] = useState(false);
@@ -916,6 +919,195 @@ export default function LavanderiaApp() {
                     </div>;
                   })}
                 </div>
+              </div>
+
+              {/* INFORME POR RANGO */}
+              <div style={{ ...card, marginBottom: 16 }}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#4FC3F7" }}>📊 Informe por Rango de Fechas</h3>
+
+                {/* Filters */}
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignSelf: "flex-end" }}>
+                    <button onClick={() => setReportView("dia")} style={{ ...btn, background: reportView==="dia"?"linear-gradient(135deg,#4FC3F7,#0288D1)":"rgba(255,255,255,0.05)", color: reportView==="dia"?"#fff":"#8B949E", padding: "8px 16px", fontSize: 12 }}>Por Día</button>
+                    <button onClick={() => setReportView("mes")} style={{ ...btn, background: reportView==="mes"?"linear-gradient(135deg,#4FC3F7,#0288D1)":"rgba(255,255,255,0.05)", color: reportView==="mes"?"#fff":"#8B949E", padding: "8px 16px", fontSize: 12 }}>Por Mes</button>
+                  </div>
+                </div>
+
+                {(() => {
+                  // Filter orders in range
+                  const inRange = orders.filter(o => o.date >= reportFrom && o.date <= reportTo);
+                  const deliveredInRange = orders.filter(o => o.delivered_at >= reportFrom && o.delivered_at <= reportTo && o.status === "entregado");
+
+                  if (reportView === "dia") {
+                    // Group by day
+                    const days = {};
+                    inRange.forEach(o => {
+                      if (!days[o.date]) days[o.date] = { ingresos: 0, ordenes: 0, prendas: 0 };
+                      days[o.date].ingresos += Number(o.price);
+                      days[o.date].ordenes += 1;
+                      days[o.date].prendas += Number(o.garments);
+                    });
+                    deliveredInRange.forEach(o => {
+                      const d = o.delivered_at;
+                      if (!days[d]) days[d] = { ingresos: 0, ordenes: 0, prendas: 0 };
+                      if (!days[d].entregas) days[d].entregas = 0;
+                      if (!days[d].valorEntregado) days[d].valorEntregado = 0;
+                      days[d].entregas += 1;
+                      days[d].valorEntregado += Number(o.price);
+                    });
+                    const sortedDays = Object.keys(days).sort();
+                    const totalIng = sortedDays.reduce((s,d) => s + (days[d].ingresos||0), 0);
+                    const totalEnt = sortedDays.reduce((s,d) => s + (days[d].valorEntregado||0), 0);
+                    const totalOrd = sortedDays.reduce((s,d) => s + (days[d].ordenes||0), 0);
+                    const totalPrend = sortedDays.reduce((s,d) => s + (days[d].prendas||0), 0);
+
+                    const exportDia = () => {
+                      const csv = [["Fecha","Órdenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],
+                        ...sortedDays.map(d => [d, days[d].ordenes||0, days[d].prendas||0, Math.round(days[d].ingresos||0), days[d].entregas||0, Math.round(days[d].valorEntregado||0)]),
+                        ["TOTAL", totalOrd, totalPrend, Math.round(totalIng), sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0), Math.round(totalEnt)]
+                      ].map(r=>r.join(",")).join("
+");
+                      const blob = new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
+                      const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                      a.href=url; a.download=`informe_diario_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                    };
+
+                    return sortedDays.length === 0 ? (
+                      <p style={{ color: "#484F58", textAlign: "center", padding: 32 }}>No hay datos en este rango de fechas</p>
+                    ) : (
+                      <>
+                        {/* Summary KPIs */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
+                          {[{label:"Total Ingresado",value:`$${Math.round(totalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(totalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:totalOrd,color:"#FFD54F"},{label:"Prendas",value:totalPrend,color:"#FF8A65"}].map((k,i) => (
+                            <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}>
+                              <div style={{ fontWeight:800,fontSize:18,color:k.color }}>{k.value}</div>
+                              <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{k.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                          <button onClick={exportDia} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                        </div>
+                        <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                            <thead><tr style={{ background:"#21262D" }}>
+                              {["Fecha","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
+                            </tr></thead>
+                            <tbody>
+                              {sortedDays.map(d => (
+                                <tr key={d} style={{ borderBottom:"1px solid #21262D" }}>
+                                  <td style={{ padding:"10px 12px",fontWeight:600 }}>{d}</td>
+                                  <td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].ordenes||0}</td>
+                                  <td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].prendas||0}</td>
+                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(days[d].ingresos||0).toLocaleString()}</td>
+                                  <td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].entregas||0}</td>
+                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(days[d].valorEntregado||0).toLocaleString()}</td>
+                                </tr>
+                              ))}
+                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                                <td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{totalOrd}</td>
+                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{totalPrend}</td>
+                                <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalIng).toLocaleString()}</td>
+                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0)}</td>
+                                <td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(totalEnt).toLocaleString()}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    );
+                  }
+
+                  // BY MONTH
+                  const months = {};
+                  inRange.forEach(o => {
+                    const m = o.date?.substring(0,7);
+                    if (!m) return;
+                    if (!months[m]) months[m] = { ingresos:0, ordenes:0, prendas:0, entregas:0, valorEntregado:0 };
+                    months[m].ingresos += Number(o.price);
+                    months[m].ordenes += 1;
+                    months[m].prendas += Number(o.garments);
+                  });
+                  deliveredInRange.forEach(o => {
+                    const m = o.delivered_at?.substring(0,7);
+                    if (!m) return;
+                    if (!months[m]) months[m] = { ingresos:0, ordenes:0, prendas:0, entregas:0, valorEntregado:0 };
+                    months[m].entregas += 1;
+                    months[m].valorEntregado += Number(o.price);
+                  });
+                  const monthNames = {"01":"Enero","02":"Febrero","03":"Marzo","04":"Abril","05":"Mayo","06":"Junio","07":"Julio","08":"Agosto","09":"Septiembre","10":"Octubre","11":"Noviembre","12":"Diciembre"};
+                  const sortedMonths = Object.keys(months).sort();
+                  const mTotalIng = sortedMonths.reduce((s,m)=>s+(months[m].ingresos||0),0);
+                  const mTotalEnt = sortedMonths.reduce((s,m)=>s+(months[m].valorEntregado||0),0);
+                  const mTotalOrd = sortedMonths.reduce((s,m)=>s+(months[m].ordenes||0),0);
+                  const mTotalPrend = sortedMonths.reduce((s,m)=>s+(months[m].prendas||0),0);
+
+                  const exportMes = () => {
+                    const csv = [["Mes","Órdenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],
+                      ...sortedMonths.map(m => { const [y,mo]=m.split("-"); return [`${monthNames[mo]} ${y}`, months[m].ordenes||0, months[m].prendas||0, Math.round(months[m].ingresos||0), months[m].entregas||0, Math.round(months[m].valorEntregado||0)]; }),
+                      ["TOTAL", mTotalOrd, mTotalPrend, Math.round(mTotalIng), sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0), Math.round(mTotalEnt)]
+                    ].map(r=>r.join(",")).join("
+");
+                    const blob = new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
+                    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                    a.href=url; a.download=`informe_mensual_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                  };
+
+                  return sortedMonths.length === 0 ? (
+                    <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p>
+                  ) : (
+                    <>
+                      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
+                        {[{label:"Total Ingresado",value:`$${Math.round(mTotalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(mTotalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:mTotalOrd,color:"#FFD54F"},{label:"Prendas",value:mTotalPrend,color:"#FF8A65"}].map((k,i) => (
+                          <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:k.color }}>{k.value}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{k.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                        <button onClick={exportMes} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                      </div>
+                      <div style={{ overflowX:"auto" }}>
+                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                          <thead><tr style={{ background:"#21262D" }}>
+                            {["Mes","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
+                          </tr></thead>
+                          <tbody>
+                            {sortedMonths.map(m => {
+                              const [y,mo] = m.split("-");
+                              return <tr key={m} style={{ borderBottom:"1px solid #21262D" }}>
+                                <td style={{ padding:"10px 12px",fontWeight:600 }}>{monthNames[mo]} {y}</td>
+                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].ordenes||0}</td>
+                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].prendas||0}</td>
+                                <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(months[m].ingresos||0).toLocaleString()}</td>
+                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].entregas||0}</td>
+                                <td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(months[m].valorEntregado||0).toLocaleString()}</td>
+                              </tr>;
+                            })}
+                            <tr style={{ background:"#21262D",fontWeight:800 }}>
+                              <td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                              <td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalOrd}</td>
+                              <td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalPrend}</td>
+                              <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(mTotalIng).toLocaleString()}</td>
+                              <td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0)}</td>
+                              <td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(mTotalEnt).toLocaleString()}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* REVERSADAS */}
