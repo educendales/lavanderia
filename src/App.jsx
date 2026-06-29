@@ -206,7 +206,7 @@ export default function LavanderiaApp() {
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (!window.confirm("⚠️ ¿Eliminar TODOS los clientes? Esta acción no se puede deshacer.")) return;
     if (!window.confirm("¿Estás seguro? Se borrarán todos los clientes registrados.")) return;
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/clients?id=neq.00000000-0000-0000-0000-000000000000`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/clients?id=neq.00000000-0000-0000-0000-000000000000`, {
       method: "DELETE",
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
     });
@@ -238,7 +238,8 @@ export default function LavanderiaApp() {
   };
 
   const confirmarReversar = async (order) => {
-    const clave = await getClave(); const pwd = prompt("Ingresa la clave:");
+    const clave = await getClave();
+    const pwd = prompt("Ingresa la clave:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (order.status === "entregado") {
       if (!window.confirm(`¿Reversar la orden ${order.order_number} a "Listo"?`)) return;
@@ -420,9 +421,7 @@ export default function LavanderiaApp() {
       ${order.notes ? `<div class="line"></div><div class="small"><b>Obs:</b> ${order.notes}</div>` : ''}
       <div class="line"></div>
       <div class="small center">RESPONDEMOS POR SUS PRENDAS SOLO POR 30 DIAS</div>
-      <div class="legal">
-        ${reciboLegal}
-      </div>
+      <div class="legal">${reciboLegal}</div>
       <br/><br/><br/>
     </body></html>`);
     w.document.close();
@@ -446,6 +445,7 @@ export default function LavanderiaApp() {
   const filteredOrders = orderFilterDate ? orders.filter(o => o.date === orderFilterDate) : orders;
   const filteredExpenses = expenseFilterDate ? expenses.filter(e => e.date === expenseFilterDate && !e.eliminado) : expenses.filter(e => !e.eliminado);
   const filteredClients = clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch));
+  const isAdmin = user?.role === "admin";
 
   const s = { fontFamily: "'Segoe UI', sans-serif", minHeight: "100vh", background: "#0D1117", color: "#E6EDF3" };
   const card = { background: "#161B22", borderRadius: 14, padding: 20, border: "1px solid #30363D" };
@@ -755,7 +755,7 @@ export default function LavanderiaApp() {
                             </div>
                           ))}
                         </div>
-                        <div style={{ display: "flex", gap: 10, marginBottom: 0 }}>
+                        <div style={{ display: "flex", gap: 10 }}>
                           <button onClick={() => printOrder(entregaResult)} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
@@ -773,7 +773,7 @@ export default function LavanderiaApp() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Clientes</h2>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={exportClients} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "8px 14px", fontSize: 12 }}>📥 Exportar Excel</button>
+                  {isAdmin && <button onClick={exportClients} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "8px 14px", fontSize: 12 }}>📥 Exportar Excel</button>}
                   <button onClick={() => setModal("newClient")} style={{ ...btn, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff" }}>+ Nuevo Cliente</button>
                 </div>
               </div>
@@ -924,10 +924,8 @@ export default function LavanderiaApp() {
               </div>
 
               {/* INFORME POR RANGO */}
-              <div style={{ ...card, marginBottom: 16 }}>
+              <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
                 <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#4FC3F7" }}>📊 Informe por Rango de Fechas</h3>
-
-                {/* Filters */}
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
                   <div>
                     <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
@@ -942,166 +940,63 @@ export default function LavanderiaApp() {
                     <button onClick={() => setReportView("mes")} style={{ ...btn, background: reportView==="mes"?"linear-gradient(135deg,#4FC3F7,#0288D1)":"rgba(255,255,255,0.05)", color: reportView==="mes"?"#fff":"#8B949E", padding: "8px 16px", fontSize: 12 }}>Por Mes</button>
                   </div>
                 </div>
-
                 {(() => {
-                  // Filter orders in range
                   const inRange = orders.filter(o => o.date >= reportFrom && o.date <= reportTo);
                   const deliveredInRange = orders.filter(o => o.delivered_at >= reportFrom && o.delivered_at <= reportTo && o.status === "entregado");
-
                   if (reportView === "dia") {
-                    // Group by day
                     const days = {};
-                    inRange.forEach(o => {
-                      if (!days[o.date]) days[o.date] = { ingresos: 0, ordenes: 0, prendas: 0 };
-                      days[o.date].ingresos += Number(o.price);
-                      days[o.date].ordenes += 1;
-                      days[o.date].prendas += Number(o.garments);
-                    });
-                    deliveredInRange.forEach(o => {
-                      const d = o.delivered_at;
-                      if (!days[d]) days[d] = { ingresos: 0, ordenes: 0, prendas: 0 };
-                      if (!days[d].entregas) days[d].entregas = 0;
-                      if (!days[d].valorEntregado) days[d].valorEntregado = 0;
-                      days[d].entregas += 1;
-                      days[d].valorEntregado += Number(o.price);
-                    });
+                    inRange.forEach(o => { if (!days[o.date]) days[o.date] = { ingresos:0,ordenes:0,prendas:0 }; days[o.date].ingresos+=Number(o.price); days[o.date].ordenes+=1; days[o.date].prendas+=Number(o.garments); });
+                    deliveredInRange.forEach(o => { const d=o.delivered_at; if (!days[d]) days[d]={ingresos:0,ordenes:0,prendas:0}; if(!days[d].entregas)days[d].entregas=0; if(!days[d].valorEntregado)days[d].valorEntregado=0; days[d].entregas+=1; days[d].valorEntregado+=Number(o.price); });
                     const sortedDays = Object.keys(days).sort();
-                    const totalIng = sortedDays.reduce((s,d) => s + (days[d].ingresos||0), 0);
-                    const totalEnt = sortedDays.reduce((s,d) => s + (days[d].valorEntregado||0), 0);
-                    const totalOrd = sortedDays.reduce((s,d) => s + (days[d].ordenes||0), 0);
-                    const totalPrend = sortedDays.reduce((s,d) => s + (days[d].prendas||0), 0);
-
+                    const totalIng=sortedDays.reduce((s,d)=>s+(days[d].ingresos||0),0), totalEnt=sortedDays.reduce((s,d)=>s+(days[d].valorEntregado||0),0), totalOrd=sortedDays.reduce((s,d)=>s+(days[d].ordenes||0),0), totalPrend=sortedDays.reduce((s,d)=>s+(days[d].prendas||0),0);
                     const exportDia = () => {
-                      const csv = [["Fecha","Órdenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],
-                        ...sortedDays.map(d => [d, days[d].ordenes||0, days[d].prendas||0, Math.round(days[d].ingresos||0), days[d].entregas||0, Math.round(days[d].valorEntregado||0)]),
-                        ["TOTAL", totalOrd, totalPrend, Math.round(totalIng), sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0), Math.round(totalEnt)]
-                      ].map(r=>r.join(",")).join("\n");
-                      const blob = new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
-                      const url = URL.createObjectURL(blob); const a = document.createElement("a");
-                      a.href=url; a.download=`informe_diario_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                      const csv=[["Fecha","Ordenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],...sortedDays.map(d=>[d,days[d].ordenes||0,days[d].prendas||0,Math.round(days[d].ingresos||0),days[d].entregas||0,Math.round(days[d].valorEntregado||0)]),["TOTAL",totalOrd,totalPrend,Math.round(totalIng),sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0),Math.round(totalEnt)]].map(r=>r.join(",")).join("\n");
+                      const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`informe_diario_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
                     };
-
-                    return sortedDays.length === 0 ? (
-                      <p style={{ color: "#484F58", textAlign: "center", padding: 32 }}>No hay datos en este rango de fechas</p>
-                    ) : (
+                    return sortedDays.length===0 ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p> : (
                       <>
-                        {/* Summary KPIs */}
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
-                          {[{label:"Total Ingresado",value:`$${Math.round(totalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(totalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:totalOrd,color:"#FFD54F"},{label:"Prendas",value:totalPrend,color:"#FF8A65"}].map((k,i) => (
-                            <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}>
-                              <div style={{ fontWeight:800,fontSize:18,color:k.color }}>{k.value}</div>
-                              <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{k.label}</div>
-                            </div>
+                        <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
+                          {[{label:"Total Ingresado",value:`$${Math.round(totalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(totalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:totalOrd,color:"#FFD54F"},{label:"Prendas",value:totalPrend,color:"#FF8A65"}].map((k,i)=>(
+                            <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}><div style={{ fontWeight:800,fontSize:18,color:k.color }}>{k.value}</div><div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{k.label}</div></div>
                           ))}
                         </div>
-                        <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                          <button onClick={exportDia} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
-                        </div>
+                        {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}><button onClick={exportDia} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button></div>}
                         <div style={{ overflowX:"auto" }}>
                           <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                            <thead><tr style={{ background:"#21262D" }}>
-                              {["Fecha","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
-                            </tr></thead>
+                            <thead><tr style={{ background:"#21262D" }}>{["Fecha","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
                             <tbody>
-                              {sortedDays.map(d => (
-                                <tr key={d} style={{ borderBottom:"1px solid #21262D" }}>
-                                  <td style={{ padding:"10px 12px",fontWeight:600 }}>{d}</td>
-                                  <td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].ordenes||0}</td>
-                                  <td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].prendas||0}</td>
-                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(days[d].ingresos||0).toLocaleString()}</td>
-                                  <td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].entregas||0}</td>
-                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(days[d].valorEntregado||0).toLocaleString()}</td>
-                                </tr>
-                              ))}
-                              <tr style={{ background:"#21262D",fontWeight:800 }}>
-                                <td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
-                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{totalOrd}</td>
-                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{totalPrend}</td>
-                                <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalIng).toLocaleString()}</td>
-                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0)}</td>
-                                <td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(totalEnt).toLocaleString()}</td>
-                              </tr>
+                              {sortedDays.map(d=>(<tr key={d} style={{ borderBottom:"1px solid #21262D" }}><td style={{ padding:"10px 12px",fontWeight:600 }}>{d}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].ordenes||0}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].prendas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(days[d].ingresos||0).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].entregas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(days[d].valorEntregado||0).toLocaleString()}</td></tr>))}
+                              <tr style={{ background:"#21262D",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(totalEnt).toLocaleString()}</td></tr>
                             </tbody>
                           </table>
                         </div>
                       </>
                     );
                   }
-
-                  // BY MONTH
-                  const months = {};
-                  inRange.forEach(o => {
-                    const m = o.date?.substring(0,7);
-                    if (!m) return;
-                    if (!months[m]) months[m] = { ingresos:0, ordenes:0, prendas:0, entregas:0, valorEntregado:0 };
-                    months[m].ingresos += Number(o.price);
-                    months[m].ordenes += 1;
-                    months[m].prendas += Number(o.garments);
-                  });
-                  deliveredInRange.forEach(o => {
-                    const m = o.delivered_at?.substring(0,7);
-                    if (!m) return;
-                    if (!months[m]) months[m] = { ingresos:0, ordenes:0, prendas:0, entregas:0, valorEntregado:0 };
-                    months[m].entregas += 1;
-                    months[m].valorEntregado += Number(o.price);
-                  });
-                  const monthNames = {"01":"Enero","02":"Febrero","03":"Marzo","04":"Abril","05":"Mayo","06":"Junio","07":"Julio","08":"Agosto","09":"Septiembre","10":"Octubre","11":"Noviembre","12":"Diciembre"};
-                  const sortedMonths = Object.keys(months).sort();
-                  const mTotalIng = sortedMonths.reduce((s,m)=>s+(months[m].ingresos||0),0);
-                  const mTotalEnt = sortedMonths.reduce((s,m)=>s+(months[m].valorEntregado||0),0);
-                  const mTotalOrd = sortedMonths.reduce((s,m)=>s+(months[m].ordenes||0),0);
-                  const mTotalPrend = sortedMonths.reduce((s,m)=>s+(months[m].prendas||0),0);
-
+                  const months={};
+                  inRange.forEach(o=>{ const m=o.date?.substring(0,7); if(!m)return; if(!months[m])months[m]={ingresos:0,ordenes:0,prendas:0,entregas:0,valorEntregado:0}; months[m].ingresos+=Number(o.price); months[m].ordenes+=1; months[m].prendas+=Number(o.garments); });
+                  deliveredInRange.forEach(o=>{ const m=o.delivered_at?.substring(0,7); if(!m)return; if(!months[m])months[m]={ingresos:0,ordenes:0,prendas:0,entregas:0,valorEntregado:0}; months[m].entregas+=1; months[m].valorEntregado+=Number(o.price); });
+                  const monthNames={"01":"Enero","02":"Febrero","03":"Marzo","04":"Abril","05":"Mayo","06":"Junio","07":"Julio","08":"Agosto","09":"Septiembre","10":"Octubre","11":"Noviembre","12":"Diciembre"};
+                  const sortedMonths=Object.keys(months).sort();
+                  const mTotalIng=sortedMonths.reduce((s,m)=>s+(months[m].ingresos||0),0), mTotalEnt=sortedMonths.reduce((s,m)=>s+(months[m].valorEntregado||0),0), mTotalOrd=sortedMonths.reduce((s,m)=>s+(months[m].ordenes||0),0), mTotalPrend=sortedMonths.reduce((s,m)=>s+(months[m].prendas||0),0);
                   const exportMes = () => {
-                    const csv = [["Mes","Órdenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],
-                      ...sortedMonths.map(m => { const [y,mo]=m.split("-"); return [`${monthNames[mo]} ${y}`, months[m].ordenes||0, months[m].prendas||0, Math.round(months[m].ingresos||0), months[m].entregas||0, Math.round(months[m].valorEntregado||0)]; }),
-                      ["TOTAL", mTotalOrd, mTotalPrend, Math.round(mTotalIng), sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0), Math.round(mTotalEnt)]
-                    ].map(r=>r.join(",")).join("\n");
-                    const blob = new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
-                    const url = URL.createObjectURL(blob); const a = document.createElement("a");
-                    a.href=url; a.download=`informe_mensual_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                    const csv=[["Mes","Ordenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],...sortedMonths.map(m=>{const[y,mo]=m.split("-");return[`${monthNames[mo]} ${y}`,months[m].ordenes||0,months[m].prendas||0,Math.round(months[m].ingresos||0),months[m].entregas||0,Math.round(months[m].valorEntregado||0)];}),["TOTAL",mTotalOrd,mTotalPrend,Math.round(mTotalIng),sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0),Math.round(mTotalEnt)]].map(r=>r.join(",")).join("\n");
+                    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`informe_mensual_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
                   };
-
-                  return sortedMonths.length === 0 ? (
-                    <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p>
-                  ) : (
+                  return sortedMonths.length===0 ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p> : (
                     <>
                       <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
-                        {[{label:"Total Ingresado",value:`$${Math.round(mTotalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(mTotalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:mTotalOrd,color:"#FFD54F"},{label:"Prendas",value:mTotalPrend,color:"#FF8A65"}].map((k,i) => (
-                          <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:k.color }}>{k.value}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{k.label}</div>
-                          </div>
+                        {[{label:"Total Ingresado",value:`$${Math.round(mTotalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(mTotalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:mTotalOrd,color:"#FFD54F"},{label:"Prendas",value:mTotalPrend,color:"#FF8A65"}].map((k,i)=>(
+                          <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}><div style={{ fontWeight:800,fontSize:18,color:k.color }}>{k.value}</div><div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{k.label}</div></div>
                         ))}
                       </div>
-                      <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                        <button onClick={exportMes} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
-                      </div>
+                      {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}><button onClick={exportMes} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button></div>}
                       <div style={{ overflowX:"auto" }}>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                          <thead><tr style={{ background:"#21262D" }}>
-                            {["Mes","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
-                          </tr></thead>
+                          <thead><tr style={{ background:"#21262D" }}>{["Mes","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
                           <tbody>
-                            {sortedMonths.map(m => {
-                              const [y,mo] = m.split("-");
-                              return <tr key={m} style={{ borderBottom:"1px solid #21262D" }}>
-                                <td style={{ padding:"10px 12px",fontWeight:600 }}>{monthNames[mo]} {y}</td>
-                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].ordenes||0}</td>
-                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].prendas||0}</td>
-                                <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(months[m].ingresos||0).toLocaleString()}</td>
-                                <td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].entregas||0}</td>
-                                <td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(months[m].valorEntregado||0).toLocaleString()}</td>
-                              </tr>;
-                            })}
-                            <tr style={{ background:"#21262D",fontWeight:800 }}>
-                              <td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
-                              <td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalOrd}</td>
-                              <td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalPrend}</td>
-                              <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(mTotalIng).toLocaleString()}</td>
-                              <td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0)}</td>
-                              <td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(mTotalEnt).toLocaleString()}</td>
-                            </tr>
+                            {sortedMonths.map(m=>{const[y,mo]=m.split("-");return<tr key={m} style={{ borderBottom:"1px solid #21262D" }}><td style={{ padding:"10px 12px",fontWeight:600 }}>{monthNames[mo]} {y}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].ordenes||0}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].prendas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(months[m].ingresos||0).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].entregas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(months[m].valorEntregado||0).toLocaleString()}</td></tr>;})}
+                            <tr style={{ background:"#21262D",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(mTotalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(mTotalEnt).toLocaleString()}</td></tr>
                           </tbody>
                         </table>
                       </div>
@@ -1119,29 +1014,15 @@ export default function LavanderiaApp() {
                   {reversadasSearch && <button onClick={() => setReversadasSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 12px", fontSize: 12 }}>✕</button>}
                 </div>
                 {(() => {
-                  const q = reversadasSearch.toLowerCase();
-                  const reversadas = orders.filter(o => {
-                    if (!o.reversada) return false;
-                    if (!q) return true;
-                    return o.client_name?.toLowerCase().includes(q) || o.phone?.includes(q) || o.order_number?.toLowerCase().includes(q);
-                  });
-                  return reversadas.length === 0
-                    ? <div style={{ textAlign:"center",padding:32,color:"#484F58" }}><div style={{ fontSize:32,marginBottom:8 }}>↩️</div><div>{reversadasSearch?"No se encontraron con ese criterio":"No hay órdenes reversadas aún"}</div></div>
-                    : <div style={{ overflowX:"auto" }}>
+                  const q=reversadasSearch.toLowerCase();
+                  const reversadas=orders.filter(o=>{ if(!o.reversada)return false; if(!q)return true; return o.client_name?.toLowerCase().includes(q)||o.phone?.includes(q)||o.order_number?.toLowerCase().includes(q); });
+                  return reversadas.length===0
+                    ?<div style={{ textAlign:"center",padding:32,color:"#484F58" }}><div style={{ fontSize:32,marginBottom:8 }}>↩️</div><div>{reversadasSearch?"No se encontraron con ese criterio":"No hay órdenes reversadas aún"}</div></div>
+                    :<div style={{ overflowX:"auto" }}>
                         <div style={{ fontSize:13,color:"#8B949E",marginBottom:12 }}><strong style={{ color:"#FFD54F" }}>{reversadas.length}</strong> orden{reversadas.length!==1?"es":""} reversada{reversadas.length!==1?"s":""}</div>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
                           <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Teléfono","Servicio","Total","Entregado por","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
-                          <tbody>{reversadas.map(o=>(
-                            <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
-                              <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"#FFD54F",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
-                              <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
-                              <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.phone}</td>
-                              <td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{ const sv=SERVICES.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,marginRight:3 }}>{sv.icon} {sv.label}</span>:null; })}</td>
-                              <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td>
-                              <td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:12 }}>👤 {o.delivered_by}</span>:<span style={{ color:"#484F58",fontSize:12 }}>—</span>}</td>
-                              <td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:11,fontWeight:600 }}>↩️ Reversada</span></td>
-                            </tr>
-                          ))}</tbody>
+                          <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"#FFD54F",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=SERVICES.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:12 }}>👤 {o.delivered_by}</span>:<span style={{ color:"#484F58",fontSize:12 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:11,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
                         </table>
                       </div>;
                 })()}
@@ -1164,54 +1045,41 @@ export default function LavanderiaApp() {
                       <option value="60">Más de 60 días</option>
                       <option value="90">Más de 90 días</option>
                     </select>
-                    <button onClick={() => {
-                      const rows = orders.filter(o => o.status !== "entregado" && (!inventoryFilter || o.date === inventoryFilter));
-                      const days = r => Math.floor((new Date()-new Date(r.date))/(1000*60*60*24));
-                      const csv = [["# Orden","Cliente","Telefono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Dias"],...rows.map(o=>[o.order_number||"",o.client_name,o.phone,getServiceLabel(o.service),o.garments,Math.round(Number(o.price)),STATUS_LABELS[o.status]?.label,o.date,o.delivery_date||"",days(o)])].map(r=>r.join(",")).join("\n");
-                      const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`inventario_${today}.csv`; a.click(); URL.revokeObjectURL(url);
-                    }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "6px 14px", fontSize: 12 }}>📥 Exportar Excel</button>
+                    {isAdmin && <button onClick={() => {
+                      const rows=orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter));
+                      const daysIn=r=>Math.floor((new Date()-new Date(r.date))/(1000*60*60*24));
+                      const csv=[["# Orden","Cliente","Telefono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Dias"],...rows.map(o=>[o.order_number||"",o.client_name,o.phone,getServiceLabel(o.service),o.garments,Math.round(Number(o.price)),STATUS_LABELS[o.status]?.label,o.date,o.delivery_date||"",daysIn(o)])].map(r=>r.join(",")).join("\n");
+                      const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`inventario_${today}.csv`; a.click(); URL.revokeObjectURL(url);
+                    }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "6px 14px", fontSize: 12 }}>📥 Exportar Excel</button>}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
-                  {[{label:"Órdenes pendientes",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#4FC3F7"},{label:"Prendas en local",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.garments),0),color:"#FFD54F"},{label:"Valor en inventario",value:`$${Math.round(orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.price),0))}`,color:"#66BB6A"},{label:"Listas para retiro",value:orders.filter(o=>o.status==="listo"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#FF8A65"}].map((kpi,i) => (
+                  {[{label:"Órdenes pendientes",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#4FC3F7"},{label:"Prendas en local",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.garments),0),color:"#FFD54F"},{label:"Valor en inventario",value:`$${Math.round(orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.price),0))}`,color:"#66BB6A"},{label:"Listas para retiro",value:orders.filter(o=>o.status==="listo"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#FF8A65"}].map((kpi,i)=>(
                     <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${kpi.color}` }}><div style={{ fontWeight:800,fontSize:18,color:kpi.color }}>{kpi.value}</div><div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{kpi.label}</div></div>
                   ))}
                 </div>
                 {(() => {
-                  const pendingOrders = orders.filter(o => {
-                    if (o.status==="entregado") return false;
-                    if (inventoryFilter && o.date!==inventoryFilter) return false;
-                    if (inventoryDaysFilter) { const d=Math.floor((new Date()-new Date(o.date))/(1000*60*60*24)); if(Number(inventoryDaysFilter)>0&&d<Number(inventoryDaysFilter))return false; }
-                    return true;
-                  }).sort((a,b)=>new Date(a.delivery_date||"9999")-new Date(b.delivery_date||"9999"));
+                  const pendingOrders=orders.filter(o=>{ if(o.status==="entregado")return false; if(inventoryFilter&&o.date!==inventoryFilter)return false; if(inventoryDaysFilter){const d=Math.floor((new Date()-new Date(o.date))/(1000*60*60*24));if(Number(inventoryDaysFilter)>0&&d<Number(inventoryDaysFilter))return false;} return true; }).sort((a,b)=>new Date(a.delivery_date||"9999")-new Date(b.delivery_date||"9999"));
                   return pendingOrders.length===0
-                    ? <div style={{ textAlign:"center",padding:32,color:"#484F58" }}><div style={{ fontSize:40,marginBottom:8 }}>✅</div><div>No hay prendas pendientes de retiro</div></div>
-                    : <div style={{ overflowX:"auto" }}>
+                    ?<div style={{ textAlign:"center",padding:32,color:"#484F58" }}><div style={{ fontSize:40,marginBottom:8 }}>✅</div><div>No hay prendas pendientes de retiro</div></div>
+                    :<div style={{ overflowX:"auto" }}>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
                           <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días","📱"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11,whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
-                          <tbody>{pendingOrders.map(o => {
+                          <tbody>{pendingOrders.map(o=>{
                             const daysIn=Math.floor((new Date()-new Date(o.date))/(1000*60*60*24));
                             const isLate=o.delivery_date&&new Date(o.delivery_date)<new Date()&&o.status!=="entregado";
-                            return <tr key={o.id} style={{ borderBottom:"1px solid #21262D",background:isLate?"rgba(239,83,80,0.05)":"transparent" }}>
+                            return<tr key={o.id} style={{ borderBottom:"1px solid #21262D",background:isLate?"rgba(239,83,80,0.05)":"transparent" }}>
                               <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:12 }}>{o.order_number||"—"}</span></td>
                               <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
                               <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.phone}</td>
-                              <td style={{ padding:"10px 12px" }}><div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>{(o.service||"").split(",").map(sid=>{ const sv=SERVICES.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,whiteSpace:"nowrap" }}>{sv.icon} {sv.label}</span>:null; })}</div></td>
+                              <td style={{ padding:"10px 12px" }}><div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>{(o.service||"").split(",").map(sid=>{const sv=SERVICES.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,whiteSpace:"nowrap" }}>{sv.icon} {sv.label}</span>:null;})}</div></td>
                               <td style={{ padding:"10px 12px",fontWeight:600,textAlign:"center" }}>{o.garments}</td>
                               <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td>
                               <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap" }}>{STATUS_LABELS[o.status]?.label}</span></td>
                               <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.date}</td>
                               <td style={{ padding:"10px 12px",fontSize:12 }}><span style={{ color:isLate?"#EF5350":"#FFD54F",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
                               <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"#FFD54F":"#8B949E",fontSize:13 }}>{daysIn}d</span></td>
-                              <td style={{ padding:"8px 10px" }}>
-                                {o.phone && o.status === "listo" && (
-                                  <a href={`https://wa.me/57${o.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))}`}
-                                    target="_blank" rel="noreferrer"
-                                    style={{ ...btn, background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:11,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>
-                                    📱 WA
-                                  </a>
-                                )}
-                              </td>
+                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={`https://wa.me/57${o.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))}`} target="_blank" rel="noreferrer" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:11,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
                             </tr>;
                           })}</tbody>
                         </table>
@@ -1299,33 +1167,26 @@ export default function LavanderiaApp() {
                   <button onClick={() => { if(window.confirm("¿Restaurar colores por defecto?"))saveColors(DEFAULT_COLORS); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid #30363D",background:"transparent",color:"#8B949E",cursor:"pointer",fontSize:12 }}>🔄 Restaurar por defecto</button>
                 </div>
               </div>
-              {/* CONDICIONES */}
               <div style={{ marginTop: 20, ...card }}>
                 <h3 style={{ margin: "0 0 14px", fontSize: 16, color: "#FF8A65" }}>⚠️ Condiciones de prendas</h3>
                 <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                  <input style={{ ...inp, flex: 1 }} placeholder="Nueva condición... ej: Quemado" value={newCondition} onChange={e => setNewCondition(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && newCondition.trim()) { saveConditions([...conditions, newCondition.trim()]); setNewCondition(""); } }} />
-                  <button onClick={() => { if (newCondition.trim()) { saveConditions([...conditions, newCondition.trim()]); setNewCondition(""); } }}
-                    style={{ ...btn, background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
+                  <input style={{ ...inp, flex: 1 }} placeholder="Nueva condición... ej: Quemado" value={newCondition} onChange={e => setNewCondition(e.target.value)} onKeyDown={e => { if(e.key==="Enter"&&newCondition.trim()){saveConditions([...conditions,newCondition.trim()]);setNewCondition("");} }} />
+                  <button onClick={() => { if(newCondition.trim()){saveConditions([...conditions,newCondition.trim()]);setNewCondition("");} }} style={{ ...btn, background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {conditions.map((c, i) => {
-                    const colors = ["#FFD54F","#EF5350","#FF8A65","#C792EA","#4FC3F7","#66BB6A","#F06292","#FFB74D"];
-                    const color = colors[i % colors.length];
-                    const isDefault = ["Decolorado","Percudido","Roto","Manchado"].includes(c);
-                    return (
-                      <div key={i} style={{ display:"flex",alignItems:"center",gap:6,background:color+"15",border:`1px solid ${color}40`,borderRadius:20,padding:"6px 12px" }}>
-                        <span style={{ fontSize:13,color:color,fontWeight:600 }}>{c}</span>
-                        {!isDefault && <button onClick={() => { if(window.confirm(`¿Eliminar "${c}"?`)) saveConditions(conditions.filter((_,idx)=>idx!==i)); }}
-                          style={{ background:"none",color:"#EF5350",border:"none",cursor:"pointer",fontSize:14,fontWeight:700,padding:"0 2px" }}>×</button>}
-                        {isDefault && <span style={{ fontSize:10,color:color,opacity:0.6 }}>●</span>}
-                      </div>
-                    );
+                  {conditions.map((c,i) => {
+                    const colorsArr=["#FFD54F","#EF5350","#FF8A65","#C792EA","#4FC3F7","#66BB6A","#F06292","#FFB74D"];
+                    const color=colorsArr[i%colorsArr.length];
+                    const isDefault=["Decolorado","Percudido","Roto","Manchado"].includes(c);
+                    return <div key={i} style={{ display:"flex",alignItems:"center",gap:6,background:color+"15",border:`1px solid ${color}40`,borderRadius:20,padding:"6px 12px" }}>
+                      <span style={{ fontSize:13,color:color,fontWeight:600 }}>{c}</span>
+                      {!isDefault&&<button onClick={()=>{if(window.confirm(`¿Eliminar "${c}"?`))saveConditions(conditions.filter((_,idx)=>idx!==i));}} style={{ background:"none",color:"#EF5350",border:"none",cursor:"pointer",fontSize:14,fontWeight:700,padding:"0 2px" }}>×</button>}
+                      {isDefault&&<span style={{ fontSize:10,color:color,opacity:0.6 }}>●</span>}
+                    </div>;
                   })}
                 </div>
                 <div style={{ fontSize:11,color:"#484F58",marginTop:10 }}>● Las condiciones base (Decolorado, Percudido, Roto, Manchado) no se pueden eliminar</div>
               </div>
-
               <div style={{ marginTop: 20, ...card }}>
                 <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#66BB6A" }}>💰 Precios por defecto de prendas</h3>
                 <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Al seleccionar una prenda en nueva orden se llenará el precio automáticamente</p>
@@ -1355,8 +1216,8 @@ export default function LavanderiaApp() {
                             </div>
                           </div>
                           <div style={{ display:"flex",gap:6 }}>
-                            <button onClick={() => setEditingEmployee({...e})} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"5px 10px",fontSize:12 }}>✏️</button>
-                            {e.id!==user.id&&<button onClick={() => deleteEmployee(e.id)} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button>}
+                            <button onClick={()=>setEditingEmployee({...e})} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"5px 10px",fontSize:12 }}>✏️</button>
+                            {e.id!==user.id&&<button onClick={()=>deleteEmployee(e.id)} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button>}
                           </div>
                         </div>
                       </div>)}
@@ -1374,7 +1235,6 @@ export default function LavanderiaApp() {
                   </div>
                 </div>
               </div>
-              {/* TEXTO DEL RECIBO */}
               <div style={{ marginTop: 20, ...card }}>
                 <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#4FC3F7" }}>🖨️ Texto del Recibo</h3>
                 <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Personaliza los textos que aparecen en el recibo impreso</p>
@@ -1382,98 +1242,68 @@ export default function LavanderiaApp() {
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>MENSAJE DE WHATSAPP 📱</label>
                     <p style={{ fontSize: 11, color: "#484F58", marginBottom: 8 }}>Usa <strong style={{color:"#25D366"}}>{"{nombre}"}</strong> para el nombre del cliente y <strong style={{color:"#25D366"}}>{"{orden}"}</strong> para el número de orden</p>
-                    <textarea value={waMensaje} onChange={e => setWaMensaje(e.target.value)}
-                      style={{ ...inp, height: 90, resize: "vertical", fontSize: 12, lineHeight: 1.5, borderColor: "rgba(37,211,102,0.3)" }} />
-                    <button onClick={async() => { const ok=await checkClave("guardar"); if(!ok)return; try{localStorage.setItem("waMensaje",waMensaje);}catch{} alert("✅ Mensaje guardado"); }}
-                      style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", border: "1px solid rgba(37,211,102,0.3)", padding: "8px 16px", marginTop: 8, fontSize: 12 }}>
-                      💾 Guardar mensaje
-                    </button>
+                    <textarea value={waMensaje} onChange={e => setWaMensaje(e.target.value)} style={{ ...inp, height: 90, resize: "vertical", fontSize: 12, lineHeight: 1.5, borderColor: "rgba(37,211,102,0.3)" }} />
+                    <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("waMensaje",waMensaje);}catch{}alert("✅ Mensaje guardado");}} style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", border: "1px solid rgba(37,211,102,0.3)", padding: "8px 16px", marginTop: 8, fontSize: 12 }}>💾 Guardar mensaje</button>
                   </div>
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>SUBTÍTULO (debajo de la dirección)</label>
                     <div style={{ display: "flex", gap: 8 }}>
                       <input style={{ ...inp, flex: 1 }} value={reciboSubtitulo} onChange={e => setReciboSubtitulo(e.target.value)} placeholder="Ej: PRENDAS EL DIA INDICADO DESPUES DE LAS 5" />
-                      <button onClick={async() => { const ok=await checkClave("guardar"); if(!ok)return; try{localStorage.setItem("reciboSubtitulo",reciboSubtitulo);}catch{} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", whiteSpace: "nowrap" }}>Guardar</button>
+                      <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("reciboSubtitulo",reciboSubtitulo);}catch{}alert("✅ Guardado");}} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", whiteSpace: "nowrap" }}>Guardar</button>
                     </div>
                   </div>
                   <div>
                     <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>TEXTO LEGAL (al final del recibo)</label>
-                    <textarea value={reciboLegal} onChange={e => setReciboLegal(e.target.value)}
-                      style={{ ...inp, height: 120, resize: "vertical", fontSize: 12, lineHeight: 1.5 }} />
-                    <button onClick={async() => { const ok=await checkClave("guardar"); if(!ok)return; try{localStorage.setItem("reciboLegal",reciboLegal);}catch{} alert("✅ Guardado"); }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", marginTop: 8, width: "100%" }}>💾 Guardar texto legal</button>
+                    <textarea value={reciboLegal} onChange={e => setReciboLegal(e.target.value)} style={{ ...inp, height: 120, resize: "vertical", fontSize: 12, lineHeight: 1.5 }} />
+                    <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("reciboLegal",reciboLegal);}catch{}alert("✅ Guardado");}} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", marginTop: 8, width: "100%" }}>💾 Guardar texto legal</button>
                   </div>
                 </div>
               </div>
-
-              {/* CAMBIAR CLAVE */}
               <div style={{ marginTop: 20, ...card }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FFD54F" }}>🔑 Clave de Administrador</h3>
                     <p style={{ margin: 0, fontSize: 13, color: "#8B949E" }}>Cambia la clave que protege las acciones importantes</p>
                   </div>
-                  <button onClick={() => setShowCambiarClave(!showCambiarClave)} style={{ ...btn, background: showCambiarClave ? "rgba(255,213,79,0.2)" : "rgba(255,255,255,0.05)", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "8px 16px", fontSize: 12 }}>
+                  <button onClick={() => setShowCambiarClave(!showCambiarClave)} style={{ ...btn, background: showCambiarClave?"rgba(255,213,79,0.2)":"rgba(255,255,255,0.05)", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "8px 16px", fontSize: 12 }}>
                     {showCambiarClave ? "✕ Cancelar" : "🔑 Cambiar clave"}
                   </button>
                 </div>
                 {showCambiarClave && (
                   <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                    <div>
-                      <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>CLAVE ACTUAL</label>
-                      <input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveActual} onChange={e => setClaveActual(e.target.value)} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>NUEVA CLAVE</label>
-                      <input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveNueva} onChange={e => setClaveNueva(e.target.value)} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>CONFIRMAR NUEVA CLAVE</label>
-                      <input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveConfirm} onChange={e => setClaveConfirm(e.target.value)} />
-                    </div>
-                    <button onClick={async () => {
-                      if (claveNueva.length < 4) { alert("❌ La nueva clave debe tener al menos 4 caracteres"); return; }
-                      if (claveNueva !== claveConfirm) { alert("❌ Las claves nuevas no coinciden"); return; }
-                      const claveDB = await getClave();
-                      if (claveActual !== claveDB) { alert("❌ La clave actual es incorrecta"); return; }
-                      await fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.admin_clave`, {
-                        method: "PATCH",
-                        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-                        body: JSON.stringify({ value: claveNueva })
-                      });
-                      setClaveActual(""); setClaveNueva(""); setClaveConfirm("");
-                      setShowCambiarClave(false);
+                    <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>CLAVE ACTUAL</label><input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveActual} onChange={e=>setClaveActual(e.target.value)} /></div>
+                    <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>NUEVA CLAVE</label><input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveNueva} onChange={e=>setClaveNueva(e.target.value)} /></div>
+                    <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>CONFIRMAR NUEVA CLAVE</label><input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveConfirm} onChange={e=>setClaveConfirm(e.target.value)} /></div>
+                    <button onClick={async()=>{
+                      if(claveNueva.length<4){alert("❌ La nueva clave debe tener al menos 4 caracteres");return;}
+                      if(claveNueva!==claveConfirm){alert("❌ Las claves nuevas no coinciden");return;}
+                      const claveDB=await getClave();
+                      if(claveActual!==claveDB){alert("❌ La clave actual es incorrecta");return;}
+                      await fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.admin_clave`,{method:"PATCH",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({value:claveNueva})});
+                      setClaveActual("");setClaveNueva("");setClaveConfirm("");setShowCambiarClave(false);
                       alert("✅ Clave cambiada correctamente");
-                    }} style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: 12, fontWeight: 800, maxWidth: 300 }}>
-                      💾 Guardar nueva clave
-                    </button>
+                    }} style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: 12, fontWeight: 800, maxWidth: 300 }}>💾 Guardar nueva clave</button>
                   </div>
                 )}
               </div>
-
-              {/* ZONA DE PELIGRO */}
               <div style={{ marginTop: 20, ...card, border: "1px solid rgba(239,83,80,0.4)" }}>
                 <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#EF5350" }}>⚠️ Zona de Peligro</h3>
                 <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8B949E" }}>Acciones irreversibles. Se requiere clave para ejecutar.</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                  <div style={{ background: "#0D1117", borderRadius: 12, padding: 20, border: "1px solid #21262D" }}>
-                    <div style={{ fontSize: 32, marginBottom: 8 }}>🔢</div>
-                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Reiniciar contador de recibos</div>
-                    <div style={{ fontSize: 13, color: "#8B949E", marginBottom: 16 }}>La próxima orden comenzará desde S0001. Las órdenes existentes no se borran.</div>
-                    <button onClick={resetOrderCounter} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", border: "1px solid rgba(239,83,80,0.3)", width: "100%", padding: 10, fontSize: 13 }}>
-                      🔢 Reiniciar contador
-                    </button>
+                  <div style={{ background:"#0D1117",borderRadius:12,padding:20,border:"1px solid #21262D" }}>
+                    <div style={{ fontSize:32,marginBottom:8 }}>🔢</div>
+                    <div style={{ fontWeight:700,fontSize:15,marginBottom:6 }}>Reiniciar contador de recibos</div>
+                    <div style={{ fontSize:13,color:"#8B949E",marginBottom:16 }}>La próxima orden comenzará desde S0001. Las órdenes existentes no se borran.</div>
+                    <button onClick={resetOrderCounter} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:13 }}>🔢 Reiniciar contador</button>
                   </div>
-                  <div style={{ background: "#0D1117", borderRadius: 12, padding: 20, border: "1px solid #21262D" }}>
-                    <div style={{ fontSize: 32, marginBottom: 8 }}>👤</div>
-                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Eliminar todos los clientes</div>
-                    <div style={{ fontSize: 13, color: "#8B949E", marginBottom: 16 }}>Borra toda la base de datos de clientes. Las órdenes no se eliminan.</div>
-                    <button onClick={deleteAllClients} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", border: "1px solid rgba(239,83,80,0.3)", width: "100%", padding: 10, fontSize: 13 }}>
-                      🗑 Eliminar todos los clientes
-                    </button>
+                  <div style={{ background:"#0D1117",borderRadius:12,padding:20,border:"1px solid #21262D" }}>
+                    <div style={{ fontSize:32,marginBottom:8 }}>👤</div>
+                    <div style={{ fontWeight:700,fontSize:15,marginBottom:6 }}>Eliminar todos los clientes</div>
+                    <div style={{ fontSize:13,color:"#8B949E",marginBottom:16 }}>Borra toda la base de datos de clientes. Las órdenes no se eliminan.</div>
+                    <button onClick={deleteAllClients} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:13 }}>🗑 Eliminar todos los clientes</button>
                   </div>
                 </div>
               </div>
-
             </div>
           )}
 
@@ -1527,9 +1357,9 @@ export default function LavanderiaApp() {
                           {items.length>1?<button onClick={()=>removeItem(i)} style={{ background:"rgba(239,83,80,0.2)",color:"#EF5350",border:"none",borderRadius:6,padding:"6px 8px",cursor:"pointer",fontSize:12 }}>✕</button>:<div/>}
                         </div>
                         <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>{conditions.map((condLabel,ci) => {
-                          const condKey = condLabel.toLowerCase().replace(/\s+/g,"_");
-                          const colors = ["#FFD54F","#EF5350","#FF8A65","#C792EA","#4FC3F7","#66BB6A","#F06292","#FFB74D"];
-                          const color = colors[ci % colors.length];
+                          const condKey=condLabel.toLowerCase().replace(/\s+/g,"_");
+                          const colorsArr=["#FFD54F","#EF5350","#FF8A65","#C792EA","#4FC3F7","#66BB6A","#F06292","#FFB74D"];
+                          const color=colorsArr[ci%colorsArr.length];
                           return <label key={condKey} style={{ display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,background:item[condKey]?color+"22":"rgba(255,255,255,0.04)",border:`1px solid ${item[condKey]?color:"#30363D"}`,borderRadius:20,padding:"3px 10px",userSelect:"none" }}><input type="checkbox" checked={!!item[condKey]} onChange={e=>updateItem(i,condKey,e.target.checked)} style={{ accentColor:color,cursor:"pointer" }} /><span style={{ color:item[condKey]?color:"#8B949E" }}>{condLabel}</span></label>;
                         })}</div>
                       </div>
@@ -1555,29 +1385,27 @@ export default function LavanderiaApp() {
                     <button onClick={async () => {
                       if (!newOrder.client_name || items.length === 0) return;
                       setSaving(true);
-                      const garments = totalGarments(items), price = totalPrice(items);
-                      const uniqueServices = [...new Set(items.map(it => it.service))];
-                      const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price };
-                      const res = await db.post("orders", o);
-                      if (Array.isArray(res) && res[0]) {
-                        const savedOrder = res[0];
-                        const orderId = savedOrder.id;
-                        for (const item of items) await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors||[]).join(", "), service: item.service });
-                        const existing = clients.find(c => c.phone === newOrder.phone);
-                        if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
-                        else if (newOrder.client_name) { const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 }); if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]); }
-                        // Wait a moment for order_number to be assigned then reload and print
+                      const garments=totalGarments(items), price=totalPrice(items);
+                      const uniqueServices=[...new Set(items.map(it=>it.service))];
+                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price};
+                      const res=await db.post("orders",o);
+                      if(Array.isArray(res)&&res[0]){
+                        const savedOrder=res[0], orderId=savedOrder.id;
+                        for(const item of items)await db.post("order_items",{order_id:orderId,garment_type:item.garment_type,quantity:Number(item.quantity),price:Number(item.price),color:(item.colors||[]).join(", "),service:item.service});
+                        const existing=clients.find(c=>c.phone===newOrder.phone);
+                        if(existing){await db.patch("clients",existing.id,{total_orders:(existing.total_orders||0)+1});setClients(prev=>prev.map(c=>c.id===existing.id?{...c,total_orders:(c.total_orders||0)+1}:c));}
+                        else if(newOrder.client_name){const nc=await db.post("clients",{name:newOrder.client_name,phone:newOrder.phone,email:"",total_orders:1});if(Array.isArray(nc))setClients(prev=>[nc[0],...prev]);}
                         await loadData();
-                        const freshOrders = await db.get("orders");
-                        const freshOrder = Array.isArray(freshOrders) ? freshOrders.find(ord => ord.id === orderId) : null;
-                        const freshItems = await db.get("order_items", `&order_id=eq.${orderId}`);
-                        const itemsMap = { [orderId]: Array.isArray(freshItems) ? freshItems : [] };
-                        setOrderItems(prev => ({ ...prev, ...itemsMap }));
-                        if (freshOrder) printOrder({ ...freshOrder }, itemsMap);
+                        const freshOrders=await db.get("orders");
+                        const freshOrder=Array.isArray(freshOrders)?freshOrders.find(ord=>ord.id===orderId):null;
+                        const freshItems=await db.get("order_items",`&order_id=eq.${orderId}`);
+                        const itemsMap={[orderId]:Array.isArray(freshItems)?freshItems:[]};
+                        setOrderItems(prev=>({...prev,...itemsMap}));
+                        if(freshOrder)printOrder({...freshOrder},itemsMap);
                       }
-                      setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
-                      setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
-                      setModal(null); setSaving(false); loadData();
+                      setNewOrder({...emptyOrder,delivery_date:getDeliveryDefault()});
+                      setItems([{...emptyItem,price:precioDefaults[emptyItem.garment_type]||""}]);
+                      setModal(null);setSaving(false);loadData();
                     }} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:2,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:14,fontWeight:800,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"🖨️ Guardar e Imprimir"}
                     </button>
