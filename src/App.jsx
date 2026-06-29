@@ -188,6 +188,7 @@ export default function LavanderiaApp() {
   }, [showCalc, calcDisplay, calcPrev, calcOp, calcNew]);
 
   const resetOrderCounter = async () => {
+    const clave = await getClave();
     const pwd = prompt("Clave para reiniciar contador:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (!window.confirm("¿Reiniciar el contador de recibos a S0001? Esto no afecta las órdenes existentes.")) return;
@@ -200,6 +201,7 @@ export default function LavanderiaApp() {
   };
 
   const deleteAllClients = async () => {
+    const clave = await getClave();
     const pwd = prompt("Clave para eliminar clientes:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (!window.confirm("⚠️ ¿Eliminar TODOS los clientes? Esta acción no se puede deshacer.")) return;
