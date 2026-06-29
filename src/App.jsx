@@ -975,8 +975,7 @@ export default function LavanderiaApp() {
                       const csv = [["Fecha","Órdenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],
                         ...sortedDays.map(d => [d, days[d].ordenes||0, days[d].prendas||0, Math.round(days[d].ingresos||0), days[d].entregas||0, Math.round(days[d].valorEntregado||0)]),
                         ["TOTAL", totalOrd, totalPrend, Math.round(totalIng), sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0), Math.round(totalEnt)]
-                      ].map(r=>r.join(",")).join("
-");
+                      ].map(r=>r.join(",")).join("\n");
                       const blob = new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
                       const url = URL.createObjectURL(blob); const a = document.createElement("a");
                       a.href=url; a.download=`informe_diario_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -1057,8 +1056,7 @@ export default function LavanderiaApp() {
                     const csv = [["Mes","Órdenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],
                       ...sortedMonths.map(m => { const [y,mo]=m.split("-"); return [`${monthNames[mo]} ${y}`, months[m].ordenes||0, months[m].prendas||0, Math.round(months[m].ingresos||0), months[m].entregas||0, Math.round(months[m].valorEntregado||0)]; }),
                       ["TOTAL", mTotalOrd, mTotalPrend, Math.round(mTotalIng), sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0), Math.round(mTotalEnt)]
-                    ].map(r=>r.join(",")).join("
-");
+                    ].map(r=>r.join(",")).join("\n");
                     const blob = new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
                     const url = URL.createObjectURL(blob); const a = document.createElement("a");
                     a.href=url; a.download=`informe_mensual_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
