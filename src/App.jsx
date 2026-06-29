@@ -307,9 +307,7 @@ export default function LavanderiaApp() {
     setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
     setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
     setSaving(false);
-    setModal(null);
     await loadData();
-    // Show recibo options modal
     if (Array.isArray(res) && res[0]) {
       const freshOrders = await db.get("orders");
       const fresh = Array.isArray(freshOrders) ? freshOrders.find(o => o.id === res[0].id) : res[0];
@@ -317,8 +315,10 @@ export default function LavanderiaApp() {
       const imap = { [res[0].id]: Array.isArray(freshItems) ? freshItems : [] };
       setOrderItems(prev => ({ ...prev, ...imap }));
       setSavedOrder({ order: fresh || res[0], itemsMap: imap });
-      setReciboModal(true);
     }
+    setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
+    setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
+    setModal("reciboOpciones");
   };
 
   const addItem = () => { const defaultType = emptyItem.garment_type; const defaultPrice = precioDefaults[defaultType] || ""; setItems(prev => [...prev, { ...emptyItem, price: defaultPrice }]); };
@@ -1549,6 +1549,52 @@ export default function LavanderiaApp() {
               </>
             )}
 
+            {modal === "reciboOpciones" && savedOrder && (
+              <>
+                <div style={{ textAlign:"center",marginBottom:24 }}>
+                  <div style={{ fontSize:48,marginBottom:8 }}>✅</div>
+                  <h3 style={{ margin:"0 0 4px",fontSize:20,fontWeight:800,color:"#66BB6A" }}>¡Orden guardada!</h3>
+                  <div style={{ fontSize:13,color:"#8B949E",marginTop:4 }}>
+                    <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{savedOrder.order?.order_number||"—"}</span>
+                    {" · "}{savedOrder.order?.client_name}
+                  </div>
+                  <div style={{ fontSize:14,color:"#66BB6A",fontWeight:700,marginTop:6 }}>${Math.round(Number(savedOrder.order?.price||0))}</div>
+                </div>
+                <p style={{ fontSize:13,color:"#8B949E",textAlign:"center",marginBottom:20 }}>¿Cómo quieres entregar el comprobante al cliente?</p>
+                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                  <button onClick={() => {
+                    printOrder(savedOrder.order, savedOrder.itemsMap);
+                  }} style={{ ...btn,background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
+                    🖨️ Imprimir recibo físico
+                  </button>
+                  <button onClick={() => {
+                    const o = savedOrder.order;
+                    const its = (savedOrder.itemsMap||{})[o.id] || [];
+                    const detalle = its.map(it => `• ${it.garment_type} x${it.quantity} - $${Math.round(Number(it.price)*Number(it.quantity))}`).join("
+");
+                    const msg = `Hola ${o.client_name}, aquí está su comprobante de Lavanderías Shaddai:
+
+📋 Orden: ${o.order_number}
+📅 Ingreso: ${o.date}
+📅 Entrega: ${o.delivery_date||"—"}
+
+Prendas:
+${detalle}
+
+💰 Total: $${Math.round(Number(o.price))}
+
+¡Gracias por preferirnos!`;
+                    window.open(`https://wa.me/57${(o.phone||"").replace(/[^0-9]/g,"")}?text=${encodeURIComponent(msg)}`, "_blank");
+                  }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
+                    📱 Enviar por WhatsApp
+                  </button>
+                  <button onClick={() => { setModal(null); setSavedOrder(null); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",padding:12,fontSize:13 }}>
+                    📋 Sin recibo por ahora
+                  </button>
+                </div>
+              </>
+            )}
+
             {modal === "newClient" && (
               <>
                 <h3 style={{ margin:"0 0 20px",fontSize:18 }}>👤 Nuevo Cliente</h3>
@@ -1609,72 +1655,6 @@ export default function LavanderiaApp() {
         </div>
       )}
 
-      {/* RECIBO MODAL */}
-      {reciboModal && savedOrder && (
-        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,fontFamily:"'Segoe UI',sans-serif" }}>
-          <div style={{ background:"#161B22",borderRadius:20,padding:32,width:380,border:"1px solid #30363D",boxShadow:"0 8px 40px rgba(0,0,0,0.8)" }}>
-            <div style={{ textAlign:"center",marginBottom:24 }}>
-              <div style={{ fontSize:48,marginBottom:8 }}>✅</div>
-              <h3 style={{ margin:"0 0 4px",fontSize:20,fontWeight:800,color:"#66BB6A" }}>¡Orden creada!</h3>
-              <div style={{ fontSize:13,color:"#8B949E" }}>
-                <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{savedOrder.order?.order_number||"—"}</span>
-                {" · "}{savedOrder.order?.client_name}
-              </div>
-              <div style={{ fontSize:13,color:"#8B949E",marginTop:4 }}>
-                Total: <strong style={{ color:"#66BB6A" }}>${Math.round(Number(savedOrder.order?.price||0))}</strong>
-              </div>
-            </div>
-
-            <p style={{ fontSize:13,color:"#8B949E",textAlign:"center",marginBottom:20 }}>¿Cómo quieres entregar el comprobante al cliente?</p>
-
-            <div style={{ display:"flex",flexDirection:"column",gap:10,marginBottom:20 }}>
-              <button onClick={() => {
-                printOrder(savedOrder.order, savedOrder.itemsMap);
-                db.patch("orders", savedOrder.order.id, { sin_recibo: false });
-                setOrders(prev => prev.map(o => o.id === savedOrder.order.id ? { ...o, sin_recibo: false } : o));
-              }} style={{ ...btn, background:"linear-gradient(135deg,#4FC3F7,#0288D1)", color:"#fff", padding:14, fontSize:14, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                🖨️ Imprimir recibo físico
-              </button>
-
-              <button onClick={() => {
-                const o = savedOrder.order;
-                const its = (savedOrder.itemsMap||{})[o.id] || [];
-                const detalle = its.map(it => `  • ${it.garment_type} x${it.quantity} - $${Math.round(Number(it.price)*Number(it.quantity))}`).join("
-");
-                const msg = `Hola ${o.client_name}, aquí está su comprobante de Lavanderías Shaddai:
-
-📋 Orden: ${o.order_number}
-📅 Ingreso: ${o.date}
-📅 Entrega: ${o.delivery_date||"—"}
-
-Prendas:
-${detalle}
-
-💰 Total: $${Math.round(Number(o.price))}
-
-¡Gracias por preferirnos!`;
-                window.open(`https://wa.me/57${(o.phone||"").replace(/[^0-9]/g,"")}?text=${encodeURIComponent(msg)}`, "_blank");
-                db.patch("orders", o.id, { sin_recibo: false });
-                setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, sin_recibo: false } : ord));
-              }} style={{ ...btn, background:"linear-gradient(135deg,#25D366,#128C7E)", color:"#fff", padding:14, fontSize:14, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                📱 Enviar por WhatsApp
-              </button>
-
-              <button onClick={() => {
-                db.patch("orders", savedOrder.order.id, { sin_recibo: true });
-                setOrders(prev => prev.map(o => o.id === savedOrder.order.id ? { ...o, sin_recibo: true } : o));
-                setReciboModal(false); setSavedOrder(null);
-              }} style={{ ...btn, background:"rgba(255,255,255,0.05)", color:"#8B949E", padding:12, fontSize:13 }}>
-                📋 Sin recibo por ahora
-              </button>
-            </div>
-
-            <button onClick={() => { setReciboModal(false); setSavedOrder(null); }} style={{ width:"100%",padding:10,borderRadius:8,border:"1px solid #30363D",background:"transparent",color:"#484F58",cursor:"pointer",fontSize:12 }}>
-              Cerrar
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* FLOATING CALCULATOR */}
       <button onClick={() => setShowCalc(!showCalc)} style={{ position:"fixed",bottom:28,right:28,zIndex:300,width:56,height:56,borderRadius:"50%",border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontSize:22,cursor:"pointer",boxShadow:"0 4px 20px rgba(79,195,247,0.4)",display:"flex",alignItems:"center",justifyContent:"center" }}>🧮</button>
