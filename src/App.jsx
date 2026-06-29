@@ -1005,6 +1005,114 @@ export default function LavanderiaApp() {
                 })()}
               </div>
 
+              {/* GASTOS POR RANGO */}
+              <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#EF5350" }}>💰 Gastos por Rango de Fechas</h3>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                </div>
+                {(() => {
+                  const gastosRango = expenses.filter(e => !e.eliminado && e.date >= reportFrom && e.date <= reportTo);
+                  const totalGastosRango = gastosRango.reduce((s,e) => s + Number(e.amount), 0);
+
+                  // Group by day
+                  const byDay = {};
+                  gastosRango.forEach(e => {
+                    if (!byDay[e.date]) byDay[e.date] = { total: 0, items: [] };
+                    byDay[e.date].total += Number(e.amount);
+                    byDay[e.date].items.push(e);
+                  });
+                  const sortedDays = Object.keys(byDay).sort();
+
+                  // Group by category
+                  const byCat = {};
+                  gastosRango.forEach(e => {
+                    if (!byCat[e.category]) byCat[e.category] = 0;
+                    byCat[e.category] += Number(e.amount);
+                  });
+
+                  const exportGastos = () => {
+                    const csv = [
+                      ["Fecha","Concepto","Categoría","Método de Pago","Monto"],
+                      ...gastosRango.map(e => [e.date, e.concept||"", e.category||"", e.payment_method||"", Math.round(Number(e.amount))]),
+                      ["","","","TOTAL", Math.round(totalGastosRango)]
+                    ].map(r => r.join(",")).join("
+");
+                    const blob = new Blob(["﻿"+csv], {type:"text/csv;charset=utf-8;"});
+                    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                    a.href=url; a.download=`gastos_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                  };
+
+                  return gastosRango.length === 0
+                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay gastos en este rango de fechas</p>
+                    : <>
+                        {/* KPIs */}
+                        <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16 }}>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #EF5350" }}>
+                            <div style={{ fontWeight:800,fontSize:20,color:"#EF5350" }}>${Math.round(totalGastosRango).toLocaleString()}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total gastos</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:20,color:"#FFD54F" }}>{gastosRango.length}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Registros</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:20,color:"#4FC3F7" }}>{sortedDays.length}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Días con gastos</div>
+                          </div>
+                        </div>
+
+                        {/* Por categoría */}
+                        <div style={{ marginBottom:16 }}>
+                          <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:8 }}>POR CATEGORÍA</div>
+                          <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                            {Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,total]) => (
+                              <div key={cat} style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.3)",borderRadius:10,padding:"8px 14px" }}>
+                                <div style={{ fontSize:11,color:"#8B949E",marginBottom:2 }}>{cat.charAt(0).toUpperCase()+cat.slice(1)}</div>
+                                <div style={{ fontWeight:800,color:"#EF5350" }}>${Math.round(total).toLocaleString()}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                          <button onClick={exportGastos} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                        </div>}
+
+                        {/* Tabla detalle */}
+                        <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                            <thead><tr style={{ background:"#21262D" }}>
+                              {["Fecha","Concepto","Categoría","Pago","Monto"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
+                            </tr></thead>
+                            <tbody>
+                              {gastosRango.map(e => (
+                                <tr key={e.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                  <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{e.date}</td>
+                                  <td style={{ padding:"10px 12px",fontWeight:600 }}>{e.concept}</td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"2px 8px",borderRadius:20,fontSize:11 }}>{e.category}</span></td>
+                                  <td style={{ padding:"10px 12px" }}><PayMethod m={e.payment_method} /></td>
+                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#EF5350" }}>${Math.round(Number(e.amount)).toLocaleString()}</td>
+                                </tr>
+                              ))}
+                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                                <td colSpan={4} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td style={{ padding:"10px 12px",color:"#EF5350" }}>${Math.round(totalGastosRango).toLocaleString()}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </>;
+                })()}
+              </div>
+
               {/* REVERSADAS */}
               <div style={{ ...card, marginTop: 20 }}>
                 <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FFD54F" }}>↩️ Órdenes Reversadas</h3>
