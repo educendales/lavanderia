@@ -1043,8 +1043,7 @@ export default function LavanderiaApp() {
                       ["Fecha","Concepto","Categoría","Método de Pago","Monto"],
                       ...gastosRango.map(e => [e.date, e.concept||"", e.category||"", e.payment_method||"", Math.round(Number(e.amount))]),
                       ["","","","TOTAL", Math.round(totalGastosRango)]
-                    ].map(r => r.join(",")).join("
-");
+                    ].map(r => r.join(",")).join("\n");
                     const blob = new Blob(["﻿"+csv], {type:"text/csv;charset=utf-8;"});
                     const url = URL.createObjectURL(blob); const a = document.createElement("a");
                     a.href=url; a.download=`gastos_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
