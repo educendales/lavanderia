@@ -304,21 +304,16 @@ export default function LavanderiaApp() {
       if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
       else if (newOrder.client_name) { const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 }); if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]); }
     }
+    const savedItems = [...items];
     setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
     setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
     setSaving(false);
-    await loadData();
+    loadData();
     if (Array.isArray(res) && res[0]) {
-      const freshOrders = await db.get("orders");
-      const fresh = Array.isArray(freshOrders) ? freshOrders.find(o => o.id === res[0].id) : res[0];
-      const freshItems = await db.get("order_items", `&order_id=eq.${res[0].id}`);
-      const imap = { [res[0].id]: Array.isArray(freshItems) ? freshItems : [] };
-      setOrderItems(prev => ({ ...prev, ...imap }));
-      setSavedOrder({ order: fresh || res[0], itemsMap: imap });
+      const imap = { [res[0].id]: savedItems.map((it,i) => ({ ...it, id: i, order_id: res[0].id })) };
+      setSavedOrder({ order: res[0], itemsMap: imap });
+      setModal("reciboOpciones");
     }
-    setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
-    setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
-    setModal("reciboOpciones");
   };
 
   const addItem = () => { const defaultType = emptyItem.garment_type; const defaultPrice = precioDefaults[defaultType] || ""; setItems(prev => [...prev, { ...emptyItem, price: defaultPrice }]); };
