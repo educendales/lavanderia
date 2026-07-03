@@ -1570,9 +1570,9 @@ export default function LavanderiaApp() {
                   <button onClick={() => {
                     const o = savedOrder.order;
                     const its = (savedOrder.itemsMap||{})[o.id] || [];
-                    const detalle = its.map(it => `• ${it.garment_type} x${it.quantity} - $${Math.round(Number(it.price)*Number(it.quantity))}`).join("\n");
-                    const msg = `Hola ${o.client_name}, su comprobante de Lavanderías Shaddai:\nOrden: ${o.order_number}\nIngreso: ${o.date}\nEntrega: ${o.delivery_date||""}\n${detalle}\nTotal: $${Math.round(Number(o.price))}\nGracias por preferirnos!`;
-                    window.open(`https://wa.me/57${(o.phone||"").replace(/[^0-9]/g,"")}?text=${encodeURIComponent(msg)}`, "_blank");
+                    const partes = ["Hola " + o.client_name + ", su comprobante de Lavanderias Shaddai:","Orden: " + (o.order_number||""),"Ingreso: " + (o.date||""),"Entrega: " + (o.delivery_date||""),""].concat(its.map(it => "* " + it.garment_type + " x" + it.quantity + " - $" + Math.round(Number(it.price)*Number(it.quantity)))).concat(["","Total: $" + Math.round(Number(o.price)),"Gracias por preferirnos!"]);
+                    const msg = partes.join(String.fromCharCode(10));
+                    window.open("https://wa.me/57" + (o.phone||"").replace(/[^0-9]/g,"") + "?text=" + encodeURIComponent(msg), "_blank");
                   }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
                     📱 Enviar por WhatsApp
                   </button>
