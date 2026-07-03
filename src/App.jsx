@@ -97,6 +97,8 @@ export default function LavanderiaApp() {
   const [newGarment, setNewGarment] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [precioDefaults, setPrecioDefaults] = useState(() => { try { const s = localStorage.getItem("precioDefaults"); return s ? JSON.parse(s) : {}; } catch { return {}; } });
+  const [precioByService, setPrecioByService] = useState(() => { try { const s = localStorage.getItem("precioByService"); return s ? JSON.parse(s) : {}; } catch { return {}; } });
+  const [configServiceTab, setConfigServiceTab] = useState("lavado_normal");
   const [precioPrend, setPrecioPrend] = useState(() => { try { return Number(localStorage.getItem("precioPrend")) || 6500; } catch { return 6500; } });
   const [showTotalPrendas, setShowTotalPrendas] = useState(false);
   const [editingPrecio, setEditingPrecio] = useState(false);
@@ -318,12 +320,20 @@ export default function LavanderiaApp() {
     }
   };
 
-  const addItem = () => { const defaultType = emptyItem.garment_type; const defaultPrice = precioDefaults[defaultType] || ""; setItems(prev => [...prev, { ...emptyItem, price: defaultPrice }]); };
+  const addItem = () => { const defaultType = emptyItem.garment_type; const defaultSvc = emptyItem.service; const priceByService = precioByService[defaultSvc]?.[defaultType]; const priceDefault = precioDefaults[defaultType]; const defaultPrice = priceByService || priceDefault || ""; setItems(prev => [...prev, { ...emptyItem, price: defaultPrice }]); };
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
   const updateItem = (i, field, val) => {
     setItems(prev => {
       let updated = prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item);
-      if (field === "garment_type" && precioDefaults[val]) updated = updated.map((item, idx) => idx === i ? { ...item, price: precioDefaults[val] } : item);
+      if (field === "garment_type" || field === "service") {
+        const item = updated[i];
+        const svc = field === "service" ? val : item.service;
+        const gmt = field === "garment_type" ? val : item.garment_type;
+        const priceByService = precioByService[svc]?.[gmt];
+        const priceDefault = precioDefaults[gmt];
+        const newPrice = priceByService || priceDefault || "";
+        if (newPrice) updated = updated.map((it, idx) => idx === i ? { ...it, price: newPrice } : it);
+      }
       if (["decolorado","percudido","roto","manchado"].includes(field)) setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
       return updated;
     });
@@ -1384,13 +1394,42 @@ export default function LavanderiaApp() {
 
               <div style={{ marginTop: 20, ...card }}>
                 <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#66BB6A" }}>💰 Precios por defecto de prendas</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Al seleccionar una prenda en nueva orden se llenará el precio automáticamente</p>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
-                  {garmentTypes.map(g => <div key={g} style={{ display:"flex",alignItems:"center",gap:8,background:"#0D1117",borderRadius:8,padding:"8px 12px" }}>
-                    <span style={{ fontSize:13,flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
-                    <input type="number" placeholder="Precio" value={precioDefaults[g]||""} onChange={e => { const val=e.target.value; const updated={...precioDefaults,[g]:val?Number(val):undefined}; if(!val)delete updated[g]; setPrecioDefaults(updated); try{localStorage.setItem("precioDefaults",JSON.stringify(updated));}catch{} }} style={{ width:80,padding:"4px 8px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#66BB6A",fontSize:13,fontWeight:700,textAlign:"right" }} />
-                  </div>)}
+                <p style={{ margin: "0 0 4px", fontSize: 13, color: "#8B949E" }}>Selecciona un servicio y asigna el precio por prenda. Al crear una orden se llenará automáticamente.</p>
+                <p style={{ margin: "0 0 14px", fontSize: 11, color: "#484F58" }}>El precio por servicio tiene prioridad sobre el precio general.</p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                  {services.map(sv => (
+                    <button key={sv.id} onClick={() => setConfigServiceTab(sv.id)} style={{ ...btn, background: configServiceTab===sv.id ? sv.color+"33" : "rgba(255,255,255,0.04)", color: configServiceTab===sv.id ? sv.color : "#8B949E", border: `1.5px solid ${configServiceTab===sv.id ? sv.color : "#30363D"}`, padding: "6px 14px", fontSize: 12 }}>
+                      {sv.icon} {sv.label}
+                    </button>
+                  ))}
+                  <button onClick={() => setConfigServiceTab("general")} style={{ ...btn, background: configServiceTab==="general" ? "rgba(102,187,106,0.2)" : "rgba(255,255,255,0.04)", color: configServiceTab==="general" ? "#66BB6A" : "#8B949E", border: `1.5px solid ${configServiceTab==="general" ? "#66BB6A" : "#30363D"}`, padding: "6px 14px", fontSize: 12 }}>
+                    🏷️ General
+                  </button>
                 </div>
+                {configServiceTab === "general" ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
+                    {garmentTypes.map(g => <div key={g} style={{ display:"flex",alignItems:"center",gap:8,background:"#0D1117",borderRadius:8,padding:"8px 12px" }}>
+                      <span style={{ fontSize:13,flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
+                      <input type="number" placeholder="Precio" value={precioDefaults[g]||""} onChange={e => { const val=e.target.value; const updated={...precioDefaults,[g]:val?Number(val):undefined}; if(!val)delete updated[g]; setPrecioDefaults(updated); try{localStorage.setItem("precioDefaults",JSON.stringify(updated));}catch{} }} style={{ width:90,padding:"4px 8px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#66BB6A",fontSize:13,fontWeight:700,textAlign:"right" }} />
+                    </div>)}
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
+                    {garmentTypes.map(g => {
+                      const val = precioByService[configServiceTab]?.[g] || "";
+                      return <div key={g} style={{ display:"flex",alignItems:"center",gap:8,background:"#0D1117",borderRadius:8,padding:"8px 12px" }}>
+                        <span style={{ fontSize:13,flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
+                        <input type="number" placeholder={precioDefaults[g]||"Precio"} value={val} onChange={e => {
+                          const newVal = e.target.value;
+                          const updated = { ...precioByService, [configServiceTab]: { ...(precioByService[configServiceTab]||{}), [g]: newVal ? Number(newVal) : undefined } };
+                          if (!newVal) delete updated[configServiceTab][g];
+                          setPrecioByService(updated);
+                          try { localStorage.setItem("precioByService", JSON.stringify(updated)); } catch {}
+                        }} style={{ width:90,padding:"4px 8px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#66BB6A",fontSize:13,fontWeight:700,textAlign:"right" }} />
+                      </div>;
+                    })}
+                  </div>
+                )}
               </div>
               <div style={{ marginTop: 20, ...card }}>
                 <h3 style={{ margin: "0 0 20px", fontSize: 16, color: "#FFD54F" }}>👥 Usuarios y Turnos</h3>
