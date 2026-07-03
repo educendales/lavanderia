@@ -57,7 +57,7 @@ const getDeliveryDefault = () => { const d = new Date(); d.setDate(d.getDate()+2
 const today = getToday();
 const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault() };
 const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
-const getServiceLabel = (serviceStr) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = services.find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
+const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = (svcs||DEFAULT_SERVICES).find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
 
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
@@ -610,7 +610,7 @@ export default function LavanderiaApp() {
                             {o.order_number && <span style={{ fontSize: 11, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 7px", borderRadius: 6 }}>{o.order_number}</span>}
                             <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
                           </div>
-                          <div style={{ fontSize: 12, color: "#8B949E" }}>{getServiceLabel(o.service)} · {o.garments} prendas</div>
+                          <div style={{ fontSize: 12, color: "#8B949E" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
                           {orderItems[o.id] && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 11, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type} x{it.quantity}{it.color?` · ${it.color}`:""} · ${Math.round(Number(it.price)*Number(it.quantity))}</span>)}</div>}
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
@@ -717,7 +717,7 @@ export default function LavanderiaApp() {
                               <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number||"—"}</span>
                               <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
                             </div>
-                            <div style={{ fontSize: 13, color: "#8B949E" }}>{getServiceLabel(o.service)} · {o.garments} prendas</div>
+                            <div style={{ fontSize: 13, color: "#8B949E" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
                             <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date||"—"}{o.delivered_by&&<span style={{ color:"#C792EA" }}> · 👤 {o.delivered_by}</span>}</div>
                           </div>
                         </div>
@@ -778,7 +778,7 @@ export default function LavanderiaApp() {
                       </div>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
-                      {[{label:"SERVICIO",value:getServiceLabel(entregaResult.service)},{label:"PRENDAS",value:`${entregaResult.garments} prendas`},{label:"FECHA ENTREGA",value:`📅 ${entregaResult.delivery_date||"—"}`,color:"#FFD54F"}].map((item,i) => (
+                      {[{label:"SERVICIO",value:getServiceLabel(entregaResult.service, services)},{label:"PRENDAS",value:`${entregaResult.garments} prendas`},{label:"FECHA ENTREGA",value:`📅 ${entregaResult.delivery_date||"—"}`,color:"#FFD54F"}].map((item,i) => (
                         <div key={i} style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px" }}>
                           <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 2 }}>{item.label}</div>
                           <div style={{ fontWeight: 600, color: item.color||"#E6EDF3" }}>{item.value}</div>
@@ -1217,7 +1217,7 @@ export default function LavanderiaApp() {
                     {isAdmin && <button onClick={() => {
                       const rows=orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter));
                       const daysIn=r=>Math.floor((new Date()-new Date(r.date))/(1000*60*60*24));
-                      const csv=[["# Orden","Cliente","Telefono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Dias"],...rows.map(o=>[o.order_number||"",o.client_name,o.phone,getServiceLabel(o.service),o.garments,Math.round(Number(o.price)),STATUS_LABELS[o.status]?.label,o.date,o.delivery_date||"",daysIn(o)])].map(r=>r.join(",")).join("\n");
+                      const csv=[["# Orden","Cliente","Telefono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Dias"],...rows.map(o=>[o.order_number||"",o.client_name,o.phone,getServiceLabel(o.service, services),o.garments,Math.round(Number(o.price)),STATUS_LABELS[o.status]?.label,o.date,o.delivery_date||"",daysIn(o)])].map(r=>r.join(",")).join("\n");
                       const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`inventario_${today}.csv`; a.click(); URL.revokeObjectURL(url);
                     }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "6px 14px", fontSize: 12 }}>📥 Exportar Excel</button>}
                   </div>
@@ -1282,7 +1282,7 @@ export default function LavanderiaApp() {
                           <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
                         </div>
                         <div style={{ fontWeight: 700, fontSize: 16 }}>{o.client_name}</div>
-                        <div style={{ fontSize: 13, color: "#8B949E" }}>📞 {o.phone} · {getServiceLabel(o.service)} · {o.garments} prendas</div>
+                        <div style={{ fontSize: 13, color: "#8B949E" }}>📞 {o.phone} · {getServiceLabel(o.service, services)} · {o.garments} prendas</div>
                         <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "#484F58" }}>
                           <span>📅 Ingreso: {o.date}</span>
                           {o.delivered_at && <span>✅ Entregado: {o.delivered_at}</span>}
