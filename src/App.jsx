@@ -443,6 +443,57 @@ export default function LavanderiaApp() {
     setTimeout(() => { w.print(); }, 400);
   };
 
+  const generateReciboImage = (order, itemsMap) => {
+    return new Promise((resolve) => {
+      const its = (itemsMap || orderItems)[order.id] || [];
+      const div = document.createElement("div");
+      div.style.cssText = "position:fixed;left:-9999px;top:0;width:300px;background:#fff;padding:16px;font-family:Courier New,monospace;font-size:11px;color:#000;";
+      div.innerHTML = `
+        <div style="text-align:center;margin-bottom:8px">
+          <div style="font-weight:bold;font-size:13px">Factura No.: ${order.order_number?.replace("S","")||""}</div>
+          <div style="font-weight:bold;font-size:15px;margin:4px 0">LAVANDERIAS SHADDAI</div>
+          <div>CARRERA 113 # 75-56</div>
+          <div style="font-size:10px">${reciboSubtitulo}</div>
+          <div style="font-weight:bold;font-size:20px;letter-spacing:2px;margin:6px 0">*${order.order_number||""}*</div>
+        </div>
+        <hr style="border:1px dashed #000;margin:6px 0"/>
+        <table style="width:100%;font-size:10px">
+          <tr><td><b>Atendido Por:</b></td><td>${order.employee||""}</td></tr>
+          <tr><td><b>Fecha Entrada:</b></td><td>${order.date||""}</td></tr>
+          <tr><td><b>Fecha Entrega:</b></td><td>${order.delivery_date||""}</td></tr>
+          <tr><td><b>Cliente:</b></td><td>${order.client_name||""}</td></tr>
+          <tr><td><b>Teléfono:</b></td><td>${order.phone||""}</td></tr>
+        </table>
+        <hr style="border:1px dashed #000;margin:6px 0"/>
+        <table style="width:100%;font-size:10px;border-collapse:collapse">
+          <tr style="border-bottom:1px solid #000"><th style="text-align:left">Prenda</th><th style="text-align:left">Serv.</th><th style="text-align:right">Cant</th><th style="text-align:right">Total</th></tr>
+          ${its.map(it => {
+            const svc = it.service==="lavado_normal"?"LAV.NOR":it.service==="planchado"?"PLANCH":it.service==="lavado_express"?"EXPRESS":it.service==="secado"?"SECADO":"";
+            return `<tr><td>${(it.garment_type||"").substring(0,10)}</td><td>${svc}</td><td style="text-align:right">${it.quantity}</td><td style="text-align:right">$${Math.round(Number(it.price)*Number(it.quantity)).toLocaleString("es-CO")}</td></tr>`;
+          }).join("")}
+        </table>
+        <hr style="border:1px dashed #000;margin:6px 0"/>
+        <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px"><span>Total a Pagar</span><span>$${Math.round(Number(order.price)).toLocaleString("es-CO")}</span></div>
+        <div style="display:flex;justify-content:space-between"><span>No. Piezas</span><span>${order.garments}</span></div>
+        <hr style="border:1px dashed #000;margin:6px 0"/>
+        <div style="font-size:8px;text-align:center;margin-top:4px">${reciboLegal}</div>
+      `;
+      document.body.appendChild(div);
+      window.html2canvas(div, { scale: 2, backgroundColor: "#ffffff" }).then(canvas => {
+        document.body.removeChild(div);
+        canvas.toBlob(blob => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `recibo_${order.order_number||"orden"}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+          resolve();
+        }, "image/png");
+      });
+    });
+  };
+
   const exportClients = () => {
     const csv = [["Nombre","Telefono","Email","Total Ordenes"],...clients.map(c=>[c.name||"",c.phone||"",c.email||"",c.total_orders||0])].map(r=>r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
@@ -1499,8 +1550,8 @@ export default function LavanderiaApp() {
                     <input type="date" style={{ ...inp,colorScheme:"dark",borderColor:"#FFD54F44" }} value={newOrder.delivery_date} onChange={e=>setNewOrder(p=>({...p,delivery_date:e.target.value}))} />
                     <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>Por defecto: 2 días después de hoy. Puedes cambiarla.</div>
                   </div>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:14,fontSize:14,opacity:saving||!newOrder.client_name?0.6:1 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:12,fontSize:13,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"💾 Solo Guardar"}
                     </button>
                     <button onClick={async () => {
@@ -1527,7 +1578,7 @@ export default function LavanderiaApp() {
                       setNewOrder({...emptyOrder,delivery_date:getDeliveryDefault()});
                       setItems([{...emptyItem,price:precioDefaults[emptyItem.garment_type]||""}]);
                       setModal(null);setSaving(false);loadData();
-                    }} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:2,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:14,fontWeight:800,opacity:saving||!newOrder.client_name?0.6:1 }}>
+                    }} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,fontSize:13,fontWeight:800,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"🖨️ Guardar e Imprimir"}
                     </button>
                   </div>
@@ -1567,14 +1618,15 @@ export default function LavanderiaApp() {
                   }} style={{ ...btn,background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
                     🖨️ Imprimir recibo físico
                   </button>
-                  <button onClick={() => {
+                  <button onClick={async () => {
                     const o = savedOrder.order;
-                    const its = (savedOrder.itemsMap||{})[o.id] || [];
-                    const partes = ["Hola " + o.client_name + ", su comprobante de Lavanderias Shaddai:","Orden: " + (o.order_number||""),"Ingreso: " + (o.date||""),"Entrega: " + (o.delivery_date||""),""].concat(its.map(it => "* " + it.garment_type + " x" + it.quantity + " - $" + Math.round(Number(it.price)*Number(it.quantity)))).concat(["","Total: $" + Math.round(Number(o.price)),"Gracias por preferirnos!"]);
+                    await generateReciboImage(o, savedOrder.itemsMap);
+                    const phone = (o.phone||"").replace(/[^0-9]/g,"");
+                    const partes = ["Hola " + o.client_name + ", adjunto su recibo de Lavanderias Shaddai.","Orden: " + (o.order_number||""),"Total: $" + Math.round(Number(o.price)),"Entrega: " + (o.delivery_date||""),"Gracias por preferirnos!"];
                     const msg = partes.join(String.fromCharCode(10));
-                    window.open("https://wa.me/57" + (o.phone||"").replace(/[^0-9]/g,"") + "?text=" + encodeURIComponent(msg), "_blank");
+                    window.open("https://wa.me/57" + phone + "?text=" + encodeURIComponent(msg), "_blank");
                   }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
-                    📱 Enviar por WhatsApp
+                    📱 Generar imagen y abrir WhatsApp
                   </button>
                   <button onClick={() => { setModal(null); setSavedOrder(null); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",padding:12,fontSize:13 }}>
                     📋 Sin recibo por ahora
