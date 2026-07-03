@@ -38,10 +38,10 @@ const DEFAULT_GARMENT_TYPES = ["Camisa","Pantalón","Vestido","Sábana","Toalla"
 const DEFAULT_COLORS = ["Blanco","Negro","Gris","Rojo","Azul","Azul marino","Azul cielo","Verde","Verde oliva","Amarillo","Naranja","Morado","Rosa","Rosado","Café","Beige","Crema","Vino","Turquesa","Celeste","Plateado","Dorado","Multicolor","Estampado"];
 const GARMENT_ICONS = {"Camisa":"👔","Pantalón":"👖","Vestido":"👗","Sábana":"🛏","Toalla":"🏊","Chaqueta":"🧥","Ropa interior":"🩲","Calcetines":"🧦","Cortina":"🪟","Cubrelecho":"🛌","Falda":"👘","Blusa":"👚","Shorts":"🩳","Chompa":"🧶","Otro":"📦"};
 
-const SERVICES = [
+const DEFAULT_SERVICES = [
   { id: "lavado_normal", label: "Lavado Normal", color: "#4FC3F7", icon: "💧" },
   { id: "planchado", label: "Planchado", color: "#FFD54F", icon: "🔥" },
-  { id: "lavado_express", label: "Lavado Express", color: "#EF5350", icon: "⚡" },
+  { id: "tintura", label: "Tintura", color: "#C792EA", icon: "🎨" },
   { id: "secado", label: "Secado", color: "#66BB6A", icon: "💨" },
 ];
 
@@ -57,7 +57,7 @@ const getDeliveryDefault = () => { const d = new Date(); d.setDate(d.getDate()+2
 const today = getToday();
 const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault() };
 const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
-const getServiceLabel = (serviceStr) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = SERVICES.find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
+const getServiceLabel = (serviceStr) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = services.find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
 
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
@@ -92,6 +92,7 @@ export default function LavanderiaApp() {
   const [entregaSinRecibo, setEntregaSinRecibo] = useState(false);
   const [entregaConfirmed, setEntregaConfirmed] = useState(false);
   const [garmentTypes, setGarmentTypes] = useState(() => { try { const s = localStorage.getItem("garmentTypes"); return s ? JSON.parse(s) : DEFAULT_GARMENT_TYPES; } catch { return DEFAULT_GARMENT_TYPES; } });
+  const [services, setServices] = useState(() => { try { const s = localStorage.getItem("services"); return s ? JSON.parse(s) : DEFAULT_SERVICES; } catch { return DEFAULT_SERVICES; } });
   const [colors, setColors] = useState(() => { try { const s = localStorage.getItem("colors"); return s ? JSON.parse(s) : DEFAULT_COLORS; } catch { return DEFAULT_COLORS; } });
   const [newGarment, setNewGarment] = useState("");
   const [clientSearch, setClientSearch] = useState("");
@@ -216,6 +217,7 @@ export default function LavanderiaApp() {
     alert("✅ Todos los clientes han sido eliminados.");
   };
 
+  const saveServices = (list) => { setServices(list); try { localStorage.setItem("services", JSON.stringify(list)); } catch {} };
   const saveConditions = (list) => { setConditions(list); try { localStorage.setItem("conditions", JSON.stringify(list)); } catch {} };
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
@@ -609,7 +611,7 @@ export default function LavanderiaApp() {
                             <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
                           </div>
                           <div style={{ fontSize: 12, color: "#8B949E" }}>{getServiceLabel(o.service)} · {o.garments} prendas</div>
-                          {orderItems[o.id] && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 11, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>{it.service&&(() => { const sv=SERVICES.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type} x{it.quantity}{it.color?` · ${it.color}`:""} · ${Math.round(Number(it.price)*Number(it.quantity))}</span>)}</div>}
+                          {orderItems[o.id] && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 11, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type} x{it.quantity}{it.color?` · ${it.color}`:""} · ${Math.round(Number(it.price)*Number(it.quantity))}</span>)}</div>}
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
                           <div style={{ fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price))}</div>
@@ -622,7 +624,7 @@ export default function LavanderiaApp() {
                 </div>
                 <div style={card}>
                   <h3 style={{ margin: "0 0 16px", fontSize: 15, color: "#8B949E" }}>Servicios del día</h3>
-                  {SERVICES.map(sv => {
+                  {services.map(sv => {
                     const cnt = todayOrders.filter(o => (o.service||"").split(",").map(s=>s.trim()).includes(sv.id)).length;
                     return <div key={sv.id} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                       <div style={{ fontSize: 18 }}>{sv.icon}</div>
@@ -658,9 +660,9 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600 }}>{o.client_name}</div><div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div></td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ fontWeight: 600 }}>{o.garments} prendas</div>
-                          {orderItems[o.id] && <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 10, background: "#21262D", borderRadius: 8, padding: "3px 7px" }}>{it.service&&(() => { const sv=SERVICES.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color&&<span style={{ color: "#C792EA" }}> · {it.color}</span>}<span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price)*Number(it.quantity))}</span></span>)}</div>}
+                          {orderItems[o.id] && <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 10, background: "#21262D", borderRadius: 8, padding: "3px 7px" }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color&&<span style={{ color: "#C792EA" }}> · {it.color}</span>}<span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price)*Number(it.quantity))}</span></span>)}</div>}
                         </td>
-                        <td style={{ padding: "12px 14px" }}><div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{(o.service||"").split(",").map(sid => { const sv=SERVICES.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"2px 8px",borderRadius:20,fontSize:11 }}>{sv.icon} {sv.label}</span>:null; })}</div></td>
+                        <td style={{ padding: "12px 14px" }}><div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{(o.service||"").split(",").map(sid => { const sv=services.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"2px 8px",borderRadius:20,fontSize:11 }}>{sv.icon} {sv.label}</span>:null; })}</div></td>
                         <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(Number(o.price))}</td>
                         <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
                         <td style={{ padding: "12px 14px" }}><span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date||"—"}</span></td>
@@ -783,7 +785,7 @@ export default function LavanderiaApp() {
                         </div>
                       ))}
                     </div>
-                    {orderItems[entregaResult.id] && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 12, color: "#8B949E", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{orderItems[entregaResult.id].map((it,i) => <div key={i} style={{ background: "#21262D", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>{it.service&&(() => { const sv=SERVICES.find(s=>s.id===it.service); return sv?<span style={{ color:sv.color }}>{sv.icon} </span>:null; })()}<span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>{it.color&&<span style={{ color:"#C792EA" }}> · {it.color}</span>}<span style={{ color:"#66BB6A",fontWeight:700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span></div>)}</div></div>}
+                    {orderItems[entregaResult.id] && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 12, color: "#8B949E", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{orderItems[entregaResult.id].map((it,i) => <div key={i} style={{ background: "#21262D", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?<span style={{ color:sv.color }}>{sv.icon} </span>:null; })()}<span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>{it.color&&<span style={{ color:"#C792EA" }}> · {it.color}</span>}<span style={{ color:"#66BB6A",fontWeight:700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span></div>)}</div></div>}
                     {entregaResult.notes && <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#FFD54F" }}>📝 {entregaResult.notes}</div>}
                     {entregaResult.status !== "entregado" && !entregaConfirmed && (
                       <>
@@ -961,7 +963,7 @@ export default function LavanderiaApp() {
               </div>
               <div style={card}>
                 <h3 style={{ margin: "0 0 16px", color: "#8B949E" }}>📊 Desglose por Servicio</h3>
-                {SERVICES.map(sv => {
+                {services.map(sv => {
                   const ords=todayOrders.filter(o=>(o.service||"").split(",").map(s=>s.trim()).includes(sv.id));
                   return <div key={sv.id} style={{ display:"flex",alignItems:"center",gap:16,padding:"12px 0",borderBottom:"1px solid #21262D" }}>
                     <div style={{ fontSize:24 }}>{sv.icon}</div>
@@ -1189,7 +1191,7 @@ export default function LavanderiaApp() {
                         <div style={{ fontSize:13,color:"#8B949E",marginBottom:12 }}><strong style={{ color:"#FFD54F" }}>{reversadas.length}</strong> orden{reversadas.length!==1?"es":""} reversada{reversadas.length!==1?"s":""}</div>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
                           <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Teléfono","Servicio","Total","Entregado por","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
-                          <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"#FFD54F",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=SERVICES.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:12 }}>👤 {o.delivered_by}</span>:<span style={{ color:"#484F58",fontSize:12 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:11,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
+                          <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"#FFD54F",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:12 }}>👤 {o.delivered_by}</span>:<span style={{ color:"#484F58",fontSize:12 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:11,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
                         </table>
                       </div>;
                 })()}
@@ -1239,7 +1241,7 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:12 }}>{o.order_number||"—"}</span></td>
                               <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
                               <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.phone}</td>
-                              <td style={{ padding:"10px 12px" }}><div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>{(o.service||"").split(",").map(sid=>{const sv=SERVICES.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,whiteSpace:"nowrap" }}>{sv.icon} {sv.label}</span>:null;})}</div></td>
+                              <td style={{ padding:"10px 12px" }}><div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,whiteSpace:"nowrap" }}>{sv.icon} {sv.label}</span>:null;})}</div></td>
                               <td style={{ padding:"10px 12px",fontWeight:600,textAlign:"center" }}>{o.garments}</td>
                               <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td>
                               <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap" }}>{STATUS_LABELS[o.status]?.label}</span></td>
@@ -1354,6 +1356,32 @@ export default function LavanderiaApp() {
                 </div>
                 <div style={{ fontSize:11,color:"#484F58",marginTop:10 }}>● Las condiciones base (Decolorado, Percudido, Roto, Manchado) no se pueden eliminar</div>
               </div>
+              {/* SERVICIOS */}
+              <div style={{ marginTop: 20, ...card }}>
+                <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#C792EA" }}>🧺 Servicios</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Personaliza los servicios que aparecen al crear una orden</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {services.map((sv, i) => (
+                    <div key={sv.id} style={{ display:"flex",alignItems:"center",gap:10,background:"#0D1117",borderRadius:10,padding:"10px 14px",border:`1px solid ${sv.color}33` }}>
+                      <span style={{ fontSize:20 }}>{sv.icon}</span>
+                      <div style={{ flex:1 }}>
+                        <input value={sv.label} onChange={e => {
+                          const updated = services.map((s,idx) => idx===i ? {...s, label: e.target.value} : s);
+                          saveServices(updated);
+                        }} style={{ ...inp, padding:"6px 10px", fontSize:13, width:"100%", borderColor: sv.color+"55" }} />
+                      </div>
+                      <div style={{ display:"flex",gap:6 }}>
+                        {["💧","🔥","🎨","💨","✂️","👒","🧤","🌿"].map(ico => (
+                          <button key={ico} onClick={() => { const updated=services.map((s,idx)=>idx===i?{...s,icon:ico}:s); saveServices(updated); }}
+                            style={{ background:sv.icon===ico?"rgba(199,146,234,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${sv.icon===ico?"#C792EA":"#30363D"}`,borderRadius:6,padding:"4px 6px",cursor:"pointer",fontSize:14 }}>{ico}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => { if(window.confirm("¿Restaurar servicios por defecto?")) saveServices(DEFAULT_SERVICES); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid #30363D",background:"transparent",color:"#8B949E",cursor:"pointer",fontSize:12 }}>🔄 Restaurar por defecto</button>
+              </div>
+
               <div style={{ marginTop: 20, ...card }}>
                 <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#66BB6A" }}>💰 Precios por defecto de prendas</h3>
                 <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Al seleccionar una prenda en nueva orden se llenará el precio automáticamente</p>
@@ -1507,7 +1535,7 @@ export default function LavanderiaApp() {
                     <div style={{ display:"grid",gridTemplateColumns:"2fr 55px 75px 1fr 30px",gap:6,marginBottom:4 }}>{["Tipo de prenda","Cant.","Precio c/u","Colores",""].map((h,i)=><div key={i} style={{ fontSize:10,color:"#484F58",fontWeight:600 }}>{h}</div>)}</div>
                     {items.map((item,i) => (
                       <div key={i} style={{ marginBottom:10,background:"rgba(255,255,255,0.02)",borderRadius:10,padding:10,border:"1px solid #21262D" }}>
-                        <div style={{ display:"flex",gap:4,marginBottom:8 }}>{SERVICES.map(sv=>{ const sel=item.service===sv.id; return <label key={sv.id} onClick={()=>updateItem(i,"service",sv.id)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:3,cursor:"pointer",fontSize:10,fontWeight:600,background:sel?sv.color+"22":"rgba(255,255,255,0.03)",border:`1.5px solid ${sel?sv.color:"#30363D"}`,borderRadius:6,padding:"4px 2px",color:sel?sv.color:"#484F58",userSelect:"none" }}>{sv.icon} {sv.label}</label>; })}</div>
+                        <div style={{ display:"flex",gap:4,marginBottom:8 }}>{services.map(sv=>{ const sel=item.service===sv.id; return <label key={sv.id} onClick={()=>updateItem(i,"service",sv.id)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:3,cursor:"pointer",fontSize:10,fontWeight:600,background:sel?sv.color+"22":"rgba(255,255,255,0.03)",border:`1.5px solid ${sel?sv.color:"#30363D"}`,borderRadius:6,padding:"4px 2px",color:sel?sv.color:"#484F58",userSelect:"none" }}>{sv.icon} {sv.label}</label>; })}</div>
                         <div style={{ display:"grid",gridTemplateColumns:"2fr 55px 75px 1fr 30px",gap:6,alignItems:"center",marginBottom:8 }}>
                           <select value={item.garment_type} onChange={e=>updateItem(i,"garment_type",e.target.value)} style={{ ...inp,padding:"8px 10px" }}>{garmentTypes.map(g=><option key={g} value={g} style={{ background:"#1a1a2e" }}>{GARMENT_ICONS[g]||"👕"} {g}</option>)}</select>
                           <input type="number" min={1} value={item.quantity} onChange={e=>updateItem(i,"quantity",e.target.value)} style={{ ...inp,padding:"8px 6px",textAlign:"center" }} />
