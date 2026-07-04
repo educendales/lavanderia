@@ -133,6 +133,8 @@ export default function LavanderiaApp() {
   const [claveActual, setClaveActual] = useState("");
   const [claveNueva, setClaveNueva] = useState("");
   const [claveConfirm, setClaveConfirm] = useState("");
+  const [negocioLogo, setNegocioLogo] = useState(() => { try { return localStorage.getItem("negocioLogo") || ""; } catch { return ""; } });
+  const [logoEnRecibo, setLogoEnRecibo] = useState(() => { try { return localStorage.getItem("logoEnRecibo") !== "false"; } catch { return true; } });
   const [negocioNombre, setNegocioNombre] = useState(() => { try { return localStorage.getItem("negocioNombre") || "Lavanderías Shaddai"; } catch { return "Lavanderías Shaddai"; } });
   const [negocioDireccion, setNegocioDireccion] = useState(() => { try { return localStorage.getItem("negocioDireccion") || "CARRERA 113 # 75-56"; } catch { return "CARRERA 113 # 75-56"; } });
   const [negocioTelefono, setNegocioTelefono] = useState(() => { try { return localStorage.getItem("negocioTelefono") || ""; } catch { return ""; } });
@@ -389,6 +391,7 @@ export default function LavanderiaApp() {
       <div class="center">
         <div class="bold" style="font-size:13px">Factura No. : &nbsp;&nbsp;&nbsp; ${order.order_number?.replace("S","") || ""}</div>
         <br/>
+        ${logoEnRecibo && negocioLogo ? `<img src="${negocioLogo}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;margin-bottom:6px" />` : ''}
         <div class="big">${negocioNombre.toUpperCase()}</div>
         <br/>
         <div>${negocioDireccion}</div>
@@ -461,6 +464,7 @@ export default function LavanderiaApp() {
       div.innerHTML = `
         <div style="text-align:center;margin-bottom:8px">
           <div style="font-weight:bold;font-size:13px">Factura No.: ${order.order_number?.replace("S","")||""}</div>
+          ${logoEnRecibo && negocioLogo ? `<img src="${negocioLogo}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;margin-bottom:4px" />` : ''}
           <div style="font-weight:bold;font-size:15px;margin:4px 0">${negocioNombre.toUpperCase()}</div>
           <div>${negocioDireccion}</div>
           <div style="font-size:10px">${reciboSubtitulo}</div>
@@ -533,7 +537,9 @@ export default function LavanderiaApp() {
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#0F2027,#203A43,#2C5364)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
       <div style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)", borderRadius: 24, padding: "48px 40px", width: 340, border: "1px solid rgba(255,255,255,0.1)" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>🫧</div>
+          {negocioLogo
+            ? <img src={negocioLogo} alt="logo" style={{ width: 80, height: 80, borderRadius: 16, objectFit: "cover", marginBottom: 12 }} />
+            : <div style={{ fontSize: 48, marginBottom: 8 }}>🫧</div>}
           <h1 style={{ color: "#fff", fontSize: 26, fontWeight: 800, margin: 0 }}>{negocioNombre}</h1>
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, marginTop: 4 }}>Sistema de Gestión</p>
         </div>
@@ -573,7 +579,9 @@ export default function LavanderiaApp() {
         {/* SIDEBAR */}
         <div style={{ width: 200, background: "#161B22", borderRight: "1px solid #30363D", display: "flex", flexDirection: "column", padding: "20px 12px", flexShrink: 0 }}>
           <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <div style={{ fontSize: 28 }}>🫧</div>
+            {negocioLogo
+              ? <img src={negocioLogo} alt="logo" style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", marginBottom: 6 }} />
+              : <div style={{ fontSize: 28 }}>🫧</div>}
             <div style={{ fontWeight: 800, fontSize: 15, color: "#4FC3F7", lineHeight: 1.2 }}>{negocioNombre}</div>
           </div>
           {tabs.map(t => (
@@ -1335,6 +1343,37 @@ export default function LavanderiaApp() {
                   <div style={{ gridColumn: "span 2" }}>
                     <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DIRECCIÓN</label>
                     <input style={{ ...inp }} value={negocioDireccion} onChange={e => setNegocioDireccion(e.target.value)} placeholder="Ej: Carrera 113 # 75-56" />
+                  </div>
+                </div>
+                <div style={{ gridColumn: "span 2", marginTop: 4 }}>
+                  <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 8 }}>LOGO DEL NEGOCIO</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    {negocioLogo
+                      ? <img src={negocioLogo} alt="logo" style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid #30363D" }} />
+                      : <div style={{ width: 64, height: 64, borderRadius: 10, background: "#0D1117", border: "2px dashed #30363D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🫧</div>}
+                    <div style={{ flex: 1 }}>
+                      <input type="file" accept="image/*" onChange={e => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = ev => {
+                          setNegocioLogo(ev.target.result);
+                          try { localStorage.setItem("negocioLogo", ev.target.result); } catch {}
+                        };
+                        reader.readAsDataURL(file);
+                      }} style={{ display: "none" }} id="logoInput" />
+                      <label htmlFor="logoInput" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", border: "1px solid rgba(79,195,247,0.3)", cursor: "pointer", display: "inline-block", fontSize: 12, padding: "8px 14px" }}>
+                        📁 Subir logo
+                      </label>
+                      {negocioLogo && <button onClick={() => { setNegocioLogo(""); try { localStorage.removeItem("negocioLogo"); } catch {} }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", fontSize: 12, padding: "8px 14px", marginLeft: 8 }}>🗑 Quitar</button>}
+                      <div style={{ fontSize: 11, color: "#484F58", marginTop: 6 }}>PNG, JPG. Recomendado: cuadrado 200x200px</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <label onClick={() => { setLogoEnRecibo(!logoEnRecibo); try { localStorage.setItem("logoEnRecibo", String(!logoEnRecibo)); } catch {} }} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",background:logoEnRecibo?"rgba(79,195,247,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${logoEnRecibo?"rgba(79,195,247,0.3)":"#30363D"}`,borderRadius:8,padding:"8px 12px" }}>
+                      <input type="checkbox" checked={logoEnRecibo} onChange={() => {}} style={{ accentColor:"#4FC3F7" }} />
+                      <span style={{ fontSize: 12, color: logoEnRecibo ? "#4FC3F7" : "#8B949E" }}>Mostrar logo en el recibo impreso</span>
+                    </label>
                   </div>
                 </div>
                 <button onClick={async () => {
