@@ -1203,6 +1203,113 @@ export default function LavanderiaApp() {
                 })()}
               </div>
 
+              {/* PAGOS POR MÉTODO */}
+              <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#C792EA" }}>💳 Pagos por Método — Rango de Fechas</h3>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                </div>
+                {(() => {
+                  const entregadas = orders.filter(o => o.status === "entregado" && o.delivered_at >= reportFrom && o.delivered_at <= reportTo);
+                  const metodos = [
+                    { key: "efectivo", label: "💵 Efectivo", color: "#66BB6A" },
+                    { key: "nequi", label: "📱 Nequi", color: "#C792EA" },
+                    { key: "daviplata", label: "💜 Daviplata", color: "#667EEA" },
+                    { key: "breb", label: "🔵 Bre-b", color: "#4FC3F7" },
+                  ];
+                  const totalesPorMetodo = metodos.map(m => ({
+                    ...m,
+                    total: entregadas.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+Number(o.price), 0),
+                    count: entregadas.filter(o => (o.payment_method||"efectivo") === m.key).length,
+                  }));
+                  const totalGeneral = totalesPorMetodo.reduce((s,m) => s+m.total, 0);
+
+                  // Group by day for detail table
+                  const byDay = {};
+                  entregadas.forEach(o => {
+                    const d = o.delivered_at;
+                    if (!byDay[d]) byDay[d] = { efectivo:0, nequi:0, daviplata:0, breb:0, total:0 };
+                    const m = o.payment_method||"efectivo";
+                    byDay[d][m] = (byDay[d][m]||0) + Number(o.price);
+                    byDay[d].total += Number(o.price);
+                  });
+                  const sortedDays = Object.keys(byDay).sort();
+
+                  const exportPagos = () => {
+                    const csv = [
+                      ["Fecha","Efectivo","Nequi","Daviplata","Bre-b","Total"],
+                      ...sortedDays.map(d => [d, Math.round(byDay[d].efectivo||0), Math.round(byDay[d].nequi||0), Math.round(byDay[d].daviplata||0), Math.round(byDay[d].breb||0), Math.round(byDay[d].total||0)]),
+                      ["TOTAL", Math.round(totalesPorMetodo.find(m=>m.key==="efectivo")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="nequi")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="daviplata")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="breb")?.total||0), Math.round(totalGeneral)]
+                    ].map(r => r.join(",")).join("
+");
+                    const blob = new Blob(["﻿"+csv], {type:"text/csv;charset=utf-8;"});
+                    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                    a.href=url; a.download=`pagos_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                  };
+
+                  return entregadas.length === 0
+                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay entregas en este rango de fechas</p>
+                    : <>
+                        {/* KPIs por método */}
+                        <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
+                          {totalesPorMetodo.map(m => (
+                            <div key={m.key} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${m.color}` }}>
+                              <div style={{ fontSize:13,color:"#8B949E",marginBottom:4 }}>{m.label}</div>
+                              <div style={{ fontWeight:800,fontSize:18,color:m.color }}>${Math.round(m.total).toLocaleString()}</div>
+                              <div style={{ fontSize:11,color:"#484F58",marginTop:2 }}>{m.count} entrega{m.count!==1?"s":""}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Total general */}
+                        <div style={{ background:"rgba(199,146,234,0.08)",border:"1px solid rgba(199,146,234,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                          <span style={{ fontWeight:600,color:"#8B949E" }}>Total recaudado en el período</span>
+                          <span style={{ fontWeight:800,fontSize:20,color:"#C792EA" }}>${Math.round(totalGeneral).toLocaleString()}</span>
+                        </div>
+
+                        {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                          <button onClick={exportPagos} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                        </div>}
+
+                        {/* Tabla por día */}
+                        {sortedDays.length > 0 && <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                            <thead><tr style={{ background:"#21262D" }}>
+                              {["Fecha","💵 Efectivo","📱 Nequi","💜 Daviplata","🔵 Bre-b","Total"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
+                            </tr></thead>
+                            <tbody>
+                              {sortedDays.map(d => (
+                                <tr key={d} style={{ borderBottom:"1px solid #21262D" }}>
+                                  <td style={{ padding:"10px 12px",fontWeight:600 }}>{d}</td>
+                                  <td style={{ padding:"10px 12px",color:"#66BB6A",fontWeight:600 }}>{byDay[d].efectivo>0?`$${Math.round(byDay[d].efectivo).toLocaleString()}`:"—"}</td>
+                                  <td style={{ padding:"10px 12px",color:"#C792EA",fontWeight:600 }}>{byDay[d].nequi>0?`$${Math.round(byDay[d].nequi).toLocaleString()}`:"—"}</td>
+                                  <td style={{ padding:"10px 12px",color:"#667EEA",fontWeight:600 }}>{byDay[d].daviplata>0?`$${Math.round(byDay[d].daviplata).toLocaleString()}`:"—"}</td>
+                                  <td style={{ padding:"10px 12px",color:"#4FC3F7",fontWeight:600 }}>{(byDay[d].breb||0)>0?`$${Math.round(byDay[d].breb).toLocaleString()}`:"—"}</td>
+                                  <td style={{ padding:"10px 12px",fontWeight:800 }}>${Math.round(byDay[d].total).toLocaleString()}</td>
+                                </tr>
+                              ))}
+                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                                <td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="efectivo")?.total||0).toLocaleString()}</td>
+                                <td style={{ padding:"10px 12px",color:"#C792EA" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="nequi")?.total||0).toLocaleString()}</td>
+                                <td style={{ padding:"10px 12px",color:"#667EEA" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="daviplata")?.total||0).toLocaleString()}</td>
+                                <td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="breb")?.total||0).toLocaleString()}</td>
+                                <td style={{ padding:"10px 12px" }}>${Math.round(totalGeneral).toLocaleString()}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>}
+                      </>;
+                })()}
+              </div>
+
               {/* REVERSADAS */}
               <div style={{ ...card, marginTop: 20 }}>
                 <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FFD54F" }}>↩️ Órdenes Reversadas</h3>
