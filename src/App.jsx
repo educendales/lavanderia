@@ -108,6 +108,7 @@ export default function LavanderiaApp() {
   const [reportTo, setReportTo] = useState(today);
   const [reportView, setReportView] = useState("dia");
   const [inventoryDaysFilter, setInventoryDaysFilter] = useState("");
+  const [selectedInventory, setSelectedInventory] = useState([]);
   const [expenseFilterDate, setExpenseFilterDate] = useState(today);
   const [showEliminados, setShowEliminados] = useState(false);
   const [reversadasSearch, setReversadasSearch] = useState("");
@@ -1367,12 +1368,33 @@ export default function LavanderiaApp() {
                   return pendingOrders.length===0
                     ?<div style={{ textAlign:"center",padding:32,color:"#484F58" }}><div style={{ fontSize:40,marginBottom:8 }}>✅</div><div>No hay prendas pendientes de retiro</div></div>
                     :<div style={{ overflowX:"auto" }}>
+                        {/* Botones selección masiva */}
+                        <div style={{ display:"flex",gap:10,marginBottom:10,flexWrap:"wrap",alignItems:"center" }}>
+                          <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"6px 12px",fontSize:12 }}>✅ Seleccionar todos</button>
+                          <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.status==="listo"&&o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 12px",fontSize:12 }}>🟢 Solo "Listo"</button>
+                          {selectedInventory.length > 0 && <>
+                            <button onClick={() => setSelectedInventory([])} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",padding:"6px 12px",fontSize:12 }}>✕ Limpiar</button>
+                            <button onClick={() => {
+                              const selected = pendingOrders.filter(o => selectedInventory.includes(o.id) && o.phone);
+                              selected.forEach(o => {
+                                const msg = waMensaje.replace("{nombre}", o.client_name).replace("{orden}", o.order_number||"");
+                                window.open("https://wa.me/" + negocioPais + (o.phone||"").replace(/[^0-9]/g,"") + "?text=" + encodeURIComponent(msg), "_blank");
+                              });
+                            }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:"6px 14px",fontSize:12,fontWeight:700 }}>
+                              📱 Enviar WA a {selectedInventory.length} seleccionado{selectedInventory.length!==1?"s":""}
+                            </button>
+                          </>}
+                        </div>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                          <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días","📱"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11,whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                          <thead><tr style={{ background:"#21262D" }}>{["","# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días","📱"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11,whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
                           <tbody>{pendingOrders.map(o=>{
                             const daysIn=Math.floor((new Date()-new Date(o.date))/(1000*60*60*24));
                             const isLate=o.delivery_date&&new Date(o.delivery_date)<new Date()&&o.status!=="entregado";
-                            return<tr key={o.id} style={{ borderBottom:"1px solid #21262D",background:isLate?"rgba(239,83,80,0.05)":"transparent" }}>
+                            const isSelected = selectedInventory.includes(o.id);
+                            return<tr key={o.id} style={{ borderBottom:"1px solid #21262D",background:isSelected?"rgba(37,211,102,0.05)":isLate?"rgba(239,83,80,0.05)":"transparent" }}>
+                              <td style={{ padding:"10px 12px" }}>
+                                {o.phone && <input type="checkbox" checked={isSelected} onChange={() => setSelectedInventory(prev => isSelected ? prev.filter(id=>id!==o.id) : [...prev,o.id])} style={{ width:16,height:16,accentColor:"#25D366",cursor:"pointer" }} />}
+                              </td>
                               <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:12 }}>{o.order_number||"—"}</span></td>
                               <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
                               <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.phone}</td>
