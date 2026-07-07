@@ -1247,8 +1247,7 @@ export default function LavanderiaApp() {
                       ["Fecha","Efectivo","Nequi","Daviplata","Bre-b","Total"],
                       ...sortedDays.map(d => [d, Math.round(byDay[d].efectivo||0), Math.round(byDay[d].nequi||0), Math.round(byDay[d].daviplata||0), Math.round(byDay[d].breb||0), Math.round(byDay[d].total||0)]),
                       ["TOTAL", Math.round(totalesPorMetodo.find(m=>m.key==="efectivo")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="nequi")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="daviplata")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="breb")?.total||0), Math.round(totalGeneral)]
-                    ].map(r => r.join(",")).join("
-");
+                    ].map(r => r.join(",")).join("\n");
                     const blob = new Blob(["﻿"+csv], {type:"text/csv;charset=utf-8;"});
                     const url = URL.createObjectURL(blob); const a = document.createElement("a");
                     a.href=url; a.download=`pagos_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
