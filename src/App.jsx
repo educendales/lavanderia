@@ -674,7 +674,7 @@ export default function LavanderiaApp() {
               </div>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                  <thead><tr style={{ background: "#21262D" }}>{["# Orden","Cliente","Prendas","Servicio","Total","Fecha","Entrega",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{ background: "#21262D" }}>{["# Orden","Cliente","Prendas","Servicio","Total","Fecha","Entrega","Recibo",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {filteredOrders.map(o => (
                       <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
@@ -688,6 +688,13 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(Number(o.price))}</td>
                         <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
                         <td style={{ padding: "12px 14px" }}><span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date||"—"}</span></td>
+                        <td style={{ padding: "12px 14px" }}>
+                          {o.recibo_enviado === "whatsapp"
+                            ? <span style={{ background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>📱 WA</span>
+                            : o.recibo_enviado === "impreso"
+                            ? <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>🖨️ Impreso</span>
+                            : <span style={{ color:"#484F58",fontSize:11 }}>—</span>}
+                        </td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button onClick={() => printOrder(o)} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
@@ -1754,8 +1761,10 @@ export default function LavanderiaApp() {
                 </div>
                 <p style={{ fontSize:13,color:"#8B949E",textAlign:"center",marginBottom:20 }}>¿Cómo quieres entregar el comprobante al cliente?</p>
                 <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                  <button onClick={() => {
+                  <button onClick={async () => {
                     printOrder(savedOrder.order, savedOrder.itemsMap);
+                    await db.patch("orders", savedOrder.order.id, { recibo_enviado: "impreso" });
+                    setOrders(prev => prev.map(o => o.id === savedOrder.order.id ? { ...o, recibo_enviado: "impreso" } : o));
                   }} style={{ ...btn,background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
                     🖨️ Imprimir recibo físico
                   </button>
@@ -1766,6 +1775,8 @@ export default function LavanderiaApp() {
                     const partes = ["Hola " + o.client_name + ", adjunto su recibo de Lavanderias Shaddai.","Orden: " + (o.order_number||""),"Total: $" + Math.round(Number(o.price)),"Entrega: " + (o.delivery_date||""),"Gracias por preferirnos!"];
                     const msg = partes.join(String.fromCharCode(10));
                     window.open("https://wa.me/" + negocioPais + phone + "?text=" + encodeURIComponent(msg), "_blank");
+                    await db.patch("orders", o.id, { recibo_enviado: "whatsapp" });
+                    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, recibo_enviado: "whatsapp" } : ord));
                   }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
                     📱 Generar imagen y abrir WhatsApp
                   </button>
