@@ -701,8 +701,8 @@ export default function LavanderiaApp() {
                         </td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={() => printOrder(o)} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
-                            <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                            <button onClick={() => printOrder(o)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
+                            <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
                           </div>
                         </td>
                       </tr>
@@ -851,7 +851,7 @@ export default function LavanderiaApp() {
                           ))}
                         </div>
                         <div style={{ display: "flex", gap: 10 }}>
-                          <button onClick={() => printOrder(entregaResult)} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
+                          <button onClick={() => printOrder(entregaResult)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
                       </div>
@@ -883,8 +883,8 @@ export default function LavanderiaApp() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                       <div style={{ fontSize: 28 }}>👤</div>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button onClick={() => setEditingClient({ ...c })} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
-                        <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar este cliente?"))deleteClient(c.id); }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
+                        <button onClick={() => setEditingClient({ ...c })} title="Editar" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
+                        <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar este cliente?"))deleteClient(c.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
                       </div>
                     </div>
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{c.name}</div>
@@ -939,7 +939,7 @@ export default function LavanderiaApp() {
                             <td style={{ padding:"12px 14px" }}><PayMethod m={e.payment_method} /></td>
                             <td style={{ padding:"12px 14px",fontWeight:700,color:"#EF5350" }}>${e.amount}</td>
                             <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{e.date}</td>
-                            <td style={{ padding:"12px 14px" }}><button onClick={async()=>{ await db.patch("expenses",e.id,{eliminado:false}); setExpenses(prev=>prev.map(ex=>ex.id===e.id?{...ex,eliminado:false}:ex)); }} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"5px 10px",fontSize:12 }}>↩️ Restaurar</button></td>
+                            <td style={{ padding:"12px 14px" }}><button onClick={async()=>{ await db.patch("expenses",e.id,{eliminado:false}); setExpenses(prev=>prev.map(ex=>ex.id===e.id?{...ex,eliminado:false}:ex)); }} title="Restaurar" style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"5px 10px",fontSize:12 }}>↩️ Restaurar</button></td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -964,7 +964,7 @@ export default function LavanderiaApp() {
                         <td style={{ padding:"12px 14px" }}><PayMethod m={e.payment_method} /></td>
                         <td style={{ padding:"12px 14px",fontWeight:700,color:"#EF5350" }}>${e.amount}</td>
                         <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{e.date}</td>
-                        <td style={{ padding:"12px 14px" }}><button onClick={async()=>{ const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar este gasto?"))deleteExpense(e.id); }} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
+                        <td style={{ padding:"12px 14px" }}><button onClick={async()=>{ const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar este gasto?"))deleteExpense(e.id); }} title="Eliminar" title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1408,7 +1408,7 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.date}</td>
                               <td style={{ padding:"10px 12px",fontSize:12 }}><span style={{ color:isLate?"#EF5350":"#FFD54F",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
                               <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"#FFD54F":"#8B949E",fontSize:13 }}>{daysIn}d</span></td>
-                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={`https://wa.me/${negocioPais}${o.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))}`} target="_blank" rel="noreferrer" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:11,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
+                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={`https://wa.me/${negocioPais}${o.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))}`} target="_blank" rel="noreferrer" title="Enviar WhatsApp" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:11,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
                             </tr>;
                           })}</tbody>
                         </table>
@@ -1667,8 +1667,8 @@ export default function LavanderiaApp() {
                             </div>
                           </div>
                           <div style={{ display:"flex",gap:6 }}>
-                            <button onClick={()=>setEditingEmployee({...e})} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"5px 10px",fontSize:12 }}>✏️</button>
-                            {e.id!==user.id&&<button onClick={()=>deleteEmployee(e.id)} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button>}
+                            <button onClick={()=>setEditingEmployee({...e})} title="Editar" style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"5px 10px",fontSize:12 }}>✏️</button>
+                            {e.id!==user.id&&<button onClick={()=>deleteEmployee(e.id)} title="Eliminar" title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button>}
                           </div>
                         </div>
                       </div>)}
@@ -2012,7 +2012,7 @@ export default function LavanderiaApp() {
 
 
       {/* FLOATING CALCULATOR */}
-      <button onClick={() => setShowCalc(!showCalc)} style={{ position:"fixed",bottom:28,right:28,zIndex:300,width:56,height:56,borderRadius:"50%",border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontSize:22,cursor:"pointer",boxShadow:"0 4px 20px rgba(79,195,247,0.4)",display:"flex",alignItems:"center",justifyContent:"center" }}>🧮</button>
+      <button onClick={() => setShowCalc(!showCalc)} title="Calculadora" style={{ position:"fixed",bottom:28,right:28,zIndex:300,width:56,height:56,borderRadius:"50%",border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontSize:22,cursor:"pointer",boxShadow:"0 4px 20px rgba(79,195,247,0.4)",display:"flex",alignItems:"center",justifyContent:"center" }}>🧮</button>
 
       {showCalc && (
         <div style={{ position:"fixed",bottom:96,right:28,zIndex:300,background:"#1C2128",borderRadius:20,padding:16,border:"1px solid #30363D",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",width:260,fontFamily:"'Segoe UI',sans-serif" }}>
