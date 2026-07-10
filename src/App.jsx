@@ -109,6 +109,9 @@ export default function LavanderiaApp() {
   const [reportView, setReportView] = useState("dia");
   const [inventoryDaysFilter, setInventoryDaysFilter] = useState("");
   const [selectedInventory, setSelectedInventory] = useState([]);
+  const [abonos, setAbonos] = useState([]);
+  const [abonoModal, setAbonoModal] = useState(null);
+  const [newAbono, setNewAbono] = useState({ amount: "", payment_method: "efectivo" });
   const [expenseFilterDate, setExpenseFilterDate] = useState(today);
   const [showEliminados, setShowEliminados] = useState(false);
   const [reversadasSearch, setReversadasSearch] = useState("");
@@ -289,11 +292,12 @@ export default function LavanderiaApp() {
   useEffect(() => { db.get("employees").then(data => { if (Array.isArray(data) && data.length) { setEmployees(data); setSelectedEmp(data[0]); } setLoading(false); }); }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items")]);
+    const [o, e, c, oi, ab] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
     if (Array.isArray(oi)) { const grouped = {}; oi.forEach(item => { if (!grouped[item.order_id]) grouped[item.order_id] = []; grouped[item.order_id].push(item); }); setOrderItems(grouped); }
+    if (Array.isArray(ab)) setAbonos(ab);
   };
   useEffect(() => { if (user) loadData(); }, [user]);
 
@@ -530,6 +534,8 @@ export default function LavanderiaApp() {
   const filteredExpenses = expenseFilterDate ? expenses.filter(e => e.date === expenseFilterDate && !e.eliminado) : expenses.filter(e => !e.eliminado);
   const filteredClients = clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch));
   const isAdmin = user?.role === "admin";
+  const getAbonado = (orderId) => abonos.filter(a => a.order_id === orderId).reduce((s,a) => s + Number(a.amount), 0);
+  const getSaldo = (order) => Math.max(0, Number(order.price) - getAbonado(order.id));
 
   const s = { fontFamily: "'Segoe UI', sans-serif", minHeight: "100vh", background: "#0D1117", color: "#E6EDF3" };
   const card = { background: "#161B22", borderRadius: 14, padding: 20, border: "1px solid #30363D" };
@@ -700,7 +706,11 @@ export default function LavanderiaApp() {
                             : <span style={{ color:"#484F58",fontSize:11 }}>—</span>}
                         </td>
                         <td style={{ padding: "12px 14px" }}>
+                          {(() => { const abonado=getAbonado(o.id); const saldo=getSaldo(o); return abonado>0?<div style={{ fontSize:11 }}><div style={{ color:"#66BB6A" }}>Abonado: ${Math.round(abonado).toLocaleString()}</div><div style={{ color:saldo>0?"#FFD54F":"#66BB6A",fontWeight:700 }}>Saldo: ${Math.round(saldo).toLocaleString()}</div></div>:null; })()}
+                        </td>
+                        <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
+                            <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo" }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "5px 10px", fontSize: 12 }}>💰</button>
                             <button onClick={() => printOrder(o)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
                             <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
                           </div>
@@ -807,7 +817,11 @@ export default function LavanderiaApp() {
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontWeight: 800, fontSize: 28, color: "#66BB6A" }}>${Math.round(Number(entregaResult.price))}</div>
-                        <div style={{ fontSize: 12, color: "#8B949E" }}>Total a cobrar</div>
+                        <div style={{ fontSize: 12, color: "#8B949E" }}>Total orden</div>
+                        {getAbonado(entregaResult.id) > 0 && <>
+                          <div style={{ fontSize: 13, color: "#4FC3F7", marginTop: 4 }}>Abonado: ${Math.round(getAbonado(entregaResult.id)).toLocaleString()}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: "#FFD54F" }}>Saldo: ${Math.round(getSaldo(entregaResult)).toLocaleString()}</div>
+                        </>}
                       </div>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
@@ -1961,6 +1975,67 @@ export default function LavanderiaApp() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ABONO MODAL */}
+      {abonoModal && (
+        <div onClick={() => setAbonoModal(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,border:"1px solid #FFD54F",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 4px",fontSize:18,color:"#E6EDF3" }}>💰 Registrar Abono</h3>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}>
+                <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{abonoModal.order_number}</span>
+                <span style={{ fontWeight:600 }}>{abonoModal.client_name}</span>
+              </div>
+              <div style={{ display:"flex",gap:16,background:"#0D1117",borderRadius:8,padding:"10px 14px",fontSize:13 }}>
+                <div><div style={{ color:"#8B949E",fontSize:11 }}>TOTAL ORDEN</div><div style={{ fontWeight:800,color:"#E6EDF3" }}>${Math.round(Number(abonoModal.price)).toLocaleString()}</div></div>
+                <div><div style={{ color:"#8B949E",fontSize:11 }}>ABONADO</div><div style={{ fontWeight:800,color:"#66BB6A" }}>${Math.round(getAbonado(abonoModal.id)).toLocaleString()}</div></div>
+                <div><div style={{ color:"#8B949E",fontSize:11 }}>SALDO</div><div style={{ fontWeight:800,color:"#FFD54F" }}>${Math.round(getSaldo(abonoModal)).toLocaleString()}</div></div>
+              </div>
+            </div>
+            {abonos.filter(a=>a.order_id===abonoModal.id).length > 0 && (
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:11,color:"#8B949E",fontWeight:600,marginBottom:6 }}>ABONOS ANTERIORES</div>
+                {abonos.filter(a=>a.order_id===abonoModal.id).map(a=>(
+                  <div key={a.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"#0D1117",borderRadius:8,marginBottom:4,fontSize:12 }}>
+                    <span style={{ color:"#8B949E" }}>{a.date} · {a.employee}</span>
+                    <span style={{ fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(a.amount)).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>MONTO DEL ABONO</label>
+                <input type="number" style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #FFD54F",background:"#0D1117",color:"#E6EDF3",fontSize:16,fontWeight:700,width:"100%",boxSizing:"border-box" }} placeholder="0" value={newAbono.amount} onChange={e=>setNewAbono(p=>({...p,amount:e.target.value}))} autoFocus />
+                {newAbono.amount && Number(newAbono.amount) > 0 && <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>Saldo restante: <strong style={{ color:"#FFD54F" }}>${Math.max(0,Math.round(getSaldo(abonoModal)-Number(newAbono.amount))).toLocaleString()}</strong></div>}
+              </div>
+              <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:6 }}>MÉTODO DE PAGO</label>
+                <div style={{ display:"flex",gap:8 }}>
+                  {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"}].map(opt=>(
+                    <label key={opt.value} onClick={()=>setNewAbono(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,fontWeight:600,background:newAbono.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAbono.payment_method===opt.value?"#FFD54F":"#30363D"}`,borderRadius:8,padding:"8px 4px",color:newAbono.payment_method===opt.value?"#FFD54F":"#8B949E" }}>{opt.label}</label>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display:"flex",gap:10,marginTop:4 }}>
+                <button onClick={()=>setAbonoModal(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
+                <button onClick={async () => {
+                  if (!newAbono.amount || Number(newAbono.amount) <= 0) { alert("Ingresa un monto válido"); return; }
+                  const abono = { order_id: abonoModal.id, amount: Number(newAbono.amount), payment_method: newAbono.payment_method, date: today, employee: user.name };
+                  const res = await db.post("abonos", abono);
+                  if (Array.isArray(res) && res[0]) {
+                    setAbonos(prev => [...prev, res[0]]);
+                    setNewAbono({ amount:"", payment_method:"efectivo" });
+                    alert("✅ Abono registrado correctamente");
+                  }
+                }} disabled={!newAbono.amount||Number(newAbono.amount)<=0} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:13,opacity:!newAbono.amount||Number(newAbono.amount)<=0?0.5:1 }}>
+                  💰 Guardar Abono
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
