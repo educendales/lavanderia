@@ -415,6 +415,7 @@ export default function LavanderiaApp() {
       <table>
         <tr><td class="bold">Atendido Por:</td><td>${order.employee||"—"}</td></tr>
         <tr><td class="bold">Fecha Entrada:</td><td>${order.date||"—"}</td></tr>
+        <tr><td class="bold">Hora:</td><td>${new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'})}</td></tr>
         <tr><td class="bold">Fecha Entrega:</td><td>${order.delivery_date||"—"}</td></tr>
         <tr><td class="bold">Cliente</td><td>${order.client_name||"—"}</td></tr>
         <tr><td class="bold">Telefono</td><td>${order.phone||"—"}</td></tr>
@@ -476,6 +477,7 @@ export default function LavanderiaApp() {
         <table style="width:100%;font-size:10px">
           <tr><td><b>Atendido Por:</b></td><td>${order.employee||""}</td></tr>
           <tr><td><b>Fecha Entrada:</b></td><td>${order.date||""}</td></tr>
+          <tr><td><b>Hora:</b></td><td>${new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'})}</td></tr>
           <tr><td><b>Fecha Entrega:</b></td><td>${order.delivery_date||""}</td></tr>
           <tr><td><b>Cliente:</b></td><td>${order.client_name||""}</td></tr>
           <tr><td><b>Teléfono:</b></td><td>${order.phone||""}</td></tr>
