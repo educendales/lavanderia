@@ -130,6 +130,7 @@ export default function LavanderiaApp() {
   });
   const [newCondition, setNewCondition] = useState("");
   const [showCambiarClave, setShowCambiarClave] = useState(false);
+  const [nuevoConsecutivo, setNuevoConsecutivo] = useState("");
   const [waMensaje, setWaMensaje] = useState(() => { try { return localStorage.getItem("waMensaje") || "Hola {nombre}, le informamos que su(s) prenda(s) en Lavanderías Shaddai ya están listas para retirar. Recuerde que puede recogerlas después de las 5pm. Orden: {orden}. ¡Gracias por preferirnos!"; } catch { return ""; } });
   const [claveActual, setClaveActual] = useState("");
   const [claveNueva, setClaveNueva] = useState("");
@@ -1742,9 +1743,41 @@ export default function LavanderiaApp() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                   <div style={{ background:"#0D1117",borderRadius:12,padding:20,border:"1px solid #21262D" }}>
                     <div style={{ fontSize:32,marginBottom:8 }}>🔢</div>
-                    <div style={{ fontWeight:700,fontSize:15,marginBottom:6 }}>Reiniciar contador de recibos</div>
-                    <div style={{ fontSize:13,color:"#8B949E",marginBottom:16 }}>La próxima orden comenzará desde S0001. Las órdenes existentes no se borran.</div>
-                    <button onClick={resetOrderCounter} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:13 }}>🔢 Reiniciar contador</button>
+                    <div style={{ fontWeight:700,fontSize:15,marginBottom:6 }}>Consecutivo de recibos</div>
+                    <div style={{ fontSize:13,color:"#8B949E",marginBottom:12 }}>Elige desde qué número quieres que empiece el consecutivo. Las órdenes existentes no se borran.</div>
+                    <div style={{ marginBottom:10 }}>
+                      <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>NÚMERO DE INICIO (ej: 68957)</label>
+                      <input type="number" min={1} placeholder="Ej: 68957" value={nuevoConsecutivo} onChange={e => setNuevoConsecutivo(e.target.value)} style={{ ...inp, fontSize:15, fontWeight:700, borderColor:"rgba(239,83,80,0.3)" }} />
+                      {nuevoConsecutivo && <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>La próxima orden será: <strong style={{ color:"#4FC3F7" }}>S{String(Number(nuevoConsecutivo)).padStart(4,"0")}</strong></div>}
+                    </div>
+                    <button onClick={async () => {
+                      if (!nuevoConsecutivo || Number(nuevoConsecutivo) < 1) { alert("Ingresa un número válido"); return; }
+                      const clave = await getClave();
+                      const pwd = prompt("Clave para cambiar consecutivo:");
+                      if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
+                      if (!window.confirm(`¿Iniciar el consecutivo en S${String(Number(nuevoConsecutivo)).padStart(4,"0")}?`)) return;
+                      await fetch(`${SUPABASE_URL}/rest/v1/rpc/reset_order_seq`, {
+                        method: "POST",
+                        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+                        body: JSON.stringify({})
+                      });
+                      // Advance sequence to desired number
+                      const target = Number(nuevoConsecutivo) - 1;
+                      if (target > 0) {
+                        await fetch(`${SUPABASE_URL}/rest/v1/rpc/set_order_seq`, {
+                          method: "POST",
+                          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+                          body: JSON.stringify({ val: target })
+                        });
+                      }
+                      alert(`✅ Consecutivo actualizado. La próxima orden será S${String(Number(nuevoConsecutivo)).padStart(4,"0")}.`);
+                      setNuevoConsecutivo("");
+                    }} disabled={!nuevoConsecutivo} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:13,opacity:!nuevoConsecutivo?0.5:1 }}>
+                      🔢 Aplicar consecutivo
+                    </button>
+                    <button onClick={resetOrderCounter} style={{ ...btn,background:"transparent",color:"#484F58",border:"1px solid #21262D",width:"100%",padding:8,fontSize:12,marginTop:8 }}>
+                      Reiniciar desde S0001
+                    </button>
                   </div>
                   <div style={{ background:"#0D1117",borderRadius:12,padding:20,border:"1px solid #21262D" }}>
                     <div style={{ fontSize:32,marginBottom:8 }}>👤</div>
