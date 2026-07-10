@@ -1748,14 +1748,14 @@ export default function LavanderiaApp() {
                     <div style={{ marginBottom:10 }}>
                       <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>NÚMERO DE INICIO (ej: 68957)</label>
                       <input type="number" min={1} placeholder="Ej: 68957" value={nuevoConsecutivo} onChange={e => setNuevoConsecutivo(e.target.value)} style={{ ...inp, fontSize:15, fontWeight:700, borderColor:"rgba(239,83,80,0.3)" }} />
-                      {nuevoConsecutivo && <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>La próxima orden será: <strong style={{ color:"#4FC3F7" }}>S{String(Number(nuevoConsecutivo)).padStart(4,"0")}</strong></div>}
+                      {nuevoConsecutivo && <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>La próxima orden será: <strong style={{ color:"#4FC3F7" }}>S{String(Number(nuevoConsecutivo)).padStart(6,"0")}</strong></div>}
                     </div>
                     <button onClick={async () => {
                       if (!nuevoConsecutivo || Number(nuevoConsecutivo) < 1) { alert("Ingresa un número válido"); return; }
                       const clave = await getClave();
                       const pwd = prompt("Clave para cambiar consecutivo:");
                       if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
-                      if (!window.confirm(`¿Iniciar el consecutivo en S${String(Number(nuevoConsecutivo)).padStart(4,"0")}?`)) return;
+                      if (!window.confirm(`¿Iniciar el consecutivo en S${String(Number(nuevoConsecutivo)).padStart(6,"0")}?`)) return;
                       await fetch(`${SUPABASE_URL}/rest/v1/rpc/reset_order_seq`, {
                         method: "POST",
                         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
@@ -1770,7 +1770,7 @@ export default function LavanderiaApp() {
                           body: JSON.stringify({ val: target })
                         });
                       }
-                      alert(`✅ Consecutivo actualizado. La próxima orden será S${String(Number(nuevoConsecutivo)).padStart(4,"0")}.`);
+                      alert(`✅ Consecutivo actualizado. La próxima orden será S${String(Number(nuevoConsecutivo)).padStart(6,"0")}.`);
                       setNuevoConsecutivo("");
                     }} disabled={!nuevoConsecutivo} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:13,opacity:!nuevoConsecutivo?0.5:1 }}>
                       🔢 Aplicar consecutivo
