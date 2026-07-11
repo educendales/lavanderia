@@ -301,7 +301,12 @@ export default function LavanderiaApp() {
         const data = await res.json();
         const dominio = data[0]?.value || "";
         const actual = window.location.hostname;
-        setLicenciaOk(actual === dominio || actual === "localhost");
+        // Allow exact match, localhost, or any vercel preview URL containing the project name
+        const projectName = dominio.replace(".vercel.app", "");
+        const isOk = actual === dominio || 
+                     actual === "localhost" || 
+                     actual.startsWith(projectName);
+        setLicenciaOk(isOk);
       } catch { setLicenciaOk(false); }
     };
     checkLicencia();
