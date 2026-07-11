@@ -1291,8 +1291,7 @@ export default function LavanderiaApp() {
                         return [a.date, orden?.order_number||"", orden?.client_name||"", a.employee||"", a.payment_method||"efectivo", Math.round(Number(a.amount))];
                       }),
                       ["","","","","TOTAL", Math.round(totalAbonos)]
-                    ].map(r => r.join(",")).join("
-");
+                    ].map(r => r.join(",")).join("\n");
                     const blob = new Blob(["﻿"+csv], {type:"text/csv;charset=utf-8;"});
                     const url = URL.createObjectURL(blob); const a = document.createElement("a");
                     a.href=url; a.download=`abonos_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
