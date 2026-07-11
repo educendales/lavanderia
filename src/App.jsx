@@ -117,6 +117,8 @@ export default function LavanderiaApp() {
   const [showEliminados, setShowEliminados] = useState(false);
   const [reversadasSearch, setReversadasSearch] = useState("");
   const [showCalc, setShowCalc] = useState(false);
+  const [showAyuda, setShowAyuda] = useState(false);
+  const [ayudaSeccion, setAyudaSeccion] = useState("dashboard");
   const [calcDisplay, setCalcDisplay] = useState("0");
   const [calcPrev, setCalcPrev] = useState(null);
   const [calcOp, setCalcOp] = useState(null);
@@ -633,8 +635,11 @@ export default function LavanderiaApp() {
             </button>
           ))}
           <div style={{ marginTop: "auto" }}>
-            <button onClick={() => { setShowTotalPrendas(true); setEditingPrecio(false); }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,rgba(255,213,79,0.2),rgba(245,127,23,0.2))", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "10px 14px", marginBottom: 12, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <button onClick={() => { setShowTotalPrendas(true); setEditingPrecio(false); }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,rgba(255,213,79,0.2),rgba(245,127,23,0.2))", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "10px 14px", marginBottom: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               👕 Total Prendas
+            </button>
+            <button onClick={() => { setShowAyuda(true); setAyudaSeccion(tab); }} style={{ ...btn, width: "100%", background: "rgba(102,187,106,0.15)", color: "#66BB6A", border: "1px solid rgba(102,187,106,0.3)", padding: "8px 14px", marginBottom: 12, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              ❓ Ayuda
             </button>
             <div style={{ borderTop: "1px solid #30363D", paddingTop: 16 }}>
               <div style={{ fontSize: 12, color: "#8B949E" }}>👤 {user.name}</div>
@@ -2227,6 +2232,186 @@ export default function LavanderiaApp() {
         </div>
       )}
 
+
+      {/* AYUDA MODAL */}
+      {showAyuda && (
+        <div onClick={() => setShowAyuda(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,fontFamily:"'Segoe UI',sans-serif" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:20,width:"90%",maxWidth:780,maxHeight:"88vh",border:"1px solid #30363D",display:"flex",flexDirection:"column",overflow:"hidden" }}>
+            {/* Header */}
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px",borderBottom:"1px solid #30363D",flexShrink:0 }}>
+              <div><h2 style={{ margin:0,fontSize:20,fontWeight:800,color:"#4FC3F7" }}>❓ Manual de Usuario</h2><p style={{ margin:0,fontSize:12,color:"#8B949E" }}>Guía de uso de Lavanderías App</p></div>
+              <button onClick={()=>setShowAyuda(false)} style={{ background:"none",border:"none",color:"#8B949E",fontSize:24,cursor:"pointer" }}>✕</button>
+            </div>
+            <div style={{ display:"flex",flex:1,overflow:"hidden" }}>
+              {/* Sidebar nav */}
+              <div style={{ width:180,borderRight:"1px solid #30363D",padding:"16px 12px",flexShrink:0,overflowY:"auto" }}>
+                {[
+                  {id:"login",icon:"🔐",label:"Inicio de Sesión"},
+                  {id:"dashboard",icon:"📊",label:"Dashboard"},
+                  {id:"orders",icon:"👕",label:"Órdenes"},
+                  {id:"entregas",icon:"📦",label:"Entregas"},
+                  {id:"clients",icon:"👤",label:"Clientes"},
+                  {id:"expenses",icon:"💰",label:"Gastos"},
+                  {id:"report",icon:"📋",label:"Informes"},
+                  {id:"reversar",icon:"↩️",label:"Reversar"},
+                  {id:"config",icon:"⚙️",label:"Configuración"},
+                  {id:"calc",icon:"🧮",label:"Calculadora"},
+                  {id:"faq",icon:"❓",label:"Preguntas"},
+                ].map(s => (
+                  <button key={s.id} onClick={()=>setAyudaSeccion(s.id)} style={{ width:"100%",textAlign:"left",padding:"8px 10px",borderRadius:8,border:"none",background:ayudaSeccion===s.id?"rgba(79,195,247,0.15)":"transparent",color:ayudaSeccion===s.id?"#4FC3F7":"#8B949E",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:6,marginBottom:2 }}>{s.icon} {s.label}</button>
+                ))}
+              </div>
+              {/* Content */}
+              <div style={{ flex:1,padding:"20px 24px",overflowY:"auto",fontSize:13,lineHeight:1.7,color:"#E6EDF3" }}>
+                {ayudaSeccion==="login" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>🔐 Inicio de Sesión</h3>
+                  <p>Al abrir la app aparece la pantalla de inicio de sesión.</p>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Selecciona tu nombre en la lista desplegable.</li>
+                    <li>Escribe tu PIN (4 a 6 dígitos) y presiona Enter.</li>
+                    <li>Si el PIN es incorrecto aparecerá un mensaje en rojo.</li>
+                  </ul>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ El administrador puede crear usuarios desde ⚙️ Configuración → Usuarios y Turnos.</div>
+                </div>}
+                {ayudaSeccion==="dashboard" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>📊 Dashboard</h3>
+                  <p>Muestra un resumen del día seleccionado.</p>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li><strong>💵 Ingresos:</strong> suma de todas las órdenes del día.</li>
+                    <li><strong>📤 Gastos:</strong> suma de todos los gastos del día.</li>
+                    <li><strong>📈 Utilidad:</strong> ingresos menos gastos.</li>
+                    <li><strong>👕 Prendas:</strong> total de prendas recibidas.</li>
+                    <li><strong>Órdenes recientes:</strong> últimas 5 órdenes.</li>
+                    <li><strong>Servicios:</strong> gráfico de distribución por servicio.</li>
+                  </ul>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ Puedes cambiar la fecha con el selector en la esquina superior derecha.</div>
+                </div>}
+                {ayudaSeccion==="orders" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>👕 Órdenes</h3>
+                  <h4 style={{ color:"#8B949E" }}>Crear nueva orden</h4>
+                  <ol style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Clic en <strong>+ Nueva Orden</strong>.</li>
+                    <li>Escribe el teléfono — si el cliente existe aparece autocompletado.</li>
+                    <li>Agrega las prendas: servicio, tipo, cantidad, precio y colores.</li>
+                    <li>Marca condiciones de las prendas si aplica.</li>
+                    <li>Ajusta la fecha de entrega (por defecto 2 días).</li>
+                    <li>Elige 💾 Solo Guardar o 🖨️ Guardar e Imprimir.</li>
+                  </ol>
+                  <h4 style={{ color:"#8B949E" }}>Comprobante</h4>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>🖨️ Imprimir recibo físico</li>
+                    <li>📱 Generar imagen PNG y abrir WhatsApp</li>
+                    <li>📋 Sin recibo por ahora</li>
+                  </ul>
+                  <h4 style={{ color:"#8B949E" }}>Registrar abono 💰</h4>
+                  <p style={{ color:"#C9D1D9" }}>Clic en 💰 en la fila de la orden → ingresa monto y método de pago → el saldo se actualiza automáticamente.</p>
+                  <div style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#EF5350" }}>⚠️ Eliminar una orden requiere clave de administrador.</div>
+                </div>}
+                {ayudaSeccion==="entregas" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>📦 Entregas</h3>
+                  <ol style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Escribe el teléfono o número de orden y clic en 🔍 Buscar.</li>
+                    <li>Si tienes pistola lectora, escanea el código de barras del recibo.</li>
+                    <li>Selecciona las órdenes a entregar (una o varias).</li>
+                    <li>Elige método de pago: Efectivo, Nequi, Daviplata o Bre-b.</li>
+                    <li>Marca "Sin recibo" si el cliente no presentó el recibo físico.</li>
+                    <li>Clic en ✅ Confirmar Entrega.</li>
+                  </ol>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ Si el cliente tiene abonos, el sistema muestra automáticamente el saldo pendiente.</div>
+                </div>}
+                {ayudaSeccion==="clients" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>👤 Clientes</h3>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Busca por nombre o teléfono.</li>
+                    <li>✏️ Editar datos del cliente.</li>
+                    <li>🗑 Eliminar cliente (requiere clave admin).</li>
+                    <li>📥 Exportar lista en Excel (solo administrador).</li>
+                  </ul>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ Los clientes se crean automáticamente al crear una orden nueva.</div>
+                </div>}
+                {ayudaSeccion==="expenses" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>💰 Gastos</h3>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Filtra por fecha con el selector.</li>
+                    <li>+ Nuevo Gasto: concepto, categoría, método y monto.</li>
+                    <li>🗑 Eliminar (no se borra, pasa a eliminados).</li>
+                    <li>🗑 Ver eliminados → ↩️ Restaurar si fue por error.</li>
+                  </ul>
+                  <p style={{ color:"#8B949E" }}>Categorías: Insumos, Servicios, Mantenimiento, Otros.</p>
+                </div>}
+                {ayudaSeccion==="report" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>📋 Informes</h3>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li><strong>Informe del Día:</strong> resumen financiero, prendas y estado de órdenes.</li>
+                    <li><strong>Rango de Fechas:</strong> detalle por día o por mes con exportar Excel.</li>
+                    <li><strong>Gastos por Rango:</strong> detalle de gastos por período.</li>
+                    <li><strong>Abonos por Rango:</strong> lista de abonos recibidos.</li>
+                    <li><strong>Pagos por Método:</strong> cuánto se cobró en Efectivo, Nequi, Daviplata y Bre-b.</li>
+                    <li><strong>Inventario:</strong> prendas sin retirar con envío de WhatsApp masivo.</li>
+                    <li><strong>Órdenes Reversadas:</strong> historial de reversas.</li>
+                  </ul>
+                </div>}
+                {ayudaSeccion==="reversar" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>↩️ Reversar</h3>
+                  <p>Permite corregir errores en entregas.</p>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Busca por teléfono o número de orden.</li>
+                    <li>Orden entregada → ↩️ Reversar la devuelve a estado "Listo".</li>
+                    <li>Orden no entregada → 🗑 Eliminar orden.</li>
+                  </ul>
+                  <div style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#EF5350" }}>⚠️ Requiere clave de administrador. Las reversas quedan registradas en Informes.</div>
+                </div>}
+                {ayudaSeccion==="config" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>⚙️ Configuración</h3>
+                  <p style={{ color:"#8B949E" }}>Solo para administradores.</p>
+                  {[
+                    ["🏪 Información del Negocio","Nombre, dirección, teléfono, código de país WA y logo."],
+                    ["👕 Tipos de Prenda","Agregar, eliminar o restaurar tipos de prenda."],
+                    ["🎨 Colores","Agregar o eliminar colores disponibles."],
+                    ["⚠️ Condiciones","Agregar condiciones personalizadas de prendas."],
+                    ["🧺 Servicios","Cambiar nombre e ícono de cada servicio."],
+                    ["💰 Precios por defecto","Precios por servicio y prenda para auto-completar al crear órdenes."],
+                    ["👥 Usuarios y Turnos","Crear, editar y eliminar usuarios del sistema."],
+                    ["🖨️ Texto del Recibo","Personalizar mensaje WA, subtítulo y texto legal del recibo."],
+                    ["🔑 Clave Administrador","Cambiar la clave de acceso administrativo."],
+                    ["⚠️ Zona de Peligro","Cambiar el consecutivo de órdenes o reiniciarlo desde S000001."],
+                  ].map(([t,d]) => <div key={t} style={{ marginBottom:10,background:"#0D1117",borderRadius:8,padding:"10px 14px" }}><div style={{ fontWeight:700,color:"#E6EDF3",marginBottom:3 }}>{t}</div><div style={{ fontSize:12,color:"#8B949E" }}>{d}</div></div>)}
+                </div>}
+                {ayudaSeccion==="calc" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>🧮 Calculadora y Total Prendas</h3>
+                  <h4 style={{ color:"#8B949E" }}>Calculadora</h4>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Clic en el botón 🧮 flotante (esquina inferior derecha).</li>
+                    <li>Puedes usar el teclado cuando está abierta.</li>
+                    <li>Operaciones: + - × ÷ %</li>
+                    <li>Escape para cerrar, C para borrar.</li>
+                  </ul>
+                  <h4 style={{ color:"#8B949E" }}>👕 Total Prendas</h4>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Estima cuántas prendas entran según los ingresos del día.</li>
+                    <li>Configura el precio promedio por prenda.</li>
+                  </ul>
+                </div>}
+                {ayudaSeccion==="faq" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>❓ Preguntas Frecuentes</h3>
+                  {[
+                    ["¿Cómo cambio mi PIN?","Ve a ⚙️ Configuración → Usuarios y Turnos → clic en ✏️ de tu usuario."],
+                    ["¿Cómo imprimo un recibo antiguo?","Ve a Órdenes, busca la orden y clic en 🖨️."],
+                    ["¿Qué pasa si elimino un gasto por error?","Ve a Gastos → 🗑 Ver eliminados → ↩️ Restaurar."],
+                    ["¿Puedo cambiar el número de orden?","Sí. ⚙️ Configuración → Zona de Peligro → ingresa el número deseado."],
+                    ["¿Cómo envío WhatsApp a varios clientes?","Informes → Inventario → selecciona con checkboxes → 📱 Enviar WA."],
+                    ["¿Qué es un abono?","Pago parcial antes de retirar. El saldo se descuenta al entregar."],
+                    ["¿Cómo cambio el logo?","⚙️ Configuración → Información del Negocio → 📁 Subir logo."],
+                  ].map(([q,a]) => <div key={q} style={{ marginBottom:14,borderBottom:"1px solid #21262D",paddingBottom:12 }}>
+                    <div style={{ fontWeight:700,color:"#4FC3F7",marginBottom:4 }}>▶ {q}</div>
+                    <div style={{ fontSize:12,color:"#C9D1D9" }}>{a}</div>
+                  </div>)}
+                </div>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FLOATING CALCULATOR */}
       <button onClick={() => setShowCalc(!showCalc)} title="Calculadora" style={{ position:"fixed",bottom:28,right:28,zIndex:300,width:56,height:56,borderRadius:"50%",border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontSize:22,cursor:"pointer",boxShadow:"0 4px 20px rgba(79,195,247,0.4)",display:"flex",alignItems:"center",justifyContent:"center" }}>🧮</button>
