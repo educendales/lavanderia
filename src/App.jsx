@@ -1253,6 +1253,117 @@ export default function LavanderiaApp() {
                 })()}
               </div>
 
+              {/* ABONOS POR RANGO */}
+              <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#FFD54F" }}>💰 Abonos por Rango de Fechas</h3>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                </div>
+                {(() => {
+                  const abonosRango = abonos.filter(a => a.date >= reportFrom && a.date <= reportTo);
+                  const totalAbonos = abonosRango.reduce((s,a) => s + Number(a.amount), 0);
+
+                  // Group by day
+                  const byDay = {};
+                  abonosRango.forEach(a => {
+                    if (!byDay[a.date]) byDay[a.date] = { total: 0, items: [] };
+                    byDay[a.date].total += Number(a.amount);
+                    byDay[a.date].items.push(a);
+                  });
+                  const sortedDays = Object.keys(byDay).sort();
+
+                  // By payment method
+                  const byMetodo = { efectivo:0, nequi:0, daviplata:0, breb:0 };
+                  abonosRango.forEach(a => { byMetodo[a.payment_method||"efectivo"] = (byMetodo[a.payment_method||"efectivo"]||0) + Number(a.amount); });
+
+                  const exportAbonos = () => {
+                    const csv = [
+                      ["Fecha","Orden","Cliente","Empleado","Metodo","Monto"],
+                      ...abonosRango.map(a => {
+                        const orden = orders.find(o => o.id === a.order_id);
+                        return [a.date, orden?.order_number||"", orden?.client_name||"", a.employee||"", a.payment_method||"efectivo", Math.round(Number(a.amount))];
+                      }),
+                      ["","","","","TOTAL", Math.round(totalAbonos)]
+                    ].map(r => r.join(",")).join("
+");
+                    const blob = new Blob(["﻿"+csv], {type:"text/csv;charset=utf-8;"});
+                    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                    a.href=url; a.download=`abonos_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                  };
+
+                  return abonosRango.length === 0
+                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay abonos en este rango de fechas</p>
+                    : <>
+                        {/* KPIs */}
+                        <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:20,color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total abonado</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:20,color:"#4FC3F7" }}>{abonosRango.length}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total abonos</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
+                            <div style={{ fontWeight:800,fontSize:20,color:"#66BB6A" }}>{new Set(abonosRango.map(a=>a.order_id)).size}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Órdenes con abono</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FF8A65" }}>
+                            <div style={{ fontWeight:800,fontSize:20,color:"#FF8A65" }}>{sortedDays.length}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Días con abonos</div>
+                          </div>
+                        </div>
+
+                        {/* Por método */}
+                        <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:16 }}>
+                          {[{k:"efectivo",l:"💵 Efectivo",c:"#66BB6A"},{k:"nequi",l:"📱 Nequi",c:"#C792EA"},{k:"daviplata",l:"💜 Daviplata",c:"#667EEA"},{k:"breb",l:"🔵 Bre-b",c:"#4FC3F7"}].filter(m=>byMetodo[m.k]>0).map(m=>(
+                            <div key={m.k} style={{ background:m.c+"15",border:`1px solid ${m.c}40`,borderRadius:10,padding:"8px 14px" }}>
+                              <div style={{ fontSize:11,color:"#8B949E" }}>{m.l}</div>
+                              <div style={{ fontWeight:800,color:m.c }}>${Math.round(byMetodo[m.k]).toLocaleString()}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                          <button onClick={exportAbonos} style={{ ...btn,background:"rgba(255,213,79,0.15)",color:"#FFD54F",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                        </div>}
+
+                        {/* Tabla detalle */}
+                        <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                            <thead><tr style={{ background:"#21262D" }}>
+                              {["Fecha","# Orden","Cliente","Empleado","Método","Monto"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
+                            </tr></thead>
+                            <tbody>
+                              {abonosRango.map(a => {
+                                const orden = orders.find(o => o.id === a.order_id);
+                                return <tr key={a.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                  <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{a.date}</td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:12 }}>{orden?.order_number||"—"}</span></td>
+                                  <td style={{ padding:"10px 12px",fontWeight:600 }}>{orden?.client_name||"—"}</td>
+                                  <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{a.employee||"—"}</td>
+                                  <td style={{ padding:"10px 12px" }}><PayMethod m={a.payment_method||"efectivo"} /></td>
+                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#FFD54F" }}>${Math.round(Number(a.amount)).toLocaleString()}</td>
+                                </tr>;
+                              })}
+                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                                <td colSpan={5} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td style={{ padding:"10px 12px",color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </>;
+                })()}
+              </div>
+
               {/* PAGOS POR MÉTODO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
                 <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#C792EA" }}>💳 Pagos por Método — Rango de Fechas</h3>
