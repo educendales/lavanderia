@@ -717,7 +717,15 @@ export default function LavanderiaApp() {
                   <input type="date" value={orderFilterDate} onChange={e => setOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 13 }} />
                   {orderFilterDate && <button onClick={() => setOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
                 </div>
-                <button onClick={() => setModal("newOrder")} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
+                <button onClick={() => {
+                  const defaultSvc = emptyItem.service;
+                  const defaultType = emptyItem.garment_type;
+                  const priceByService = precioByService[defaultSvc]?.[defaultType];
+                  const priceDefault = precioDefaults[defaultType];
+                  const defaultPrice = priceByService || priceDefault || "";
+                  setItems([{ ...emptyItem, price: defaultPrice }]);
+                  setModal("newOrder");
+                }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
               </div>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
