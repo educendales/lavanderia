@@ -61,6 +61,7 @@ const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; retu
 
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
+  const [licenciaOk, setLicenciaOk] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [pin, setPin] = useState("");
@@ -290,6 +291,21 @@ export default function LavanderiaApp() {
   };
 
   useEffect(() => { db.get("employees").then(data => { if (Array.isArray(data) && data.length) { setEmployees(data); setSelectedEmp(data[0]); } setLoading(false); }); }, []);
+
+  useEffect(() => {
+    const checkLicencia = async () => {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.dominio_autorizado&select=value`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+        });
+        const data = await res.json();
+        const dominio = data[0]?.value || "";
+        const actual = window.location.hostname;
+        setLicenciaOk(actual === dominio || actual === "localhost");
+      } catch { setLicenciaOk(false); }
+    };
+    checkLicencia();
+  }, []);
 
   const loadData = async () => {
     const [o, e, c, oi, ab] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos")]);
@@ -543,6 +559,17 @@ export default function LavanderiaApp() {
   const inp = { padding: "10px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14, width: "100%", boxSizing: "border-box" };
 
   if (loading) return <div style={{ minHeight: "100vh", background: "#0D1117", display: "flex", alignItems: "center", justifyContent: "center", color: "#4FC3F7", fontSize: 18 }}>🫧 Cargando...</div>;
+
+  if (licenciaOk === false) return (
+    <div style={{ minHeight: "100vh", background: "#0D1117", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
+      <div style={{ background: "#161B22", borderRadius: 20, padding: "48px 40px", width: 380, border: "1px solid rgba(239,83,80,0.4)", textAlign: "center" }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ color: "#EF5350", fontSize: 22, fontWeight: 800, margin: "0 0 12px" }}>Acceso No Autorizado</h2>
+        <p style={{ color: "#8B949E", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>Esta aplicación no está autorizada para funcionar en este dominio.</p>
+        <p style={{ color: "#484F58", fontSize: 12 }}>Si crees que es un error contacta al administrador del sistema.</p>
+      </div>
+    </div>
+  );
 
   if (!user) return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#0F2027,#203A43,#2C5364)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
