@@ -561,15 +561,17 @@ export default function LavanderiaApp() {
     const hora = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
     const line = "-".repeat(32);
     const dline = "=".repeat(32);
-    const center = (txt) => { const t = String(txt); const pad = Math.max(0, Math.floor((32 - t.length) / 2)); return " ".repeat(pad) + t; };
-    const right = (left, right) => { const r = String(right); const l = String(left); const spaces = Math.max(1, 32 - l.length - r.length); return l + " ".repeat(spaces) + r; };
+    const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"?");
+    const center = (txt) => { const t = normalize(String(txt)); const pad = Math.max(0, Math.floor((32 - t.length) / 2)); return " ".repeat(pad) + t; };
+    const right = (left, right) => { const r = normalize(String(right)); const l = normalize(String(left)); const spaces = Math.max(1, 32 - l.length - r.length); return l + " ".repeat(spaces) + r; };
+
 
     const lines = [
       center("Factura No.: " + (order.order_number?.replace("S","") || "")),
       "",
-      center(negocioNombre.toUpperCase()),
-      center(negocioDireccion),
-      center(reciboSubtitulo),
+      center(normalize(negocioNombre).toUpperCase()),
+      center(normalize(negocioDireccion)),
+      center(normalize(reciboSubtitulo)),
       "",
       center("*" + (order.order_number||"") + "*"),
       "",
