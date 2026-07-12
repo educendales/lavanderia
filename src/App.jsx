@@ -597,7 +597,18 @@ export default function LavanderiaApp() {
     data += normalize(negocioNombre).toUpperCase() + LF;
     data += BIG_OFF + BOLD_OFF;
     data += normalize(negocioDireccion) + LF;
-    data += normalize(reciboSubtitulo) + LF;
+    // Wrap subtitulo
+    const subWords = normalize(reciboSubtitulo).split(" ");
+    let subLine = "";
+    subWords.forEach(word => {
+      if ((subLine + " " + word).trim().length <= W) {
+        subLine = (subLine + " " + word).trim();
+      } else {
+        data += subLine + LF;
+        subLine = word;
+      }
+    });
+    if (subLine) data += subLine + LF;
     data += LF;
 
     // Order number big
@@ -649,15 +660,21 @@ export default function LavanderiaApp() {
 
     // Totals
     data += LF;
-    data += BOLD_ON + BIG_ON;
+    data += BOLD_ON;
     data += rpad("Total a Pagar:", "$" + Math.round(Number(order.price)).toLocaleString('es-CO')) + LF;
-    data += BIG_OFF + BOLD_OFF;
+    data += BOLD_OFF;
     data += rpad("No. Piezas:", String(order.garments)) + LF;
     data += LINE + LF;
 
     if (order.notes) {
       data += "Obs: " + normalize(order.notes) + LF;
       data += LINE + LF;
+    }
+
+    // Observations
+    if (order.notes) {
+      data += LEFT + LINE + LF;
+      data += "Obs: " + normalize(order.notes) + LF;
     }
 
     // Footer
@@ -667,12 +684,12 @@ export default function LavanderiaApp() {
     data += BOLD_OFF + LEFT;
     data += LF;
 
-    // Legal text small
-    data += SMALL;
+    // Legal text - small and centered
+    data += CENTER + SMALL;
     const legalNorm = normalize(reciboLegal);
-    const words = legalNorm.split(" ");
+    const legalWords = legalNorm.split(" ");
     let line2 = "";
-    words.forEach(word => {
+    legalWords.forEach(word => {
       if ((line2 + " " + word).trim().length <= W) {
         line2 = (line2 + " " + word).trim();
       } else {
@@ -681,7 +698,7 @@ export default function LavanderiaApp() {
       }
     });
     if (line2) data += line2 + LF;
-    data += NORMAL_FONT;
+    data += NORMAL_FONT + LEFT;
     data += LF + LF + LF;
     data += CUT;
 
