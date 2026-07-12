@@ -398,25 +398,33 @@ export default function LavanderiaApp() {
 
   const printOrder = (order, itemsMap) => {
     const its = (itemsMap || orderItems)[order.id] || [];
-    const w = window.open("", "_blank", "width=320,height=600");
+    const w = window.open("", "_blank", "width=400,height=800");
     w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recibo ${order.order_number||""}</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/barcodes/JsBarcode.code128.min.js"><\/script>
     <style>
       * { margin:0; padding:0; box-sizing:border-box; }
       #barcode { display: block; margin: 4px auto; }
-      body { font-family: 'Courier New', monospace; font-size: 11px; width: 80mm; padding: 4mm; color: #000; }
+      body { font-family: 'Courier New', monospace; font-size: 13px; width: 72mm; margin: 0 auto; padding: 2mm; color: #000; }
       .center { text-align: center; }
       .bold { font-weight: bold; }
-      .big { font-size: 16px; font-weight: bold; }
-      .huge { font-size: 22px; font-weight: bold; letter-spacing: 2px; margin: 6px 0; }
+      .big { font-size: 18px; font-weight: bold; }
+      .huge { font-size: 26px; font-weight: bold; letter-spacing: 2px; margin: 8px 0; }
       .line { border-top: 1px dashed #000; margin: 6px 0; }
       .line-solid { border-top: 1px solid #000; margin: 4px 0; }
-      table { width: 100%; border-collapse: collapse; font-size: 10px; }
-      td { padding: 2px 0; vertical-align: top; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      td { padding: 3px 1px; vertical-align: top; }
       .right { text-align: right; }
-      .small { font-size: 9px; }
-      .legal { font-size: 8px; text-align: center; margin-top: 6px; line-height: 1.3; }
-      @media print { body { margin: 0; } }
+      .small { font-size: 11px; }
+      .legal { font-size: 10px; text-align: justify; margin-top: 6px; line-height: 1.4; }
+      @media print { 
+        * { -webkit-print-color-adjust: exact; }
+        body { margin: 0; width: 72mm; } 
+        @page { 
+          margin: 2mm; 
+          size: 80mm auto;
+        }
+      }
+      @page { size: 80mm auto; margin: 2mm; }
     </style></head><body>
       <div class="center">
         <div class="bold" style="font-size:13px">Factura No. : &nbsp;&nbsp;&nbsp; ${order.order_number?.replace("S","") || ""}</div>
@@ -484,7 +492,10 @@ export default function LavanderiaApp() {
     </body></html>`);
     w.document.close();
     w.focus();
-    setTimeout(() => { w.print(); }, 400);
+    setTimeout(() => {
+        w.document.title = "";
+        w.print();
+      }, 800);
   };
 
   const generateReciboImage = (order, itemsMap) => {
