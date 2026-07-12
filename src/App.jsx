@@ -631,8 +631,7 @@ export default function LavanderiaApp() {
       if (!qz) { alert("QZ Tray no está disponible. Usando impresión normal..."); printOrderQZ(order, itemsMap); return; }
       await qz.websocket.connect();
       const config = qz.configs.create("BIXOLON SRP-330II");
-      const data = [{ type: 'raw', format: 'plain', data: lines.join("
-") }];
+      const data = [{ type: 'raw', format: 'plain', data: lines.join("\n") }];
       await qz.print(config, data);
       await qz.websocket.disconnect();
     } catch(e) {
