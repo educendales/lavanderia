@@ -398,60 +398,57 @@ export default function LavanderiaApp() {
 
   const printOrder = (order, itemsMap) => {
     const its = (itemsMap || orderItems)[order.id] || [];
+    const hora = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
     const w = window.open("", "_blank", "width=400,height=800");
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Recibo ${order.order_number||""}</title>
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title></title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/barcodes/JsBarcode.code128.min.js"><\/script>
     <style>
       * { margin:0; padding:0; box-sizing:border-box; }
-      #barcode { display: block; margin: 4px auto; }
-      body { font-family: 'Courier New', monospace; font-size: 13px; width: 72mm; margin: 0 auto; padding: 2mm; color: #000; }
-      .center { text-align: center; }
-      .bold { font-weight: bold; }
-      .big { font-size: 18px; font-weight: bold; }
-      .huge { font-size: 26px; font-weight: bold; letter-spacing: 2px; margin: 8px 0; }
-      .line { border-top: 1px dashed #000; margin: 6px 0; }
-      .line-solid { border-top: 1px solid #000; margin: 4px 0; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      td { padding: 3px 1px; vertical-align: top; }
-      .right { text-align: right; }
-      .small { font-size: 11px; }
-      .legal { font-size: 10px; text-align: justify; margin-top: 6px; line-height: 1.4; }
-      @media print { 
-        * { -webkit-print-color-adjust: exact; }
-        body { margin: 0; width: 72mm; } 
-        @page { 
-          margin: 2mm; 
-          size: 80mm auto;
-        }
+      html, body { width:80mm; }
+      body {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 13px;
+        color: #000;
+        background: #fff;
+        padding: 2mm 3mm;
+        width: 80mm;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
-      @page { size: 80mm auto; margin: 2mm; }
+      .center { text-align: center; }
+      .right { text-align: right; }
+      .bold { font-weight: bold; }
+      .big { font-size: 16px; font-weight: bold; }
+      .huge { font-size: 24px; font-weight: bold; letter-spacing: 3px; margin: 6px 0; }
+      .line { border-top: 1px dashed #000; margin: 5px 0; }
+      .line-solid { border-top: 1px solid #000; margin: 3px 0; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      td { padding: 2px 1px; vertical-align: top; }
+      .small { font-size: 11px; }
+      .legal { font-size: 10px; text-align: justify; margin-top: 4px; line-height: 1.35; }
+      #barcode { display: block; width: 100%; max-width: 180px; margin: 4px auto; }
+      @page { size: 80mm auto; margin: 0; }
+      @media print {
+        html, body { width: 80mm; margin: 0; padding: 2mm 3mm; }
+      }
     </style></head><body>
       <div class="center">
-        <div class="bold" style="font-size:13px">Factura No. : &nbsp;&nbsp;&nbsp; ${order.order_number?.replace("S","") || ""}</div>
-        <br/>
-        ${logoEnRecibo && negocioLogo ? `<img src="${negocioLogo}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;margin-bottom:6px" />` : ''}
+        <div style="font-size:11px">Factura No.: ${order.order_number?.replace("S","") || ""}</div>
+        ${logoEnRecibo && negocioLogo ? `<img src="${negocioLogo}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;margin:4px 0" />` : ''}
         <div class="big">${negocioNombre.toUpperCase()}</div>
-        <br/>
-        <div>${negocioDireccion}</div>
-        <div>${reciboSubtitulo}</div>
-        <br/>
+        <div style="font-size:11px;margin-top:2px">${negocioDireccion}</div>
+        <div style="font-size:11px">${reciboSubtitulo}</div>
         <div class="huge">*${order.order_number||""}*</div>
-        <svg id="barcode" style="width:100%;max-width:200px"></svg>
+        <svg id="barcode"></svg>
       </div>
       <script>
-        JsBarcode("#barcode", "${order.order_number||''}", {
-          format: "CODE128",
-          width: 2,
-          height: 50,
-          displayValue: false,
-          margin: 4
-        });
+        JsBarcode("#barcode","${order.order_number||''}",{format:"CODE128",width:2,height:48,displayValue:false,margin:2});
       <\/script>
       <div class="line"></div>
       <table>
         <tr><td class="bold">Atendido Por:</td><td>${order.employee||"—"}</td></tr>
         <tr><td class="bold">Fecha Entrada:</td><td>${order.date||"—"}</td></tr>
-        <tr><td class="bold">Hora:</td><td>${new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'})}</td></tr>
+        <tr><td class="bold">Hora:</td><td>${hora}</td></tr>
         <tr><td class="bold">Fecha Entrega:</td><td>${order.delivery_date||"—"}</td></tr>
         <tr><td class="bold">Cliente</td><td>${order.client_name||"—"}</td></tr>
         <tr><td class="bold">Telefono</td><td>${order.phone||"—"}</td></tr>
@@ -459,43 +456,38 @@ export default function LavanderiaApp() {
       <div class="line"></div>
       <table>
         <tr>
-          <td class="bold" style="width:35%">Prenda</td>
-          <td class="bold" style="width:30%">Servicio</td>
+          <td class="bold" style="width:36%">Prenda</td>
+          <td class="bold" style="width:28%">Servicio</td>
           <td class="bold right" style="width:10%">Cant</td>
-          <td class="bold right" style="width:25%">Total</td>
+          <td class="bold right" style="width:26%">Total</td>
         </tr>
         <tr><td colspan="4"><div class="line-solid"></div></td></tr>
         ${its.map(it => {
-          const svcLabel = it.service ? (it.service === 'lavado_normal' ? 'LAV. NORMAL' : it.service === 'planchado' ? 'PLANCHADO' : it.service === 'lavado_express' ? 'EXPRESS' : it.service === 'secado' ? 'SECADO' : it.service.toUpperCase()) : '';
+          const svcLabel = it.service === 'lavado_normal' ? 'LAV. NORMAL' : it.service === 'planchado' ? 'PLANCHADO' : it.service === 'tintura' ? 'TINTURA' : it.service === 'secado' ? 'SECADO' : (it.service||"").toUpperCase();
           const total = Math.round(Number(it.price) * Number(it.quantity));
-          const color = it.color ? it.color.toUpperCase().substring(0,12) : '';
+          const color = it.color ? it.color.toUpperCase().substring(0,14) : '';
           return `<tr>
-            <td>${(it.garment_type||"").toUpperCase().substring(0,12)}</td>
+            <td>${(it.garment_type||"").toUpperCase().substring(0,13)}</td>
             <td>${svcLabel}</td>
             <td class="right">${it.quantity}</td>
-            <td class="right">$ ${total.toLocaleString('es-CO')}</td>
-          </tr>
-          ${color ? `<tr><td colspan="2" class="small">${color}</td><td colspan="2"></td></tr>` : ''}
-          <tr><td colspan="4"><div style="border-top:1px dashed #ccc;margin:1px 0"></div></td></tr>`;
+            <td class="right">$${total.toLocaleString('es-CO')}</td>
+          </tr>${color ? `<tr><td colspan="4" class="small">${color}</td></tr>` : ''}<tr><td colspan="4"><div class="line"></div></td></tr>`;
         }).join('')}
       </table>
       <div class="line"></div>
       <table>
-        <tr><td class="bold big">Total a Pagar</td><td class="right bold big">$ ${Math.round(Number(order.price)).toLocaleString('es-CO')}</td></tr>
+        <tr><td class="bold big">Total a Pagar</td><td class="right bold big">$${Math.round(Number(order.price)).toLocaleString('es-CO')}</td></tr>
         <tr><td class="bold">No. Piezas</td><td class="right bold">${order.garments}</td></tr>
       </table>
       ${order.notes ? `<div class="line"></div><div class="small"><b>Obs:</b> ${order.notes}</div>` : ''}
       <div class="line"></div>
       <div class="small center">RESPONDEMOS POR SUS PRENDAS SOLO POR 30 DIAS</div>
       <div class="legal">${reciboLegal}</div>
-      <br/><br/><br/>
+      <br/><br/>
     </body></html>`);
     w.document.close();
     w.focus();
-    setTimeout(() => {
-        w.document.title = "";
-        w.print();
-      }, 800);
+    setTimeout(() => { w.print(); }, 900);
   };
 
   const generateReciboImage = (order, itemsMap) => {
