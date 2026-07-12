@@ -559,92 +559,144 @@ export default function LavanderiaApp() {
   const printOrderQZ = async (order, itemsMap) => {
     const its = (itemsMap || orderItems)[order.id] || [];
     const hora = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
-    const W = 42;
-    const line = "-".repeat(W);
     const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"");
-    const center = (txt) => { const t = normalize(String(txt)); const pad = Math.max(0, Math.floor((W - t.length) / 2)); return " ".repeat(pad) + t; };
-    const rpad = (left, right) => { const r = normalize(String(right)); const l = normalize(String(left)); const spaces = Math.max(1, W - l.length - r.length); return l + " ".repeat(spaces) + r; };
 
+    // ESC/POS commands
+    const ESC = "\x1B";
+    const GS = "\x1D";
+    const RESET = ESC + "@";
+    const CENTER = ESC + "a\x01";
+    const LEFT = ESC + "a\x00";
+    const BOLD_ON = ESC + "E\x01";
+    const BOLD_OFF = ESC + "E\x00";
+    const BIG_ON = GS + "!\x11";   // double width + double height
+    const BIG_OFF = GS + "!\x00";
+    const SMALL = ESC + "M\x01";   // small font
+    const NORMAL_FONT = ESC + "M\x00";
+    const CUT = GS + "V\x41\x00";
+    const LF = "\n";
+    const LINE = "-".repeat(42);
+    const W = 42;
 
-    const lines = [
-      center("Factura No.: " + (order.order_number?.replace("S","") || "")),
-      "",
-      center(normalize(negocioNombre).toUpperCase()),
-      center(normalize(negocioDireccion)),
-      center(normalize(reciboSubtitulo)),
-      "",
-      center("*" + (order.order_number||"") + "*"),
-      "",
-      line,
-      rpad("Atendido Por:", normalize(order.employee||"")),
-      rpad("Fecha Entrada:", order.date||"—"),
-      rpad("Hora:", hora),
-      rpad("Fecha Entrega:", order.delivery_date||"—"),
-      rpad("Cliente:", normalize(order.client_name||"")),
-      rpad("Telefono:", order.phone||"—"),
-      line,
-      "Prenda         Servicio    Cant Total",
-      line,
-      ...its.flatMap(it => {
-        const svc = it.service === 'lavado_normal' ? 'LAV. NORMAL' : it.service === 'planchado' ? 'PLANCHADO' : it.service === 'tintura' ? 'TINTURA' : it.service === 'secado' ? 'SECADO' : (it.service||"").toUpperCase();
-        const total = "$" + Math.round(Number(it.price)*Number(it.quantity)).toLocaleString('es-CO');
-        const prenda = normalize(it.garment_type||"").toUpperCase().substring(0,13);
-        const cant = String(it.quantity);
-        const totalLen = total.length;
-        const cantLen = cant.length;
-        const svcLen = Math.min(svc.length, 11);
-        const svcStr = svc.substring(0,11);
-        const spaces1 = Math.max(1, 14 - prenda.length);
-        const spaces2 = Math.max(1, W - prenda.length - spaces1 - svcLen - cantLen - 1 - totalLen);
-        const row = prenda + " ".repeat(spaces1) + svcStr + " ".repeat(Math.max(1,spaces2)) + cant + " " + total;
-        const result = [row];
-        if (it.color) result.push("  " + normalize(it.color).toUpperCase());
-        result.push(line);
-        return result;
-      }),
-      "",
-      rpad("Total a Pagar:", "$" + Math.round(Number(order.price)).toLocaleString('es-CO')),
-      rpad("No. Piezas:", String(order.garments)),
-      line,
-    ];
+    const rpad = (left, right) => {
+      const l = normalize(String(left));
+      const r = normalize(String(right));
+      const spaces = Math.max(1, W - l.length - r.length);
+      return l + " ".repeat(spaces) + r;
+    };
+
+    let data = "";
+    data += RESET;
+
+    // Header - centered bold
+    data += CENTER + BOLD_ON;
+    data += "Factura No.: " + (order.order_number?.replace("S","") || "") + LF;
+    data += BOLD_OFF;
+    data += LF;
+    data += BOLD_ON + BIG_ON;
+    data += normalize(negocioNombre).toUpperCase() + LF;
+    data += BIG_OFF + BOLD_OFF;
+    data += normalize(negocioDireccion) + LF;
+    data += normalize(reciboSubtitulo) + LF;
+    data += LF;
+
+    // Order number big
+    data += BOLD_ON + BIG_ON;
+    data += "*" + (order.order_number||"") + "*" + LF;
+    data += BIG_OFF + BOLD_OFF;
+    data += LF;
+
+    // Barcode
+    data += CENTER;
+    data += GS + "h\x50";          // barcode height 80px
+    data += GS + "w\x02";          // barcode width
+    data += GS + "H\x00";          // no text below
+    data += GS + "k\x49";          // CODE128
+    const barcodeData = order.order_number || "";
+    data += String.fromCharCode(barcodeData.length) + barcodeData;
+    data += LF + LF;
+
+    // Info section - left aligned
+    data += LEFT;
+    data += LINE + LF;
+    data += rpad("Atendido Por:", normalize(order.employee||"")) + LF;
+    data += rpad("Fecha Entrada:", order.date||"") + LF;
+    data += rpad("Hora:", hora) + LF;
+    data += rpad("Fecha Entrega:", order.delivery_date||"") + LF;
+    data += rpad("Cliente:", normalize(order.client_name||"")) + LF;
+    data += rpad("Telefono:", order.phone||"") + LF;
+    data += LINE + LF;
+
+    // Items header
+    data += BOLD_ON;
+    data += "Prenda         Servicio  Cant  Total" + LF;
+    data += BOLD_OFF;
+    data += LINE + LF;
+
+    // Items
+    its.forEach(it => {
+      const svc = it.service === 'lavado_normal' ? 'LAV.NOR' : it.service === 'planchado' ? 'PLANCH' : it.service === 'tintura' ? 'TINTURA' : it.service === 'secado' ? 'SECADO' : (it.service||"").toUpperCase().substring(0,7);
+      const total = "$" + Math.round(Number(it.price)*Number(it.quantity)).toLocaleString('es-CO');
+      const prenda = normalize(it.garment_type||"").toUpperCase().substring(0,13);
+      const cant = String(it.quantity);
+      const p1 = Math.max(1, 15 - prenda.length);
+      const p2 = Math.max(1, 10 - svc.length);
+      const p3 = Math.max(1, 6 - cant.length);
+      data += prenda + " ".repeat(p1) + svc + " ".repeat(p2) + cant + " ".repeat(p3) + total + LF;
+      if (it.color) data += "  " + normalize(it.color).toUpperCase() + LF;
+      data += LINE + LF;
+    });
+
+    // Totals
+    data += LF;
+    data += BOLD_ON + BIG_ON;
+    data += rpad("Total a Pagar:", "$" + Math.round(Number(order.price)).toLocaleString('es-CO')) + LF;
+    data += BIG_OFF + BOLD_OFF;
+    data += rpad("No. Piezas:", String(order.garments)) + LF;
+    data += LINE + LF;
 
     if (order.notes) {
-      lines.push("Obs: " + order.notes);
-      lines.push(line);
+      data += "Obs: " + normalize(order.notes) + LF;
+      data += LINE + LF;
     }
 
-    lines.push(center("RESPONDEMOS POR SUS PRENDAS"));
-    lines.push(center("SOLO POR 30 DIAS"));
-    lines.push("");
+    // Footer
+    data += CENTER + BOLD_ON;
+    data += "RESPONDEMOS POR SUS PRENDAS" + LF;
+    data += "SOLO POR 30 DIAS" + LF;
+    data += BOLD_OFF + LEFT;
+    data += LF;
 
-    // Word wrap legal text at 32 chars
-    const words = reciboLegal.split(" ");
-    let currentLine = "";
+    // Legal text small
+    data += SMALL;
+    const legalNorm = normalize(reciboLegal);
+    const words = legalNorm.split(" ");
+    let line2 = "";
     words.forEach(word => {
-      if ((currentLine + " " + word).trim().length <= 32) {
-        currentLine = (currentLine + " " + word).trim();
+      if ((line2 + " " + word).trim().length <= W) {
+        line2 = (line2 + " " + word).trim();
       } else {
-        lines.push(currentLine);
-        currentLine = word;
+        data += line2 + LF;
+        line2 = word;
       }
     });
-    if (currentLine) lines.push(currentLine);
-    lines.push(""); lines.push(""); lines.push("");
+    if (line2) data += line2 + LF;
+    data += NORMAL_FONT;
+    data += LF + LF + LF;
+    data += CUT;
 
     try {
-      const qz = window.qz;
-      if (!qz) { alert("QZ Tray no está disponible. Usando impresión normal..."); printOrderQZ(order, itemsMap); return; }
-      await qz.websocket.connect();
-      const config = qz.configs.create("BIXOLON SRP-330II");
-      const data = [{ type: 'raw', format: 'plain', data: lines.join("\n") }];
-      await qz.print(config, data);
-      await qz.websocket.disconnect();
+      if (!window.qz) throw new Error("QZ no disponible");
+      if (!window.qz.websocket.isActive()) await window.qz.websocket.connect();
+      const config = window.qz.configs.create("BIXOLON SRP-330II");
+      await window.qz.print(config, [{ type: 'raw', format: 'plain', data: data }]);
     } catch(e) {
       console.error("QZ Error:", e);
-      alert("Error con QZ Tray: " + e.message + ". Usando impresión normal...");
-      printOrderQZ(order, itemsMap);
+      alert("Error con QZ Tray: " + e.message + ". Usando impresion normal...");
+      printOrder(order, itemsMap);
     }
   };
+
 
   const exportClients = () => {
     const csv = [["Nombre","Telefono","Email","Total Ordenes"],...clients.map(c=>[c.name||"",c.phone||"",c.email||"",c.total_orders||0])].map(r=>r.join(",")).join("\n");
