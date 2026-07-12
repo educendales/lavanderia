@@ -62,6 +62,7 @@ const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; retu
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
   const [licenciaOk, setLicenciaOk] = useState(null);
+  const [qzReady, setQzReady] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [pin, setPin] = useState("");
@@ -291,6 +292,18 @@ export default function LavanderiaApp() {
     if (!window.confirm("¿Eliminar este usuario?")) return;
     await db.delete("employees", id); setEmployees(prev => prev.filter(e => e.id !== id));
   };
+
+  useEffect(() => {
+    // Load QZ Tray
+    if (!window.qz) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js';
+      script.onload = () => { setQzReady(true); };
+      document.head.appendChild(script);
+    } else {
+      setQzReady(true);
+    }
+  }, []);
 
   useEffect(() => { db.get("employees").then(data => { if (Array.isArray(data) && data.length) { setEmployees(data); setSelectedEmp(data[0]); } setLoading(false); }); }, []);
 
@@ -543,6 +556,92 @@ export default function LavanderiaApp() {
     });
   };
 
+  const printOrderQZ = async (order, itemsMap) => {
+    const its = (itemsMap || orderItems)[order.id] || [];
+    const hora = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
+    const line = "-".repeat(32);
+    const dline = "=".repeat(32);
+    const center = (txt) => { const t = String(txt); const pad = Math.max(0, Math.floor((32 - t.length) / 2)); return " ".repeat(pad) + t; };
+    const right = (left, right) => { const r = String(right); const l = String(left); const spaces = Math.max(1, 32 - l.length - r.length); return l + " ".repeat(spaces) + r; };
+
+    const lines = [
+      center("Factura No.: " + (order.order_number?.replace("S","") || "")),
+      "",
+      center(negocioNombre.toUpperCase()),
+      center(negocioDireccion),
+      center(reciboSubtitulo),
+      "",
+      center("*" + (order.order_number||"") + "*"),
+      "",
+      line,
+      right("Atendido Por:", order.employee||"—"),
+      right("Fecha Entrada:", order.date||"—"),
+      right("Hora:", hora),
+      right("Fecha Entrega:", order.delivery_date||"—"),
+      right("Cliente:", order.client_name||"—"),
+      right("Telefono:", order.phone||"—"),
+      line,
+      right(right("Prenda","Serv."), right("Cant","Total")),
+      line,
+      ...its.flatMap(it => {
+        const svc = it.service === 'lavado_normal' ? 'LAV.NOR' : it.service === 'planchado' ? 'PLANCH' : it.service === 'tintura' ? 'TINTURA' : it.service === 'secado' ? 'SECADO' : (it.service||"").toUpperCase();
+        const total = "$" + Math.round(Number(it.price)*Number(it.quantity)).toLocaleString('es-CO');
+        const prenda = (it.garment_type||"").toUpperCase().substring(0,10);
+        const cant = String(it.quantity);
+        const spaces1 = Math.max(1, 12 - prenda.length);
+        const spaces2 = Math.max(1, 8 - svc.length);
+        const spaces3 = Math.max(1, 4 - cant.length);
+        const row = prenda + " ".repeat(spaces1) + svc + " ".repeat(spaces2) + cant + " ".repeat(spaces3) + total;
+        const result = [row];
+        if (it.color) result.push("  " + it.color.toUpperCase());
+        result.push(line);
+        return result;
+      }),
+      "",
+      right("Total a Pagar:", "$" + Math.round(Number(order.price)).toLocaleString('es-CO')),
+      right("No. Piezas:", String(order.garments)),
+      line,
+    ];
+
+    if (order.notes) {
+      lines.push("Obs: " + order.notes);
+      lines.push(line);
+    }
+
+    lines.push(center("RESPONDEMOS POR SUS PRENDAS"));
+    lines.push(center("SOLO POR 30 DIAS"));
+    lines.push("");
+
+    // Word wrap legal text at 32 chars
+    const words = reciboLegal.split(" ");
+    let currentLine = "";
+    words.forEach(word => {
+      if ((currentLine + " " + word).trim().length <= 32) {
+        currentLine = (currentLine + " " + word).trim();
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    });
+    if (currentLine) lines.push(currentLine);
+    lines.push(""); lines.push(""); lines.push("");
+
+    try {
+      const qz = window.qz;
+      if (!qz) { alert("QZ Tray no está disponible. Usando impresión normal..."); printOrderQZ(order, itemsMap); return; }
+      await qz.websocket.connect();
+      const config = qz.configs.create("BIXOLON SRP-330II");
+      const data = [{ type: 'raw', format: 'plain', data: lines.join("
+") }];
+      await qz.print(config, data);
+      await qz.websocket.disconnect();
+    } catch(e) {
+      console.error("QZ Error:", e);
+      alert("Error con QZ Tray: " + e.message + ". Usando impresión normal...");
+      printOrderQZ(order, itemsMap);
+    }
+  };
+
   const exportClients = () => {
     const csv = [["Nombre","Telefono","Email","Total Ordenes"],...clients.map(c=>[c.name||"",c.phone||"",c.email||"",c.total_orders||0])].map(r=>r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
@@ -759,7 +858,7 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo" }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "5px 10px", fontSize: 12 }}>💰</button>
-                            <button onClick={() => printOrder(o)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
+                            <button onClick={() => printOrderQZ(o)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
                             <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
                           </div>
                         </td>
@@ -913,7 +1012,7 @@ export default function LavanderiaApp() {
                           ))}
                         </div>
                         <div style={{ display: "flex", gap: 10 }}>
-                          <button onClick={() => printOrder(entregaResult)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
+                          <button onClick={() => printOrderQZ(entregaResult)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
                       </div>
