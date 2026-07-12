@@ -559,11 +559,11 @@ export default function LavanderiaApp() {
   const printOrderQZ = async (order, itemsMap) => {
     const its = (itemsMap || orderItems)[order.id] || [];
     const hora = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
-    const line = "-".repeat(32);
-    const dline = "=".repeat(32);
-    const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"?");
-    const center = (txt) => { const t = normalize(String(txt)); const pad = Math.max(0, Math.floor((32 - t.length) / 2)); return " ".repeat(pad) + t; };
-    const right = (left, right) => { const r = normalize(String(right)); const l = normalize(String(left)); const spaces = Math.max(1, 32 - l.length - r.length); return l + " ".repeat(spaces) + r; };
+    const W = 42;
+    const line = "-".repeat(W);
+    const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"");
+    const center = (txt) => { const t = normalize(String(txt)); const pad = Math.max(0, Math.floor((W - t.length) / 2)); return " ".repeat(pad) + t; };
+    const rpad = (left, right) => { const r = normalize(String(right)); const l = normalize(String(left)); const spaces = Math.max(1, W - l.length - r.length); return l + " ".repeat(spaces) + r; };
 
 
     const lines = [
@@ -576,32 +576,35 @@ export default function LavanderiaApp() {
       center("*" + (order.order_number||"") + "*"),
       "",
       line,
-      right("Atendido Por:", order.employee||"—"),
-      right("Fecha Entrada:", order.date||"—"),
-      right("Hora:", hora),
-      right("Fecha Entrega:", order.delivery_date||"—"),
-      right("Cliente:", order.client_name||"—"),
-      right("Telefono:", order.phone||"—"),
+      rpad("Atendido Por:", normalize(order.employee||"")),
+      rpad("Fecha Entrada:", order.date||"—"),
+      rpad("Hora:", hora),
+      rpad("Fecha Entrega:", order.delivery_date||"—"),
+      rpad("Cliente:", normalize(order.client_name||"")),
+      rpad("Telefono:", order.phone||"—"),
       line,
-      right(right("Prenda","Serv."), right("Cant","Total")),
+      "Prenda         Servicio    Cant Total",
       line,
       ...its.flatMap(it => {
-        const svc = it.service === 'lavado_normal' ? 'LAV.NOR' : it.service === 'planchado' ? 'PLANCH' : it.service === 'tintura' ? 'TINTURA' : it.service === 'secado' ? 'SECADO' : (it.service||"").toUpperCase();
+        const svc = it.service === 'lavado_normal' ? 'LAV. NORMAL' : it.service === 'planchado' ? 'PLANCHADO' : it.service === 'tintura' ? 'TINTURA' : it.service === 'secado' ? 'SECADO' : (it.service||"").toUpperCase();
         const total = "$" + Math.round(Number(it.price)*Number(it.quantity)).toLocaleString('es-CO');
-        const prenda = (it.garment_type||"").toUpperCase().substring(0,10);
+        const prenda = normalize(it.garment_type||"").toUpperCase().substring(0,13);
         const cant = String(it.quantity);
-        const spaces1 = Math.max(1, 12 - prenda.length);
-        const spaces2 = Math.max(1, 8 - svc.length);
-        const spaces3 = Math.max(1, 4 - cant.length);
-        const row = prenda + " ".repeat(spaces1) + svc + " ".repeat(spaces2) + cant + " ".repeat(spaces3) + total;
+        const totalLen = total.length;
+        const cantLen = cant.length;
+        const svcLen = Math.min(svc.length, 11);
+        const svcStr = svc.substring(0,11);
+        const spaces1 = Math.max(1, 14 - prenda.length);
+        const spaces2 = Math.max(1, W - prenda.length - spaces1 - svcLen - cantLen - 1 - totalLen);
+        const row = prenda + " ".repeat(spaces1) + svcStr + " ".repeat(Math.max(1,spaces2)) + cant + " " + total;
         const result = [row];
-        if (it.color) result.push("  " + it.color.toUpperCase());
+        if (it.color) result.push("  " + normalize(it.color).toUpperCase());
         result.push(line);
         return result;
       }),
       "",
-      right("Total a Pagar:", "$" + Math.round(Number(order.price)).toLocaleString('es-CO')),
-      right("No. Piezas:", String(order.garments)),
+      rpad("Total a Pagar:", "$" + Math.round(Number(order.price)).toLocaleString('es-CO')),
+      rpad("No. Piezas:", String(order.garments)),
       line,
     ];
 
