@@ -665,16 +665,14 @@ export default function LavanderiaApp() {
     data += BOLD_OFF;
     data += rpad("No. Piezas:", String(order.garments)) + LF;
     data += LINE + LF;
-
     if (order.notes) {
       data += "Obs: " + normalize(order.notes) + LF;
       data += LINE + LF;
     }
 
-    // Observations
     if (order.notes) {
-      data += LEFT + LINE + LF;
       data += "Obs: " + normalize(order.notes) + LF;
+      data += LINE + LF;
     }
 
     // Footer
@@ -684,13 +682,14 @@ export default function LavanderiaApp() {
     data += BOLD_OFF + LEFT;
     data += LF;
 
-    // Legal text - small and centered
+    // Legal text - small font, wider wrap
+    const LEGALW = 56;
     data += CENTER + SMALL;
     const legalNorm = normalize(reciboLegal);
     const legalWords = legalNorm.split(" ");
     let line2 = "";
     legalWords.forEach(word => {
-      if ((line2 + " " + word).trim().length <= W) {
+      if ((line2 + " " + word).trim().length <= LEGALW) {
         line2 = (line2 + " " + word).trim();
       } else {
         data += line2 + LF;
