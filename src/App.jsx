@@ -2521,6 +2521,8 @@ export default function LavanderiaApp() {
                   {id:"config",icon:"⚙️",label:"Configuración"},
                   {id:"calc",icon:"🧮",label:"Calculadora"},
                   {id:"faq",icon:"❓",label:"Preguntas"},
+                  {id:"qz",icon:"🖨️",label:"Impresora QZ Tray"},
+                  {id:"informe",icon:"💳",label:"Informe Diario"},
                 ].map(s => (
                   <button key={s.id} onClick={()=>setAyudaSeccion(s.id)} style={{ width:"100%",textAlign:"left",padding:"8px 10px",borderRadius:8,border:"none",background:ayudaSeccion===s.id?"rgba(79,195,247,0.15)":"transparent",color:ayudaSeccion===s.id?"#4FC3F7":"#8B949E",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:6,marginBottom:2 }}>{s.icon} {s.label}</button>
                 ))}
@@ -2559,16 +2561,21 @@ export default function LavanderiaApp() {
                     <li>Agrega las prendas: servicio, tipo, cantidad, precio y colores.</li>
                     <li>Marca condiciones de las prendas si aplica.</li>
                     <li>Ajusta la fecha de entrega (por defecto 2 días).</li>
-                    <li>Elige 💾 Solo Guardar o 🖨️ Guardar e Imprimir.</li>
+                    <li>Elige 💾 Solo Guardar o 🖨️ Guardar e Imprimir (imprime 2 copias).</li>
                   </ol>
                   <h4 style={{ color:"#8B949E" }}>Comprobante</h4>
                   <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
-                    <li>🖨️ Imprimir recibo físico</li>
+                    <li>🖨️ Imprimir recibo físico — al crear imprime 2 copias, al reimprimir 1 copia</li>
                     <li>📱 Generar imagen PNG y abrir WhatsApp</li>
                     <li>📋 Sin recibo por ahora</li>
                   </ul>
                   <h4 style={{ color:"#8B949E" }}>Registrar abono 💰</h4>
-                  <p style={{ color:"#C9D1D9" }}>Clic en 💰 en la fila de la orden → ingresa monto y método de pago → el saldo se actualiza automáticamente.</p>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Clic en 💰 en la fila de la orden.</li>
+                    <li>Ingresa el monto y método de pago (Efectivo, Nequi, Daviplata, Bre-b).</li>
+                    <li>El saldo pendiente se actualiza automáticamente.</li>
+                    <li>Al entregar, el sistema muestra cuánto abonó y cuánto falta.</li>
+                  </ul>
                   <div style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#EF5350" }}>⚠️ Eliminar una orden requiere clave de administrador.</div>
                 </div>}
                 {ayudaSeccion==="entregas" && <div>
@@ -2656,16 +2663,52 @@ export default function LavanderiaApp() {
                     <li>Configura el precio promedio por prenda.</li>
                   </ul>
                 </div>}
+                {ayudaSeccion==="qz" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>🖨️ Impresión con QZ Tray</h3>
+                  <p style={{ color:"#8B949E",fontSize:12 }}>QZ Tray permite imprimir recibos nítidos directamente en la impresora térmica.</p>
+                  <h4 style={{ color:"#8B949E" }}>Instalación (una sola vez)</h4>
+                  <ol style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Descarga QZ Tray en <strong>qz.io/download</strong> e instálalo.</li>
+                    <li>Queda corriendo en la bandeja del sistema (ícono azul).</li>
+                    <li>La primera vez que imprimas, QZ pide permiso — clic en <strong>Allow</strong>.</li>
+                  </ol>
+                  <h4 style={{ color:"#8B949E" }}>Configurar nombre de impresora</h4>
+                  <ol style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Panel de Control → Dispositivos e impresoras.</li>
+                    <li>Copia el nombre exacto de tu impresora.</li>
+                    <li>⚙️ Configuración → Información del Negocio → 🖨️ Nombre de la Impresora → pegar y guardar.</li>
+                  </ol>
+                  <h4 style={{ color:"#8B949E" }}>Copias</h4>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>🖨️ <strong>Guardar e Imprimir</strong> → 2 copias (cliente + lavandería)</li>
+                    <li>🖨️ <strong>Botón imprimir en Órdenes</strong> → 1 copia</li>
+                    <li>🖨️ <strong>Imprimir en Entregas</strong> → 1 copia</li>
+                  </ul>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ Compatible con cualquier impresora térmica ESC/POS de 80mm. Usa Chrome o Edge.</div>
+                </div>}
+                {ayudaSeccion==="informe" && <div>
+                  <h3 style={{ color:"#4FC3F7",marginTop:0 }}>💳 Informe Diario</h3>
+                  <p style={{ color:"#C9D1D9" }}>Botón rápido en el sidebar que muestra el resumen de cobros del día.</p>
+                  <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
+                    <li>Lo recaudado por <strong>Efectivo, Nequi, Daviplata y Bre-b</strong>.</li>
+                    <li>Incluye tanto entregas como abonos del día.</li>
+                    <li>Total general = entregas + abonos.</li>
+                    <li>Usa la misma fecha del Dashboard.</li>
+                  </ul>
+                </div>}
                 {ayudaSeccion==="faq" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>❓ Preguntas Frecuentes</h3>
                   {[
-                    ["¿Cómo cambio mi PIN?","Ve a ⚙️ Configuración → Usuarios y Turnos → clic en ✏️ de tu usuario."],
-                    ["¿Cómo imprimo un recibo antiguo?","Ve a Órdenes, busca la orden y clic en 🖨️."],
-                    ["¿Qué pasa si elimino un gasto por error?","Ve a Gastos → 🗑 Ver eliminados → ↩️ Restaurar."],
-                    ["¿Puedo cambiar el número de orden?","Sí. ⚙️ Configuración → Zona de Peligro → ingresa el número deseado."],
-                    ["¿Cómo envío WhatsApp a varios clientes?","Informes → Inventario → selecciona con checkboxes → 📱 Enviar WA."],
+                    ["¿Cómo cambio mi PIN?","⚙️ Configuración → Usuarios y Turnos → ✏️ de tu usuario."],
+                    ["¿Cómo imprimo un recibo antiguo?","Órdenes → busca la orden → 🖨️ (imprime 1 copia)."],
+                    ["¿Qué pasa si elimino un gasto por error?","Gastos → 🗑 Ver eliminados → ↩️ Restaurar."],
+                    ["¿Puedo cambiar el número de orden?","⚙️ Configuración → Zona de Peligro → ingresa el número deseado."],
+                    ["¿Cómo envío WhatsApp a varios clientes?","Informes → Inventario → checkboxes → 📱 Enviar WA."],
                     ["¿Qué es un abono?","Pago parcial antes de retirar. El saldo se descuenta al entregar."],
                     ["¿Cómo cambio el logo?","⚙️ Configuración → Información del Negocio → 📁 Subir logo."],
+                    ["¿Cómo configuro la impresora?","⚙️ Configuración → Información del Negocio → 🖨️ Nombre de la Impresora."],
+                    ["¿Qué pasa si QZ Tray no está instalado?","La app usa la impresión del navegador automáticamente."],
+                    ["¿Cómo veo cuánto se cobró por Nequi hoy?","Clic en 💳 Informe Diario en el sidebar."],
                   ].map(([q,a]) => <div key={q} style={{ marginBottom:14,borderBottom:"1px solid #21262D",paddingBottom:12 }}>
                     <div style={{ fontWeight:700,color:"#4FC3F7",marginBottom:4 }}>▶ {q}</div>
                     <div style={{ fontSize:12,color:"#C9D1D9" }}>{a}</div>
