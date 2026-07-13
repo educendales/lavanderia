@@ -119,6 +119,7 @@ export default function LavanderiaApp() {
   const [reversadasSearch, setReversadasSearch] = useState("");
   const [showCalc, setShowCalc] = useState(false);
   const [showAyuda, setShowAyuda] = useState(false);
+  const [showInformeDiario, setShowInformeDiario] = useState(false);
   const [ayudaSeccion, setAyudaSeccion] = useState("dashboard");
   const [calcDisplay, setCalcDisplay] = useState("0");
   const [calcPrev, setCalcPrev] = useState(null);
@@ -809,6 +810,9 @@ export default function LavanderiaApp() {
           <div style={{ marginTop: "auto" }}>
             <button onClick={() => { setShowTotalPrendas(true); setEditingPrecio(false); }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,rgba(255,213,79,0.2),rgba(245,127,23,0.2))", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "10px 14px", marginBottom: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               👕 Total Prendas
+            </button>
+            <button onClick={() => setShowInformeDiario(true)} style={{ ...btn, width: "100%", background: "rgba(199,146,234,0.15)", color: "#C792EA", border: "1px solid rgba(199,146,234,0.3)", padding: "8px 14px", marginBottom: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              💳 Informe Diario
             </button>
             <button onClick={() => { setShowAyuda(true); setAyudaSeccion(tab); }} style={{ ...btn, width: "100%", background: "rgba(102,187,106,0.15)", color: "#66BB6A", border: "1px solid rgba(102,187,106,0.3)", padding: "8px 14px", marginBottom: 12, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               ❓ Ayuda
@@ -2412,6 +2416,80 @@ export default function LavanderiaApp() {
         </div>
       )}
 
+
+      {/* INFORME DIARIO MODAL */}
+      {showInformeDiario && (
+        <div onClick={() => setShowInformeDiario(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,fontFamily:"'Segoe UI',sans-serif" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:20,padding:28,width:420,border:"1px solid rgba(199,146,234,0.4)",boxShadow:"0 8px 40px rgba(0,0,0,0.8)" }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
+              <div>
+                <h2 style={{ margin:0,fontSize:20,fontWeight:800,color:"#C792EA" }}>💳 Informe Diario</h2>
+                <p style={{ margin:0,fontSize:12,color:"#8B949E" }}>{filterDate}</p>
+              </div>
+              <button onClick={()=>setShowInformeDiario(false)} style={{ background:"none",border:"none",color:"#8B949E",fontSize:24,cursor:"pointer" }}>✕</button>
+            </div>
+
+            {(() => {
+              const entregadasHoy = orders.filter(o => o.status === "entregado" && o.delivered_at === filterDate);
+              const metodos = [
+                { key:"efectivo", label:"💵 Efectivo", color:"#66BB6A" },
+                { key:"nequi", label:"📱 Nequi", color:"#C792EA" },
+                { key:"daviplata", label:"💜 Daviplata", color:"#667EEA" },
+                { key:"breb", label:"🔵 Bre-b", color:"#4FC3F7" },
+              ];
+              const totalGeneral = entregadasHoy.reduce((s,o) => s+Number(o.price), 0);
+              const totalAbonos = abonos.filter(a => a.date === filterDate).reduce((s,a) => s+Number(a.amount), 0);
+
+              return <>
+                {/* Totales por método */}
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16 }}>
+                  {metodos.map(m => {
+                    const total = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+Number(o.price), 0);
+                    const count = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).length;
+                    const abonosMetodo = abonos.filter(a => a.date === filterDate && (a.payment_method||"efectivo") === m.key).reduce((s,a) => s+Number(a.amount), 0);
+                    return (
+                      <div key={m.key} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${m.color}` }}>
+                        <div style={{ fontSize:13,color:"#8B949E",marginBottom:4 }}>{m.label}</div>
+                        <div style={{ fontWeight:800,fontSize:18,color:m.color }}>${Math.round(total+abonosMetodo).toLocaleString()}</div>
+                        <div style={{ fontSize:11,color:"#484F58",marginTop:2 }}>{count} entrega{count!==1?"s":""}{abonosMetodo>0?` + $${Math.round(abonosMetodo).toLocaleString()} abono`:""}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Total general */}
+                <div style={{ background:"rgba(199,146,234,0.08)",border:"1px solid rgba(199,146,234,0.3)",borderRadius:10,padding:"14px 16px",marginBottom:16 }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                    <div>
+                      <div style={{ fontSize:13,color:"#8B949E" }}>Total recaudado hoy</div>
+                      <div style={{ fontSize:11,color:"#484F58" }}>{entregadasHoy.length} entregas · {abonos.filter(a=>a.date===filterDate).length} abonos</div>
+                    </div>
+                    <div style={{ fontWeight:800,fontSize:24,color:"#C792EA" }}>${Math.round(totalGeneral+totalAbonos).toLocaleString()}</div>
+                  </div>
+                </div>
+
+                {/* Desglose entregas vs abonos */}
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16 }}>
+                  <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #66BB6A" }}>
+                    <div style={{ fontSize:11,color:"#8B949E" }}>Entregas</div>
+                    <div style={{ fontWeight:800,color:"#66BB6A" }}>${Math.round(totalGeneral).toLocaleString()}</div>
+                  </div>
+                  <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #FFD54F" }}>
+                    <div style={{ fontSize:11,color:"#8B949E" }}>Abonos</div>
+                    <div style={{ fontWeight:800,color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</div>
+                  </div>
+                </div>
+
+                {entregadasHoy.length === 0 && totalAbonos === 0 && (
+                  <p style={{ textAlign:"center",color:"#484F58",fontSize:13 }}>No hay entregas ni abonos hoy</p>
+                )}
+
+                <button onClick={()=>setShowInformeDiario(false)} style={{ width:"100%",padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#C792EA,#9B59B6)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:14 }}>Cerrar</button>
+              </>;
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* AYUDA MODAL */}
       {showAyuda && (
