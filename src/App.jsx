@@ -683,7 +683,7 @@ export default function LavanderiaApp() {
     data += LF;
 
     // Legal text - small font, wider wrap
-    const LEGALW = 56;
+    const LEGALW = 64;
     data += CENTER + SMALL;
     const legalNorm = normalize(reciboLegal);
     const legalWords = legalNorm.split(" ");
