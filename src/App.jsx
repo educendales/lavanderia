@@ -677,9 +677,11 @@ export default function LavanderiaApp() {
     data += BOLD_OFF + LEFT;
     data += LF;
 
-    // Legal text - small font, wider wrap
+    // Legal text - condensed small font
     const LEGALW = 52;
-    data += CENTER + SMALL;
+    const CONDENSED_ON = ESC + "\x0f";   // condensed mode
+    const CONDENSED_OFF = ESC + "\x12";
+    data += CENTER + CONDENSED_ON + SMALL;
     const legalNorm = normalize(reciboLegal);
     const legalWords = legalNorm.split(" ");
     let line2 = "";
@@ -692,7 +694,7 @@ export default function LavanderiaApp() {
       }
     });
     if (line2) data += line2 + LF;
-    data += NORMAL_FONT + LEFT;
+    data += CONDENSED_OFF + NORMAL_FONT + LEFT;
     data += LF + LF + LF;
     data += CUT;
 
@@ -700,7 +702,7 @@ export default function LavanderiaApp() {
       if (!window.qz) throw new Error("QZ no disponible");
       if (!window.qz.websocket.isActive()) await window.qz.websocket.connect();
       const config = window.qz.configs.create("BIXOLON SRP-330II");
-      await window.qz.print(config, [{ type: 'raw', format: 'plain', data: data }]);
+      await window.qz.print(config, [{ type: 'raw', format: 'plain', data: data }, { type: 'raw', format: 'plain', data: data }]);
     } catch(e) {
       console.error("QZ Error:", e);
       alert("Error con QZ Tray: " + e.message + ". Usando impresion normal...");
