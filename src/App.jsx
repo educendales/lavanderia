@@ -587,6 +587,7 @@ export default function LavanderiaApp() {
 
     let data = "";
     data += RESET;
+    data += ESC + "3\x18";  // reduce line spacing to 24 dots
     // Header - centered bold
     data += CENTER + BOLD_ON;
     data += "Factura No.: " + (order.order_number?.replace("S","") || "") + LF;
