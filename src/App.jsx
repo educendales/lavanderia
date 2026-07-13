@@ -143,6 +143,7 @@ export default function LavanderiaApp() {
   const [claveActual, setClaveActual] = useState("");
   const [claveNueva, setClaveNueva] = useState("");
   const [claveConfirm, setClaveConfirm] = useState("");
+  const [nombreImpresora, setNombreImpresora] = useState(() => { try { return localStorage.getItem("nombreImpresora") || "BIXOLON SRP-330II"; } catch { return "BIXOLON SRP-330II"; } });
   const [negocioPais, setNegocioPais] = useState(() => { try { return localStorage.getItem("negocioPais") || "57"; } catch { return "57"; } });
   const [negocioLogo, setNegocioLogo] = useState(() => { try { return localStorage.getItem("negocioLogo") || ""; } catch { return ""; } });
   const [logoEnRecibo, setLogoEnRecibo] = useState(() => { try { return localStorage.getItem("logoEnRecibo") !== "false"; } catch { return true; } });
@@ -702,7 +703,7 @@ export default function LavanderiaApp() {
     try {
       if (!window.qz) throw new Error("QZ no disponible");
       if (!window.qz.websocket.isActive()) await window.qz.websocket.connect();
-      const config = window.qz.configs.create("BIXOLON SRP-330II");
+      const config = window.qz.configs.create(nombreImpresora);
       const printData = Array.from({length: copies}, () => ({ type: 'raw', format: 'plain', data: data }));
       await window.qz.print(config, printData);
     } catch(e) {
@@ -1833,6 +1834,11 @@ export default function LavanderiaApp() {
                     <div style={{ fontSize: 11, color: "#484F58", marginTop: 4 }}>Colombia = 57, México = 52, Venezuela = 58</div>
                   </div>
                   <div style={{ gridColumn: "span 2" }}>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>🖨️ NOMBRE DE LA IMPRESORA (QZ Tray)</label>
+                    <input style={{ ...inp, borderColor: "rgba(79,195,247,0.3)" }} value={nombreImpresora} onChange={e => setNombreImpresora(e.target.value)} placeholder="Ej: BIXOLON SRP-330II" />
+                    <div style={{ fontSize: 11, color: "#484F58", marginTop: 4 }}>Debe coincidir exactamente con el nombre en Windows → Dispositivos e impresoras</div>
+                  </div>
+                  <div style={{ gridColumn: "span 2" }}>
                     <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DIRECCIÓN</label>
                     <input style={{ ...inp }} value={negocioDireccion} onChange={e => setNegocioDireccion(e.target.value)} placeholder="Ej: Carrera 113 # 75-56" />
                   </div>
@@ -1871,7 +1877,7 @@ export default function LavanderiaApp() {
                 <button onClick={async () => {
                   const ok = await checkClave("guardar");
                   if (!ok) return;
-                  try { localStorage.setItem("negocioNombre", negocioNombre); localStorage.setItem("negocioDireccion", negocioDireccion); localStorage.setItem("negocioTelefono", negocioTelefono); localStorage.setItem("negocioPais", negocioPais); } catch {}
+                  try { localStorage.setItem("negocioNombre", negocioNombre); localStorage.setItem("negocioDireccion", negocioDireccion); localStorage.setItem("negocioTelefono", negocioTelefono); localStorage.setItem("negocioPais", negocioPais); localStorage.setItem("nombreImpresora", nombreImpresora); } catch {}
                   alert("✅ Información guardada");
                 }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", marginTop: 14, width: "100%" }}>
                   💾 Guardar información
