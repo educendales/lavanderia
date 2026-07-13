@@ -556,7 +556,7 @@ export default function LavanderiaApp() {
     });
   };
 
-  const printOrderQZ = async (order, itemsMap) => {
+  const printOrderQZ = async (order, itemsMap, copies = 2) => {
     const its = (itemsMap || orderItems)[order.id] || [];
     const hora = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
     const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"");
@@ -702,7 +702,8 @@ export default function LavanderiaApp() {
       if (!window.qz) throw new Error("QZ no disponible");
       if (!window.qz.websocket.isActive()) await window.qz.websocket.connect();
       const config = window.qz.configs.create("BIXOLON SRP-330II");
-      await window.qz.print(config, [{ type: 'raw', format: 'plain', data: data }, { type: 'raw', format: 'plain', data: data }]);
+      const printData = Array.from({length: copies}, () => ({ type: 'raw', format: 'plain', data: data }));
+      await window.qz.print(config, printData);
     } catch(e) {
       console.error("QZ Error:", e);
       alert("Error con QZ Tray: " + e.message + ". Usando impresion normal...");
@@ -927,7 +928,7 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo" }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "5px 10px", fontSize: 12 }}>💰</button>
-                            <button onClick={() => printOrderQZ(o)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
+                            <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
                             <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
                           </div>
                         </td>
@@ -1081,7 +1082,7 @@ export default function LavanderiaApp() {
                           ))}
                         </div>
                         <div style={{ display: "flex", gap: 10 }}>
-                          <button onClick={() => printOrderQZ(entregaResult)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
+                          <button onClick={() => printOrderQZ(entregaResult, null, 1)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
                       </div>
@@ -2265,7 +2266,7 @@ export default function LavanderiaApp() {
                 <p style={{ fontSize:13,color:"#8B949E",textAlign:"center",marginBottom:20 }}>¿Cómo quieres entregar el comprobante al cliente?</p>
                 <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                   <button onClick={async () => {
-                    printOrderQZ(savedOrder.order, savedOrder.itemsMap);
+                    printOrderQZ(savedOrder.order, savedOrder.itemsMap, 1);
                     await db.patch("orders", savedOrder.order.id, { recibo_enviado: "impreso" });
                     setOrders(prev => prev.map(o => o.id === savedOrder.order.id ? { ...o, recibo_enviado: "impreso" } : o));
                   }} style={{ ...btn,background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
