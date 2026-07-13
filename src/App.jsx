@@ -587,7 +587,6 @@ export default function LavanderiaApp() {
 
     let data = "";
     data += RESET;
-
     // Header - centered bold
     data += CENTER + BOLD_ON;
     data += "Factura No.: " + (order.order_number?.replace("S","") || "") + LF;
@@ -615,7 +614,6 @@ export default function LavanderiaApp() {
     data += BOLD_ON + BIG_ON;
     data += "*" + (order.order_number||"") + "*" + LF;
     data += BIG_OFF + BOLD_OFF;
-    data += LF;
 
     // Barcode
     data += CENTER;
@@ -625,7 +623,7 @@ export default function LavanderiaApp() {
     data += GS + "k\x49";          // CODE128
     const barcodeData = order.order_number || "";
     data += String.fromCharCode(barcodeData.length) + barcodeData;
-    data += LF + LF;
+    data += LF;
 
     // Info section - left aligned
     data += LEFT;
@@ -677,11 +675,12 @@ export default function LavanderiaApp() {
     data += BOLD_OFF + LEFT;
     data += LF;
 
-    // Legal text - extra small font using font B
+    // Legal text - smallest font
     const LEGALW = 56;
-    const FONT_B = ESC + "M\x01";  // Font B (smaller)
-    const FONT_A = ESC + "M\x00";  // Font A (normal)
-    data += CENTER + FONT_B;
+    const FONT_B = ESC + "M\x01";
+    const FONT_A = ESC + "M\x00";
+    const TINY = GS + "!\x00" + ESC + "M\x01";
+    data += CENTER + TINY;
     const legalNorm = normalize(reciboLegal);
     const legalWords = legalNorm.split(" ");
     let line2 = "";
@@ -694,7 +693,7 @@ export default function LavanderiaApp() {
       }
     });
     if (line2) data += line2 + LF;
-    data += FONT_A + NORMAL_FONT + LEFT;
+    data += FONT_A + GS + "!\x00" + NORMAL_FONT + LEFT;
     data += LF + LF + LF;
     data += CUT;
 
