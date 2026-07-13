@@ -677,11 +677,11 @@ export default function LavanderiaApp() {
     data += BOLD_OFF + LEFT;
     data += LF;
 
-    // Legal text - condensed small font
-    const LEGALW = 52;
-    const CONDENSED_ON = ESC + "\x0f";   // condensed mode
-    const CONDENSED_OFF = ESC + "\x12";
-    data += CENTER + CONDENSED_ON + SMALL;
+    // Legal text - extra small font using font B
+    const LEGALW = 56;
+    const FONT_B = ESC + "M\x01";  // Font B (smaller)
+    const FONT_A = ESC + "M\x00";  // Font A (normal)
+    data += CENTER + FONT_B;
     const legalNorm = normalize(reciboLegal);
     const legalWords = legalNorm.split(" ");
     let line2 = "";
@@ -694,7 +694,7 @@ export default function LavanderiaApp() {
       }
     });
     if (line2) data += line2 + LF;
-    data += CONDENSED_OFF + NORMAL_FONT + LEFT;
+    data += FONT_A + NORMAL_FONT + LEFT;
     data += LF + LF + LF;
     data += CUT;
 
