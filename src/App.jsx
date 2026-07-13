@@ -632,7 +632,10 @@ export default function LavanderiaApp() {
     data += rpad("Atendido Por:", normalize(order.employee||"")) + LF;
     data += rpad("Fecha Entrada:", order.date||"") + LF;
     data += rpad("Hora:", hora) + LF;
-    data += BOLD_ON + rpad("Fecha Entrega:", order.delivery_date||"") + BOLD_OFF + LF;
+    data += BOLD_ON;
+    data += "****************************************" + LF;
+    data += rpad("** Fecha Entrega:", (order.delivery_date||"") + "  **") + LF;
+    data += "****************************************" + BOLD_OFF + LF;
     data += rpad("Cliente:", normalize(order.client_name||"")) + LF;
     data += rpad("Telefono:", order.phone||"") + LF;
     data += LINE + LF;
