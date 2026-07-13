@@ -678,7 +678,7 @@ export default function LavanderiaApp() {
     data += LF;
 
     // Legal text - small font, wider wrap
-    const LEGALW = 48;
+    const LEGALW = 52;
     data += CENTER + SMALL;
     const legalNorm = normalize(reciboLegal);
     const legalWords = legalNorm.split(" ");
@@ -2222,7 +2222,7 @@ export default function LavanderiaApp() {
                         const freshItems=await db.get("order_items",`&order_id=eq.${orderId}`);
                         const itemsMap={[orderId]:Array.isArray(freshItems)?freshItems:[]};
                         setOrderItems(prev=>({...prev,...itemsMap}));
-                        if(freshOrder)printOrder({...freshOrder},itemsMap);
+                        if(freshOrder)printOrderQZ({...freshOrder},itemsMap);
                       }
                       setNewOrder({...emptyOrder,delivery_date:getDeliveryDefault()});
                       setItems([{...emptyItem,price:precioDefaults[emptyItem.garment_type]||""}]);
@@ -2263,7 +2263,7 @@ export default function LavanderiaApp() {
                 <p style={{ fontSize:13,color:"#8B949E",textAlign:"center",marginBottom:20 }}>¿Cómo quieres entregar el comprobante al cliente?</p>
                 <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                   <button onClick={async () => {
-                    printOrder(savedOrder.order, savedOrder.itemsMap);
+                    printOrderQZ(savedOrder.order, savedOrder.itemsMap);
                     await db.patch("orders", savedOrder.order.id, { recibo_enviado: "impreso" });
                     setOrders(prev => prev.map(o => o.id === savedOrder.order.id ? { ...o, recibo_enviado: "impreso" } : o));
                   }} style={{ ...btn,background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
