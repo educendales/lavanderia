@@ -558,20 +558,6 @@ export default function LavanderiaApp() {
     });
   };
 
-  const pemToBuffer = (pem) => {
-    const b64 = pem.replace(/-----[^-]+-----/g,"").replace(/\s/g,"");
-    const bin = atob(b64);
-    const buf = new Uint8Array(bin.length);
-    for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
-    return buf.buffer;
-  };
-  const str2ab = (str) => {
-    const buf = new ArrayBuffer(str.length);
-    const view = new Uint8Array(buf);
-    for(let i=0;i<str.length;i++) view[i]=str.charCodeAt(i);
-    return buf;
-  };
-
   const printOrderQZ = async (order, itemsMap, copies = 2) => {
     const its = (itemsMap || orderItems)[order.id] || [];
     const hora = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
@@ -716,66 +702,6 @@ export default function LavanderiaApp() {
 
     try {
       if (!window.qz) throw new Error("QZ no disponible");
-      const QZ_CERT = `-----BEGIN CERTIFICATE-----
-MIIECzCCAvOgAwIBAgIGAZ9ZVfssMA0GCSqGSIb3DQEBCwUAMIGiMQswCQYDVQQG
-EwJVUzELMAkGA1UECAwCTlkxEjAQBgNVBAcMCUNhbmFzdG90YTEbMBkGA1UECgwS
-UVogSW5kdXN0cmllcywgTExDMRswGQYDVQQLDBJRWiBJbmR1c3RyaWVzLCBMTEMx
-HDAaBgkqhkiG9w0BCQEWDXN1cHBvcnRAcXouaW8xGjAYBgNVBAMMEVFaIFRyYXkg
-RGVtbyBDZXJ0MB4XDTI2MDcxMjAyMzcxNFoXDTQ2MDcxMjAyMzcxNFowgaIxCzAJ
-BgNVBAYTAlVTMQswCQYDVQQIDAJOWTESMBAGA1UEBwwJQ2FuYXN0b3RhMRswGQYD
-VQQKDBJRWiBJbmR1c3RyaWVzLCBMTEMxGzAZBgNVBAsMElFaIEluZHVzdHJpZXMs
-IExMQzEcMBoGCSqGSIb3DQEJARYNc3VwcG9ydEBxei5pbzEaMBgGA1UEAwwRUVog
-VHJheSBEZW1vIENlcnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCn
-y1Di0Tda1deD90UpctYaVTufZDttHLvqtTPmsWMa4fkxAlcEq3FMOTAvJXS8tbfE
-CbKNwjoK0YE4ou30T7pFVCo4rZFZbgZYZZvEMrhXyeS7KfjlcE1yljWe/7c6sHF5
-XE25Xy+FcEoWJ1n3iwODAs94gQqkZjBagL99yeyFfjC2KMihMxAkJ0dezKzd/cLa
-st+t9N7VOqK9SklFNmRxrIaAfoXb92oxVNsR3SAhr3PTvvjBRCTJ8Plazege6vBx
-eau0DdZ/RCu3JD5AwI5WIAmorEbtyBA378OnW4JDO3FyShXz6UkwfvXZKL98yMRQ
-y1VtYcLEwpWcajDoOOATAgMBAAGjRTBDMBIGA1UdEwEB/wQIMAYBAf8CAQEwDgYD
-VR0PAQH/BAQDAgEGMB0GA1UdDgQWBBTDVnGogW4NnQhLxi2TusNUS9hslDANBgkq
-hkiG9w0BAQsFAAOCAQEAW+bDS3DISk0NJEZNX3hfukTN0AGCMMyW+3Jr5j9e0rkI
-ZvvXuyTXVZI/r14YrvReo7UFi3l780DCDm4S/gwIQV0yu50moypgOlS3lIYU2BZD
-uj/oXvzcvEYRjLJz+4Nzn2gg9gMqf/NbAO7dKOuCyLNFZdu5+83RWDsFI3/3XLXd
-8BUyg3FFiDOI5hjd7M7cM8cQENZ0/vUdyWU4DH3srxSmXaN1BnqQny5N1OOivwTm
-hncwHAU/HPVSzlfeBwNUXeQvLvDkzZy2Nl62Q+IluGfvsA/pGIhtKAlSrcNy3wgi
-BTkl2Q79JzlOOkZk7qUYui3apNlVe2Uz46mps3DQmA==
------END CERTIFICATE-----`;
-      const QZ_KEY = `-----BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCny1Di0Tda1deD
-90UpctYaVTufZDttHLvqtTPmsWMa4fkxAlcEq3FMOTAvJXS8tbfECbKNwjoK0YE4
-ou30T7pFVCo4rZFZbgZYZZvEMrhXyeS7KfjlcE1yljWe/7c6sHF5XE25Xy+FcEoW
-J1n3iwODAs94gQqkZjBagL99yeyFfjC2KMihMxAkJ0dezKzd/cLast+t9N7VOqK9
-SklFNmRxrIaAfoXb92oxVNsR3SAhr3PTvvjBRCTJ8Plazege6vBxeau0DdZ/RCu3
-JD5AwI5WIAmorEbtyBA378OnW4JDO3FyShXz6UkwfvXZKL98yMRQy1VtYcLEwpWc
-ajDoOOATAgMBAAECggEAI0ngNgOYJ7NnguqDEieDncAlLO1wjg8H+mGni7HszN+P
-f94lHOdNiaFRX+j5tyJkhocflS6u9E2BZr7lWodV/nSn+ImQUwWPshGUg9vC5zuf
-rjkyjlZjA2FR36GaEG7BPqvJ8N1y6hZmjmgyRJxo3am+pnJFIbQYIUCIhVTtOFmt
-iZxxlyC6L0jFBJtmU7ZpT6xkpl3V451nPb/pHX7eBf3fLEcP5P1Ktag8RzogvQFh
-cSXOLRzF60sDhfAU2XzC9KjwldjnjDfrSwCs9mN/R1fuqpVvkR0otTbi234LmJoR
-rD2iHh6zRdRGLhwtwrsqAkcA7cSnUnqnxp7pf/cS2QKBgQDPXl9qZquWY1ZtogWP
-Tr2Kuk/Wy8WvxTvA6UBjLADmdD/+iCtivI+b8ndSlDNX7uxxCO3nOZUW7AKRTbdd
-kZkY7/z86sI2P6KNX/iMYA+Ryr50wtVc/OGhhNzoE3FvrzXA7PKA9rbuIO4AEiJh
-rMGyf0aOPEBIzhdBERKUSA6bzQKBgQDPJQs58Zpzt2/fQ+4fCxrBfs1Ojr4fHjLy
-Vl3o5UJHm+oarh5sD23BOfaED8+1wJGrzWAPho0/5ynh7pj4EeyDuyQ2TaROvsvO
-6XT8p2IcTuuQlEMocxZuD6IrmruQB+i/K3Cv1R5FNVp3BiZfBYVf/I2wiU6zk4+Y
-WfX318hLXwKBgHOxn2JprcnV2l6ISrnNoIpJsEmSntSWIeRbPoUWA9qPeTS1HB+W
-PDkxack0zgB9WIUoCjM7OSb0ven7hhY6KUR0gJ1LDNffYP2nUbBf18/rYZ8bJJcg
-r3HCAs2oK124TzE4AYRaIW1yCdcYRv5fuCGySNcKXoNAGFFBCTCZkyzxAoGBAMS8
-hiEOWoc03cfLGMnbHhpQeGX4JJIheHm5lY+wznZ8mqekX7h6Ht+6UWu0KK6Sqsfl
-UyrrvBPJVXoDxr01KNEkWIxKyZcQlzl5eWbNAt2oBwtWBULRq6f0qS2I1ENDf8ax
-V2FopEtPFRCegqsU70vu7hORFXJw35zvNDGke9M5AoGBAISnoPSkGUZg/u3xHfBh
-15TTD1iLqL6bgmHWHxM8EVulRn4AhIOLWgK6K7z9lPt4TdoR3QKhtj//ixq8EcgJ
-Hiv2NExloGumFWYo7fnazq/Ebi2r+Gq9Y6phQcYep0J3osFit9A+7qk/XgAF2UBG
-UVniRjGPWYlkIrsqHRzh4Hxo
------END PRIVATE KEY-----`;
-      window.qz.security.setCertificatePromise((resolve) => resolve(QZ_CERT));
-      window.qz.security.setSignatureAlgorithm("SHA512");
-      window.qz.security.setSignaturePromise((toSign) => (resolve, reject) => {
-        window.crypto.subtle.importKey("pkcs8", str2ab(pemToBuffer(QZ_KEY)), {name:"RSASSA-PKCS1-v1_5",hash:"SHA-512"}, false, ["sign"])
-          .then(key => window.crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(toSign)))
-          .then(sig => resolve(btoa(String.fromCharCode(...new Uint8Array(sig)))))
-          .catch(reject);
-      });
       if (!window.qz.websocket.isActive()) await window.qz.websocket.connect();
       const config = window.qz.configs.create(nombreImpresora);
       const printData = Array.from({length: copies}, () => ({ type: 'raw', format: 'plain', data: data }));
