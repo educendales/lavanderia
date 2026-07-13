@@ -670,11 +670,6 @@ export default function LavanderiaApp() {
       data += LINE + LF;
     }
 
-    if (order.notes) {
-      data += "Obs: " + normalize(order.notes) + LF;
-      data += LINE + LF;
-    }
-
     // Footer
     data += CENTER + BOLD_ON;
     data += "RESPONDEMOS POR SUS PRENDAS" + LF;
@@ -683,7 +678,7 @@ export default function LavanderiaApp() {
     data += LF;
 
     // Legal text - small font, wider wrap
-    const LEGALW = 64;
+    const LEGALW = 48;
     data += CENTER + SMALL;
     const legalNorm = normalize(reciboLegal);
     const legalWords = legalNorm.split(" ");
