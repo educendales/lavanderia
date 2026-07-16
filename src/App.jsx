@@ -440,6 +440,7 @@ export default function LavanderiaApp() {
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
       td { padding: 2px 1px; vertical-align: top; }
       .small { font-size: 11px; }
+      .obs { font-size: 9px; }
       .legal { font-size: 10px; text-align: justify; margin-top: 4px; line-height: 1.35; }
       #barcode { display: block; width: 100%; max-width: 180px; margin: 4px auto; }
       @page { size: 80mm auto; margin: 0; }
@@ -494,7 +495,7 @@ export default function LavanderiaApp() {
         <tr><td class="bold big">Total a Pagar</td><td class="right bold big">$${Math.round(Number(order.price)).toLocaleString('es-CO')}</td></tr>
         <tr><td class="bold">No. Piezas</td><td class="right bold">${order.garments}</td></tr>
       </table>
-      ${order.notes ? `<div class="line"></div><div class="small"><b>Obs:</b> ${order.notes}</div>` : ''}
+      ${order.notes ? `<div class="line"></div><div class="obs"><b>Obs:</b> ${order.notes}</div>` : ''}
       <div class="line"></div>
       <div class="small center">RESPONDEMOS POR SUS PRENDAS SOLO POR 30 DIAS</div>
       <div class="legal">${reciboLegal}</div>
@@ -667,9 +668,12 @@ export default function LavanderiaApp() {
     data += rpad("No. Piezas:", String(order.garments)) + LF;
     data += LINE + LF;
     if (order.notes) {
-      data += "Obs: " + normalize(order.notes) + LF;
-      data += LINE + LF;
-    }
+  data += NORMAL_FONT; // asegura tamaño base antes de reducir
+  data += SMALL;
+  data += "Obs: " + normalize(order.notes) + LF;
+  data += NORMAL_FONT;
+  data += LINE + LF;
+}
 
     // Footer
     data += CENTER + BOLD_ON;
