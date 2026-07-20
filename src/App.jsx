@@ -668,12 +668,12 @@ export default function LavanderiaApp() {
     data += rpad("No. Piezas:", String(order.garments)) + LF;
     data += LINE + LF;
     if (order.notes) {
-  data += NORMAL_FONT; // asegura tamaño base antes de reducir
-  data += SMALL;
-  data += "Obs: " + normalize(order.notes) + LF;
-  data += NORMAL_FONT;
-  data += LINE + LF;
-}
+      data += NORMAL_FONT;
+      data += SMALL;
+      data += "Obs: " + normalize(order.notes) + LF;
+      data += NORMAL_FONT;
+      data += LINE + LF;
+    }
 
     // Footer
     data += CENTER + BOLD_ON;
