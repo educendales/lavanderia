@@ -245,6 +245,7 @@ export default function LavanderiaApp() {
     for (const order of selectedEntregas) {
       await db.patch("orders", order.id, { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: today, delivered_by: user.name });
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today, delivered_by: user.name } : o));
+      if (entregaMultiSinRecibo) await printConstanciaSinRecibo(order, null);
     }
     setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today, delivered_by: user.name } : o));
     setSelectedEntregas([]);
@@ -409,6 +410,7 @@ export default function LavanderiaApp() {
     setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, status: "entregado", payment_method: entregaPayment, delivered_at: today, delivered_by: user.name } : o));
     setEntregaResult(prev => ({ ...prev, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today, delivered_by: user.name }));
     setEntregaConfirmed(true);
+    if (entregaSinRecibo) printConstanciaSinRecibo(entregaResult, null);
   };
 
   const printOrder = (order, itemsMap) => {
@@ -717,6 +719,115 @@ export default function LavanderiaApp() {
     }
   };
 
+  const printConstanciaSinReciboBrowser = (order, itemsMap) => {
+    const its = (itemsMap || orderItems)[order.id] || [];
+    const detalle = its.length
+      ? its.map(it => `${it.quantity} ${it.garment_type}${it.color ? " " + it.color : ""}`).join(", ")
+      : `${order.garments} prenda(s)`;
+    const fechaHoy = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+    const horaImpresion = new Date().toLocaleString('es-CO');
+    const w = window.open("", "_blank", "width=400,height=800");
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title></title>
+    <style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      html, body { width:80mm; }
+      body { font-family:'Courier New', Courier, monospace; font-size:12px; color:#000; background:#fff; padding:3mm; width:80mm; }
+      .center { text-align:center; }
+      .bold { font-weight:bold; }
+      .title { font-size:14px; font-weight:bold; margin-bottom:6px; }
+      .line { border-top:1px dashed #000; margin:6px 0; }
+      .firma { border-top:1px solid #000; margin-top:36px; padding-top:4px; text-align:center; }
+      p { margin:6px 0; line-height:1.4; }
+      @page { size:80mm auto; margin:0; }
+    </style></head><body>
+      <div class="center title">CONSTANCIA DE ENTREGA<br/>SIN RECIBO FÍSICO</div>
+      <div class="center">${negocioNombre.toUpperCase()}</div>
+      <div class="line"></div>
+      <p><b>Fecha:</b> ${fechaHoy}</p>
+      <p>Yo <b>${order.client_name || ""}</b>, recibí de parte de <b>${negocioNombre}</b> las siguientes prendas correspondientes a la orden de servicio <b>${order.order_number || ""}</b>:</p>
+      <p>${detalle}</p>
+      <p>Mi firma en este documento certifica que he recibido las prendas a satisfacción y que el comprobante físico de la orden de servicio <b>${order.order_number || ""}</b> pierde toda validez para el reclamo de prendas.</p>
+      <div class="firma">${order.client_name || ""}<br/>C.C./Tel: ${order.phone || ""}</div>
+      <div class="line"></div>
+      <div class="center" style="font-size:10px">Fecha de impresión: ${horaImpresion}<br/>${negocioNombre}</div>
+      <br/><br/>
+    </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 700);
+  };
+
+  const printConstanciaSinRecibo = async (order, itemsMap) => {
+    const its = (itemsMap || orderItems)[order.id] || [];
+    const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"");
+    const detalle = its.length
+      ? its.map(it => `${it.quantity} ${it.garment_type}${it.color ? " " + it.color : ""}`).join(", ")
+      : `${order.garments} prenda(s)`;
+    const fechaHoy = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+    const horaImpresion = new Date().toLocaleString('es-CO');
+
+    const ESC = "\x1B";
+    const GS = "\x1D";
+    const RESET = ESC + "@";
+    const CENTER = ESC + "a\x01";
+    const LEFT = ESC + "a\x00";
+    const BOLD_ON = ESC + "E\x01";
+    const BOLD_OFF = ESC + "E\x00";
+    const SMALL = ESC + "M\x01";
+    const NORMAL_FONT = ESC + "M\x00";
+    const CUT = GS + "V\x41\x00";
+    const LF = "\n";
+    const LINE = "-".repeat(42);
+    const W = 42;
+
+    const wrap = (text) => {
+      let out = "";
+      let line = "";
+      normalize(text).split(" ").forEach(word => {
+        if ((line + " " + word).trim().length <= W) { line = (line + " " + word).trim(); }
+        else { out += line + LF; line = word; }
+      });
+      if (line) out += line + LF;
+      return out;
+    };
+
+    let data = "";
+    data += RESET;
+    data += CENTER + BOLD_ON;
+    data += "CONSTANCIA DE ENTREGA" + LF;
+    data += "SIN RECIBO FISICO" + LF;
+    data += BOLD_OFF;
+    data += normalize(negocioNombre).toUpperCase() + LF;
+    data += LINE + LF;
+    data += LEFT;
+    data += "Fecha: " + fechaHoy + LF + LF;
+    data += wrap(`Yo ${order.client_name || ""}, recibi de parte de ${negocioNombre} las siguientes prendas correspondientes a la orden de servicio ${order.order_number || ""}:`);
+    data += LF;
+    data += wrap(detalle);
+    data += LF;
+    data += wrap(`Mi firma en este documento certifica que he recibido las prendas a satisfaccion y que el comprobante fisico de la orden de servicio ${order.order_number || ""} pierde toda validez para el reclamo de prendas.`);
+    data += LF + LF + LF;
+    data += CENTER;
+    data += "_______________________________" + LF;
+    data += normalize(order.client_name || "") + LF;
+    data += "C.C./Tel: " + (order.phone || "") + LF;
+    data += LINE + LF;
+    data += SMALL;
+    data += "Fecha de impresion: " + horaImpresion + LF;
+    data += NORMAL_FONT;
+    data += LF + LF;
+    data += CUT;
+
+    try {
+      if (!window.qz) throw new Error("QZ no disponible");
+      if (!window.qz.websocket.isActive()) await window.qz.websocket.connect();
+      const config = window.qz.configs.create(nombreImpresora);
+      await window.qz.print(config, [{ type: 'raw', format: 'plain', data: data }]);
+    } catch(e) {
+      console.error("QZ Error:", e);
+      printConstanciaSinReciboBrowser(order, itemsMap);
+    }
+  };
 
   const exportClients = () => {
     const csv = [["Nombre","Telefono","Email","Total Ordenes"],...clients.map(c=>[c.name||"",c.phone||"",c.email||"",c.total_orders||0])].map(r=>r.join(",")).join("\n");
@@ -1092,6 +1203,7 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ display: "flex", gap: 10 }}>
                           <button onClick={() => printOrderQZ(entregaResult, null, 1)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
+                          {entregaResult.sin_recibo && <button onClick={() => printConstanciaSinRecibo(entregaResult, null)} title="Imprimir constancia sin recibo" style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", flex: 1, padding: 12 }}>📝 Reimprimir constancia</button>}
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
                       </div>
