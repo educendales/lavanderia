@@ -115,7 +115,7 @@ export default function LavanderiaApp() {
   const [abonoModal, setAbonoModal] = useState(null);
   const [newAbono, setNewAbono] = useState({ amount: "", payment_method: "efectivo" });
   const [advances, setAdvances] = useState([]);
-  const [newAdvance, setNewAdvance] = useState({ employee_id: "", amount: "", date: today, note: "" });
+  const [newAdvance, setNewAdvance] = useState({ employee_id: "", amount: "", date: today, note: "", payment_method: "efectivo" });
   const [advanceFrom, setAdvanceFrom] = useState(() => { const d = new Date(); return d.getDate() <= 15 ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01` : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-16`; });
   const [advanceTo, setAdvanceTo] = useState(() => { const d = new Date(); if (d.getDate() <= 15) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-15`; const lastDay = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`; });
   const [expenseFilterDate, setExpenseFilterDate] = useState(today);
@@ -401,9 +401,9 @@ export default function LavanderiaApp() {
     if (!newAdvance.employee_id || !newAdvance.amount) return;
     setSaving(true);
     const emp = employees.find(e => e.id === newAdvance.employee_id);
-    const res = await db.post("employee_advances", { employee_id: newAdvance.employee_id, employee_name: emp?.name || "", amount: Number(newAdvance.amount), date: newAdvance.date, note: newAdvance.note, created_by: user.name });
+    const res = await db.post("employee_advances", { employee_id: newAdvance.employee_id, employee_name: emp?.name || "", amount: Number(newAdvance.amount), date: newAdvance.date, note: newAdvance.note, payment_method: newAdvance.payment_method, created_by: user.name });
     if (Array.isArray(res) && res[0]) setAdvances(prev => [res[0], ...prev]);
-    setNewAdvance({ employee_id: "", amount: "", date: today, note: "" });
+    setNewAdvance({ employee_id: "", amount: "", date: today, note: "", payment_method: "efectivo" });
     setModal(null); setSaving(false);
   };
   const deleteAdvance = async (id) => {
@@ -1396,9 +1396,9 @@ export default function LavanderiaApp() {
 
                 const exportNomina = () => {
                   const csv = [
-                    ["Empleado","Fecha","Monto","Nota","Registrado por"],
-                    ...filteredAdvances.map(a => [a.employee_name||"", a.date, Math.round(Number(a.amount)), a.note||"", a.created_by||""]),
-                    ["","","TOTAL", Math.round(totalPeriodo), "", ""]
+                    ["Empleado","Fecha","Monto","Método","Nota","Registrado por"],
+                    ...filteredAdvances.map(a => [a.employee_name||"", a.date, Math.round(Number(a.amount)), a.payment_method||"efectivo", a.note||"", a.created_by||""]),
+                    ["","","TOTAL", Math.round(totalPeriodo), "", "", ""]
                   ].map(r => r.join(",")).join("\n");
                   const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
                   const url = URL.createObjectURL(blob); const a = document.createElement("a");
@@ -1449,13 +1449,14 @@ export default function LavanderiaApp() {
                     ? <div style={{ ...card, textAlign: "center", padding: 40, color: "#484F58" }}><div style={{ fontSize: 40, marginBottom: 8 }}>💸</div><div>No hay adelantos registrados en este período</div></div>
                     : <div style={{ overflowX: "auto" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                          <thead><tr style={{ background: "#21262D" }}>{["Empleado","Fecha","Monto","Nota","Registrado por",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
+                          <thead><tr style={{ background: "#21262D" }}>{["Empleado","Fecha","Monto","Método","Nota","Registrado por",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
                           <tbody>
                             {filteredAdvances.map(a => (
                               <tr key={a.id} style={{ borderBottom: "1px solid #21262D" }}>
                                 <td style={{ padding:"12px 14px",fontWeight:600 }}>{a.employee_name}</td>
                                 <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{a.date}</td>
                                 <td style={{ padding:"12px 14px",fontWeight:700,color:"#FFD54F" }}>${Math.round(Number(a.amount)).toLocaleString()}</td>
+                                <td style={{ padding:"12px 14px" }}><PayMethod m={a.payment_method||"efectivo"} /></td>
                                 <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:13 }}>{a.note||"—"}</td>
                                 <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{a.created_by||"—"}</td>
                                 <td style={{ padding:"12px 14px" }}><button onClick={()=>deleteAdvance(a.id)} title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
@@ -2535,6 +2536,7 @@ export default function LavanderiaApp() {
                     </select>
                   </div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newAdvance.amount} onChange={e=>setNewAdvance(p=>({...p,amount:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"}].map(opt=><label key={opt.value} onClick={()=>setNewAdvance(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:newAdvance.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAdvance.payment_method===opt.value?"#FFD54F":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newAdvance.payment_method===opt.value?"#FFD54F":"#8B949E" }}>{opt.label}</label>)}</div></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newAdvance.date} onChange={e=>setNewAdvance(p=>({...p,date:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOTA (opcional)</label><input style={inp} placeholder="Ej: Adelanto para transporte" value={newAdvance.note} onChange={e=>setNewAdvance(p=>({...p,note:e.target.value}))} /></div>
                   <button onClick={addAdvance} disabled={saving||!newAdvance.employee_id||!newAdvance.amount} style={{ ...btn,background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",padding:12,opacity:(saving||!newAdvance.employee_id||!newAdvance.amount)?0.5:1 }}>{saving?"Guardando...":"Guardar Adelanto"}</button>
@@ -2725,6 +2727,9 @@ export default function LavanderiaApp() {
               ];
               const totalGeneral = entregadasHoy.reduce((s,o) => s+Number(o.price), 0);
               const totalAbonos = abonos.filter(a => a.date === filterDate).reduce((s,a) => s+Number(a.amount), 0);
+              const advancesHoy = advances.filter(a => a.date === filterDate);
+              const totalAdvancesHoy = advancesHoy.reduce((s,a) => s+Number(a.amount), 0);
+              const netoCaja = totalGeneral + totalAbonos - totalAdvancesHoy;
 
               return <>
                 {/* Totales por método */}
@@ -2733,11 +2738,12 @@ export default function LavanderiaApp() {
                     const total = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+Number(o.price), 0);
                     const count = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).length;
                     const abonosMetodo = abonos.filter(a => a.date === filterDate && (a.payment_method||"efectivo") === m.key).reduce((s,a) => s+Number(a.amount), 0);
+                    const advancesMetodo = advancesHoy.filter(a => (a.payment_method||"efectivo") === m.key).reduce((s,a) => s+Number(a.amount), 0);
                     return (
                       <div key={m.key} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${m.color}` }}>
                         <div style={{ fontSize:13,color:"#8B949E",marginBottom:4 }}>{m.label}</div>
-                        <div style={{ fontWeight:800,fontSize:18,color:m.color }}>${Math.round(total+abonosMetodo).toLocaleString()}</div>
-                        <div style={{ fontSize:11,color:"#484F58",marginTop:2 }}>{count} entrega{count!==1?"s":""}{abonosMetodo>0?` + $${Math.round(abonosMetodo).toLocaleString()} abono`:""}</div>
+                        <div style={{ fontWeight:800,fontSize:18,color:m.color }}>${Math.round(total+abonosMetodo-advancesMetodo).toLocaleString()}</div>
+                        <div style={{ fontSize:11,color:"#484F58",marginTop:2 }}>{count} entrega{count!==1?"s":""}{abonosMetodo>0?` + $${Math.round(abonosMetodo).toLocaleString()} abono`:""}{advancesMetodo>0?` − $${Math.round(advancesMetodo).toLocaleString()} adelanto`:""}</div>
                       </div>
                     );
                   })}
@@ -2747,15 +2753,15 @@ export default function LavanderiaApp() {
                 <div style={{ background:"rgba(199,146,234,0.08)",border:"1px solid rgba(199,146,234,0.3)",borderRadius:10,padding:"14px 16px",marginBottom:16 }}>
                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                     <div>
-                      <div style={{ fontSize:13,color:"#8B949E" }}>Total recaudado hoy</div>
-                      <div style={{ fontSize:11,color:"#484F58" }}>{entregadasHoy.length} entregas · {abonos.filter(a=>a.date===filterDate).length} abonos</div>
+                      <div style={{ fontSize:13,color:"#8B949E" }}>Neto en caja (después de adelantos)</div>
+                      <div style={{ fontSize:11,color:"#484F58" }}>{entregadasHoy.length} entregas · {abonos.filter(a=>a.date===filterDate).length} abonos · {advancesHoy.length} adelanto{advancesHoy.length!==1?"s":""}</div>
                     </div>
-                    <div style={{ fontWeight:800,fontSize:24,color:"#C792EA" }}>${Math.round(totalGeneral+totalAbonos).toLocaleString()}</div>
+                    <div style={{ fontWeight:800,fontSize:24,color:"#C792EA" }}>${Math.round(netoCaja).toLocaleString()}</div>
                   </div>
                 </div>
 
-                {/* Desglose entregas vs abonos */}
-                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16 }}>
+                {/* Desglose entregas vs abonos vs adelantos */}
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16 }}>
                   <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #66BB6A" }}>
                     <div style={{ fontSize:11,color:"#8B949E" }}>Entregas</div>
                     <div style={{ fontWeight:800,color:"#66BB6A" }}>${Math.round(totalGeneral).toLocaleString()}</div>
@@ -2764,10 +2770,14 @@ export default function LavanderiaApp() {
                     <div style={{ fontSize:11,color:"#8B949E" }}>Abonos</div>
                     <div style={{ fontWeight:800,color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</div>
                   </div>
+                  <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #EF5350" }}>
+                    <div style={{ fontSize:11,color:"#8B949E" }}>Adelantos</div>
+                    <div style={{ fontWeight:800,color:"#EF5350" }}>− ${Math.round(totalAdvancesHoy).toLocaleString()}</div>
+                  </div>
                 </div>
 
-                {entregadasHoy.length === 0 && totalAbonos === 0 && (
-                  <p style={{ textAlign:"center",color:"#484F58",fontSize:13 }}>No hay entregas ni abonos hoy</p>
+                {entregadasHoy.length === 0 && totalAbonos === 0 && totalAdvancesHoy === 0 && (
+                  <p style={{ textAlign:"center",color:"#484F58",fontSize:13 }}>No hay entregas, abonos ni adelantos hoy</p>
                 )}
 
                 <button onClick={()=>setShowInformeDiario(false)} style={{ width:"100%",padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#C792EA,#9B59B6)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:14 }}>Cerrar</button>
