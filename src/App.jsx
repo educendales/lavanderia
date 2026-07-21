@@ -114,6 +114,10 @@ export default function LavanderiaApp() {
   const [abonos, setAbonos] = useState([]);
   const [abonoModal, setAbonoModal] = useState(null);
   const [newAbono, setNewAbono] = useState({ amount: "", payment_method: "efectivo" });
+  const [advances, setAdvances] = useState([]);
+  const [newAdvance, setNewAdvance] = useState({ employee_id: "", amount: "", date: today, note: "" });
+  const [advanceFrom, setAdvanceFrom] = useState(() => { const d = new Date(); return d.getDate() <= 15 ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01` : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-16`; });
+  const [advanceTo, setAdvanceTo] = useState(() => { const d = new Date(); if (d.getDate() <= 15) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-15`; const lastDay = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`; });
   const [expenseFilterDate, setExpenseFilterDate] = useState(today);
   const [showEliminados, setShowEliminados] = useState(false);
   const [reversadasSearch, setReversadasSearch] = useState("");
@@ -331,12 +335,13 @@ export default function LavanderiaApp() {
   }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi, ab] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos")]);
+    const [o, e, c, oi, ab, adv] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
     if (Array.isArray(oi)) { const grouped = {}; oi.forEach(item => { if (!grouped[item.order_id]) grouped[item.order_id] = []; grouped[item.order_id].push(item); }); setOrderItems(grouped); }
     if (Array.isArray(ab)) setAbonos(ab);
+    if (Array.isArray(adv)) setAdvances(adv);
   };
   useEffect(() => { if (user) loadData(); }, [user]);
 
@@ -392,6 +397,21 @@ export default function LavanderiaApp() {
 
   const addExpense = async () => { setSaving(true); const res = await db.post("expenses", { ...newExpense, amount: Number(newExpense.amount) }); if (Array.isArray(res)) setExpenses(prev => [res[0], ...prev]); setNewExpense({ concept: "", amount: "", date: today, category: "insumos", payment_method: "efectivo" }); setModal(null); setSaving(false); };
   const deleteExpense = async (id) => { await db.patch("expenses", id, { eliminado: true }); setExpenses(prev => prev.map(e => e.id === id ? { ...e, eliminado: true } : e)); };
+  const addAdvance = async () => {
+    if (!newAdvance.employee_id || !newAdvance.amount) return;
+    setSaving(true);
+    const emp = employees.find(e => e.id === newAdvance.employee_id);
+    const res = await db.post("employee_advances", { employee_id: newAdvance.employee_id, employee_name: emp?.name || "", amount: Number(newAdvance.amount), date: newAdvance.date, note: newAdvance.note, created_by: user.name });
+    if (Array.isArray(res) && res[0]) setAdvances(prev => [res[0], ...prev]);
+    setNewAdvance({ employee_id: "", amount: "", date: today, note: "" });
+    setModal(null); setSaving(false);
+  };
+  const deleteAdvance = async (id) => {
+    const ok = await checkClave("eliminar"); if (!ok) return;
+    if (!window.confirm("¿Eliminar este adelanto?")) return;
+    await db.delete("employee_advances", id);
+    setAdvances(prev => prev.filter(a => a.id !== id));
+  };
   const addClient = async () => { setSaving(true); const res = await db.post("clients", { ...newClient, total_orders: 0 }); if (Array.isArray(res)) setClients(prev => [res[0], ...prev]); setNewClient({ name: "", phone: "", email: "" }); setModal(null); setSaving(false); };
   const deleteClient = async (id) => { setClients(prev => prev.filter(c => c.id !== id)); await db.delete("clients", id); };
   const updateClient = async () => { if (!editingClient) return; await db.patch("clients", editingClient.id, { name: editingClient.name, phone: editingClient.phone, email: editingClient.email }); setClients(prev => prev.map(c => c.id === editingClient.id ? { ...c, ...editingClient } : c)); setEditingClient(null); };
@@ -909,6 +929,7 @@ export default function LavanderiaApp() {
     { id: "entregas", label: "Entregas", icon: "📦" },
     { id: "clients", label: "Clientes", icon: "👤" },
     { id: "expenses", label: "Gastos", icon: "💰" },
+    { id: "nomina", label: "Nómina", icon: "💸" },
     { id: "report", label: "Informes", icon: "📋" },
     { id: "config", label: "Configuración", icon: "⚙️" },
     { id: "reversar", label: "Reversar", icon: "↩️" },
@@ -1333,6 +1354,119 @@ export default function LavanderiaApp() {
                   </tbody>
                 </table>
               </>}
+            </div>
+          )}
+
+          {/* NOMINA */}
+          {tab === "nomina" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>💸 Nómina — Adelantos de Empleados</h2>
+                <button onClick={() => setModal("newAdvance")} style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000" }}>+ Registrar Adelanto</button>
+              </div>
+
+              <div style={{ ...card, marginBottom: 20 }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={advanceFrom} onChange={e => setAdvanceFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={advanceTo} onChange={e => setAdvanceTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignSelf: "flex-end" }}>
+                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; setAdvanceFrom(`${ym}-01`); setAdvanceTo(`${ym}-15`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "8px 14px", fontSize: 12 }}>Quincena 1 (1-15)</button>
+                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; const lastDay=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); setAdvanceFrom(`${ym}-16`); setAdvanceTo(`${ym}-${String(lastDay).padStart(2,"0")}`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "8px 14px", fontSize: 12 }}>Quincena 2 (16-fin)</button>
+                  </div>
+                </div>
+              </div>
+
+              {(() => {
+                const filteredAdvances = advances.filter(a => a.date >= advanceFrom && a.date <= advanceTo);
+                const totalPeriodo = filteredAdvances.reduce((s,a) => s + Number(a.amount), 0);
+                const porEmpleado = {};
+                filteredAdvances.forEach(a => {
+                  const key = a.employee_id || a.employee_name || "—";
+                  if (!porEmpleado[key]) porEmpleado[key] = { name: a.employee_name || "—", total: 0, count: 0 };
+                  porEmpleado[key].total += Number(a.amount);
+                  porEmpleado[key].count += 1;
+                });
+                const empleadosList = Object.values(porEmpleado).sort((a,b) => b.total - a.total);
+
+                const exportNomina = () => {
+                  const csv = [
+                    ["Empleado","Fecha","Monto","Nota","Registrado por"],
+                    ...filteredAdvances.map(a => [a.employee_name||"", a.date, Math.round(Number(a.amount)), a.note||"", a.created_by||""]),
+                    ["","","TOTAL", Math.round(totalPeriodo), "", ""]
+                  ].map(r => r.join(",")).join("\n");
+                  const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                  a.href = url; a.download = `adelantos_${advanceFrom}_${advanceTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                };
+
+                return <>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 20 }}>
+                    <div style={{ ...card, borderLeft: "4px solid #FFD54F" }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>💸</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>${Math.round(totalPeriodo).toLocaleString()}</div>
+                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Total adelantado en el período</div>
+                    </div>
+                    <div style={{ ...card, borderLeft: "4px solid #4FC3F7" }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>👥</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#4FC3F7" }}>{empleadosList.length}</div>
+                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Empleados con adelantos</div>
+                    </div>
+                    <div style={{ ...card, borderLeft: "4px solid #66BB6A" }}>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>📋</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#66BB6A" }}>{filteredAdvances.length}</div>
+                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Registros</div>
+                    </div>
+                  </div>
+
+                  {empleadosList.length > 0 && (
+                    <div style={{ ...card, marginBottom: 20 }}>
+                      <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#8B949E" }}>Total a descontar por empleado</h3>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 12 }}>
+                        {empleadosList.map((emp,i) => (
+                          <div key={i} style={{ background: "#0D1117", borderRadius: 10, padding: "12px 16px", borderLeft: "3px solid #FFD54F" }}>
+                            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{emp.name}</div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                              <span style={{ fontSize: 11, color: "#8B949E" }}>{emp.count} adelanto{emp.count!==1?"s":""}</span>
+                              <span style={{ fontWeight: 800, fontSize: 17, color: "#FFD54F" }}>${Math.round(emp.total).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {isAdmin && filteredAdvances.length > 0 && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                    <button onClick={exportNomina} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                  </div>}
+
+                  {filteredAdvances.length === 0
+                    ? <div style={{ ...card, textAlign: "center", padding: 40, color: "#484F58" }}><div style={{ fontSize: 40, marginBottom: 8 }}>💸</div><div>No hay adelantos registrados en este período</div></div>
+                    : <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                          <thead><tr style={{ background: "#21262D" }}>{["Empleado","Fecha","Monto","Nota","Registrado por",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
+                          <tbody>
+                            {filteredAdvances.map(a => (
+                              <tr key={a.id} style={{ borderBottom: "1px solid #21262D" }}>
+                                <td style={{ padding:"12px 14px",fontWeight:600 }}>{a.employee_name}</td>
+                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{a.date}</td>
+                                <td style={{ padding:"12px 14px",fontWeight:700,color:"#FFD54F" }}>${Math.round(Number(a.amount)).toLocaleString()}</td>
+                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:13 }}>{a.note||"—"}</td>
+                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{a.created_by||"—"}</td>
+                                <td style={{ padding:"12px 14px" }}><button onClick={()=>deleteAdvance(a.id)} title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                  }
+                </>;
+              })()}
             </div>
           )}
 
@@ -2385,6 +2519,25 @@ export default function LavanderiaApp() {
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newExpense.amount} onChange={e=>setNewExpense(p=>({...p,amount:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newExpense.date} onChange={e=>setNewExpense(p=>({...p,date:e.target.value}))} /></div>
                   <button onClick={addExpense} disabled={saving} style={{ ...btn,background:"linear-gradient(135deg,#EF5350,#B71C1C)",color:"#fff",padding:12,opacity:saving?0.7:1 }}>{saving?"Guardando...":"Guardar Gasto"}</button>
+                </div>
+              </>
+            )}
+
+            {modal === "newAdvance" && (
+              <>
+                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>💸 Registrar Adelanto</h3>
+                <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                  <div>
+                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>EMPLEADO</label>
+                    <select style={inp} value={newAdvance.employee_id} onChange={e=>setNewAdvance(p=>({...p,employee_id:e.target.value}))}>
+                      <option value="" style={{ background:"#1a1a2e" }}>Selecciona un empleado...</option>
+                      {employees.map(emp => <option key={emp.id} value={emp.id} style={{ background:"#1a1a2e" }}>{emp.name}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newAdvance.amount} onChange={e=>setNewAdvance(p=>({...p,amount:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newAdvance.date} onChange={e=>setNewAdvance(p=>({...p,date:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOTA (opcional)</label><input style={inp} placeholder="Ej: Adelanto para transporte" value={newAdvance.note} onChange={e=>setNewAdvance(p=>({...p,note:e.target.value}))} /></div>
+                  <button onClick={addAdvance} disabled={saving||!newAdvance.employee_id||!newAdvance.amount} style={{ ...btn,background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",padding:12,opacity:(saving||!newAdvance.employee_id||!newAdvance.amount)?0.5:1 }}>{saving?"Guardando...":"Guardar Adelanto"}</button>
                 </div>
               </>
             )}
