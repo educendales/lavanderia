@@ -400,8 +400,17 @@ export default function LavanderiaApp() {
   const searchEntrega = () => {
     const q = entregaSearch.trim().toLowerCase(); if (!q) return;
     const byOrder = orders.find(o => o.order_number?.toLowerCase() === q);
-    if (byOrder) { setEntregaResults([byOrder]); } else { setEntregaResults(orders.filter(o => o.phone?.toLowerCase().includes(q))); }
+    const results = byOrder ? [byOrder] : orders.filter(o => o.phone?.toLowerCase().includes(q));
+    setEntregaResults(results);
     setEntregaResult(null); setEntregaConfirmed(false); setEntregaSinRecibo(false); setEntregaPayment("efectivo");
+    const yaSinRecibo = results.filter(o => o.status === "entregado" && o.sin_recibo);
+    if (yaSinRecibo.length > 0) {
+      const msg = yaSinRecibo.map(o => {
+        const fecha = o.delivered_at ? new Date(o.delivered_at + "T00:00:00").toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : "fecha desconocida";
+        return `Orden ${o.order_number || "—"}: entregada SIN RECIBO el ${fecha} por ${o.delivered_by || "—"}.`;
+      }).join("\n");
+      alert("⚠️ ATENCIÓN — Esta orden ya fue entregada SIN RECIBO:\n\n" + msg + "\n\nSi el cliente presenta el comprobante físico, verifica bien antes de entregar nuevamente.");
+    }
   };
 
   const confirmarEntrega = async () => {
@@ -1087,15 +1096,17 @@ export default function LavanderiaApp() {
                   </div>
                   {entregaResults.map(o => {
                     const isSelected=selectedEntregas.some(s=>s.id===o.id), isPending=o.status!=="entregado";
-                    return <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${isSelected?"#66BB6A":STATUS_LABELS[o.status]?.color||"#30363D"}`, background: isSelected?"rgba(102,187,106,0.06)":"#161B22" }}>
+                    const yaSinRecibo = !isPending && o.sin_recibo;
+                    return <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${yaSinRecibo?"#EF5350":isSelected?"#66BB6A":STATUS_LABELS[o.status]?.color||"#30363D"}`, background: yaSinRecibo?"rgba(239,83,80,0.06)":isSelected?"rgba(102,187,106,0.06)":"#161B22" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
                           {isPending && <input type="checkbox" checked={isSelected} onChange={() => setSelectedEntregas(prev=>isSelected?prev.filter(s=>s.id!==o.id):[...prev,o])} style={{ width:20,height:20,accentColor:"#66BB6A",cursor:"pointer",flexShrink:0 }} />}
-                          {!isPending && <span style={{ fontSize: 18, flexShrink: 0 }}>✅</span>}
+                          {!isPending && <span style={{ fontSize: 18, flexShrink: 0 }}>{yaSinRecibo?"⚠️":"✅"}</span>}
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                               <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number||"—"}</span>
                               <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
+                              {yaSinRecibo && <span style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>⚠️ Entregada sin recibo</span>}
                             </div>
                             <div style={{ fontSize: 13, color: "#8B949E" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
                             <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date||"—"}{o.delivered_by&&<span style={{ color:"#C792EA" }}> · 👤 {o.delivered_by}</span>}</div>
@@ -1103,7 +1114,7 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ textAlign: "right", marginLeft: 12 }}>
                           <div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A", marginBottom: 4 }}>${Math.round(Number(o.price))}</div>
-                          {isPending && <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(o.payment_method||"efectivo"); }} style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "4px 10px", fontSize: 11 }}>Ver detalle →</button>}
+                          <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(o.payment_method||"efectivo"); }} style={{ ...btn, background: yaSinRecibo?"rgba(239,83,80,0.15)":"rgba(79,195,247,0.1)", color: yaSinRecibo?"#EF5350":"#4FC3F7", padding: "4px 10px", fontSize: 11 }}>Ver detalle →</button>
                         </div>
                       </div>
                     </div>;
