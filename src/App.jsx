@@ -55,7 +55,7 @@ const STATUS_LABELS = {
 const getToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const getDeliveryDefault = () => { const d = new Date(); d.setDate(d.getDate()+2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const today = getToday();
-const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "" };
+const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false };
 const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
 const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = (svcs||DEFAULT_SERVICES).find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
 
@@ -92,6 +92,17 @@ export default function LavanderiaApp() {
   const [agencyReportFrom, setAgencyReportFrom] = useState(() => { const d = new Date(); d.setDate(1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; });
   const [agencyReportTo, setAgencyReportTo] = useState(today);
   const [agencyReportId, setAgencyReportId] = useState("todas");
+  const [domiciliarios, setDomiciliarios] = useState([]);
+  const [newDomiciliario, setNewDomiciliario] = useState({ name: "", phone: "", contact_name: "", address: "" });
+  const [editingDomiciliario, setEditingDomiciliario] = useState(null);
+  const [domiciliarioSearch, setDomiciliarioSearch] = useState("");
+  const [selectedDomiciliarioId, setSelectedDomiciliarioId] = useState("");
+  const [domiciliarioOrderFilterDate, setDomiciliarioOrderFilterDate] = useState("");
+  const [domiciliarioReportFrom, setDomiciliarioReportFrom] = useState(() => { const d = new Date(); d.setDate(1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; });
+  const [domiciliarioReportTo, setDomiciliarioReportTo] = useState(today);
+  const [domiciliarioReportId, setDomiciliarioReportId] = useState("todas");
+  const [domicilioReportFrom, setDomicilioReportFrom] = useState(() => { const d = new Date(); d.setDate(1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; });
+  const [domicilioReportTo, setDomicilioReportTo] = useState(today);
   const [entregaSearch, setEntregaSearch] = useState("");
   const [selectedEntregas, setSelectedEntregas] = useState([]);
   const [entregaMultiPayment, setEntregaMultiPayment] = useState("efectivo");
@@ -345,7 +356,7 @@ export default function LavanderiaApp() {
   }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi, ab, adv, ag] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies")]);
+    const [o, e, c, oi, ab, adv, ag, dom] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
@@ -353,6 +364,7 @@ export default function LavanderiaApp() {
     if (Array.isArray(ab)) setAbonos(ab);
     if (Array.isArray(adv)) setAdvances(adv);
     if (Array.isArray(ag)) setAgencies(ag);
+    if (Array.isArray(dom)) setDomiciliarios(dom);
   };
   useEffect(() => { if (user) loadData(); }, [user]);
 
@@ -366,12 +378,12 @@ export default function LavanderiaApp() {
     setSaving(true);
     const garments = totalGarments(items), price = totalPrice(items);
     const uniqueServices = [...new Set(items.map(it => it.service))];
-    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null };
+    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null, domiciliario_id: newOrder.domiciliario_id || null, a_domicilio: !!newOrder.a_domicilio };
     const res = await db.post("orders", o);
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
       for (const item of items) await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors||[]).join(", "), service: item.service });
-      if (!newOrder.agencia_id) {
+      if (!newOrder.agencia_id && !newOrder.domiciliario_id) {
         const existing = clients.find(c => c.phone === newOrder.phone);
         if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
         else if (newOrder.client_name) { const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 }); if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]); }
@@ -431,6 +443,9 @@ export default function LavanderiaApp() {
   const addAgency = async () => { if (!newAgency.name) return; setSaving(true); const res = await db.post("agencies", newAgency); if (Array.isArray(res) && res[0]) setAgencies(prev => [res[0], ...prev]); setNewAgency({ name: "", phone: "", contact_name: "", address: "" }); setModal(null); setSaving(false); };
   const deleteAgency = async (id) => { const ok = await checkClave("eliminar"); if (!ok) return; if (!window.confirm("¿Eliminar esta agencia? Sus órdenes históricas no se borran.")) return; await db.delete("agencies", id); setAgencies(prev => prev.filter(a => a.id !== id)); };
   const updateAgency = async () => { if (!editingAgency) return; await db.patch("agencies", editingAgency.id, { name: editingAgency.name, phone: editingAgency.phone, contact_name: editingAgency.contact_name, address: editingAgency.address }); setAgencies(prev => prev.map(a => a.id === editingAgency.id ? { ...a, ...editingAgency } : a)); setEditingAgency(null); };
+  const addDomiciliario = async () => { if (!newDomiciliario.name) return; setSaving(true); const res = await db.post("domiciliarios", newDomiciliario); if (Array.isArray(res) && res[0]) setDomiciliarios(prev => [res[0], ...prev]); setNewDomiciliario({ name: "", phone: "", contact_name: "", address: "" }); setModal(null); setSaving(false); };
+  const deleteDomiciliario = async (id) => { const ok = await checkClave("eliminar"); if (!ok) return; if (!window.confirm("¿Eliminar este domiciliario? Sus órdenes históricas no se borran.")) return; await db.delete("domiciliarios", id); setDomiciliarios(prev => prev.filter(d => d.id !== id)); };
+  const updateDomiciliario = async () => { if (!editingDomiciliario) return; await db.patch("domiciliarios", editingDomiciliario.id, { name: editingDomiciliario.name, phone: editingDomiciliario.phone, contact_name: editingDomiciliario.contact_name, address: editingDomiciliario.address }); setDomiciliarios(prev => prev.map(d => d.id === editingDomiciliario.id ? { ...d, ...editingDomiciliario } : d)); setEditingDomiciliario(null); };
   const deleteOrder = async (id) => { setOrders(prev => prev.filter(o => o.id !== id)); await db.delete("orders", id); };
 
   const searchEntrega = () => {
@@ -945,6 +960,7 @@ export default function LavanderiaApp() {
     { id: "entregas", label: "Entregas", icon: "📦" },
     { id: "clients", label: "Clientes", icon: "👤" },
     { id: "agencias", label: "Agencias", icon: "🏢" },
+    { id: "domiciliarios", label: "Domiciliarios", icon: "🛵" },
     { id: "expenses", label: "Gastos", icon: "💰" },
     { id: "nomina", label: "Nómina", icon: "💸" },
     { id: "report", label: "Informes", icon: "📋" },
@@ -1106,7 +1122,7 @@ export default function LavanderiaApp() {
                     {filteredOrders.map(o => (
                       <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
                         <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number||"—"}</span></td>
-                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600 }}>{o.client_name}</div><div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div></td>
+                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 11, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}</div><div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div></td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ fontWeight: 600 }}>{o.garments} prendas</div>
                           {orderItems[o.id] && <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 10, background: "#21262D", borderRadius: 8, padding: "3px 7px" }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color&&<span style={{ color: "#C792EA" }}> · {it.color}</span>}<span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price)*Number(it.quantity))}</span></span>)}</div>}
@@ -1417,6 +1433,100 @@ export default function LavanderiaApp() {
                                   <div style={{ display: "flex", gap: 6 }}>
                                     <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
                                     <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden de agencia?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>;
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* DOMICILIARIOS */}
+          {tab === "domiciliarios" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>🛵 Domiciliarios</h2>
+                <button onClick={() => setModal("newDomiciliario")} style={{ ...btn, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff" }}>+ Nuevo Domiciliario</button>
+              </div>
+              <div style={{ marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
+                <input style={{ ...inp, maxWidth: 320 }} placeholder="🔍 Buscar por nombre o teléfono..." value={domiciliarioSearch} onChange={e => setDomiciliarioSearch(e.target.value)} />
+                {domiciliarioSearch && <button onClick={() => setDomiciliarioSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 14px", fontSize: 12 }}>✕ Limpiar</button>}
+              </div>
+
+              {(() => {
+                const filteredDomiciliarios = domiciliarios.filter(d => d.name?.toLowerCase().includes(domiciliarioSearch.toLowerCase()) || d.phone?.includes(domiciliarioSearch));
+                return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 16, marginBottom: 24 }}>
+                  {filteredDomiciliarios.map(dm => {
+                    const dmOrders = orders.filter(o => o.domiciliario_id === dm.id);
+                    const totalValor = dmOrders.reduce((s,o) => s+Number(o.price), 0);
+                    return <div key={dm.id} style={{ ...card, borderTop: "3px solid #66BB6A" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                        <div style={{ fontSize: 28 }}>🛵</div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => setEditingDomiciliario({ ...dm })} title="Editar" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
+                          <button onClick={() => deleteDomiciliario(dm.id)} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{dm.name}</div>
+                      {dm.contact_name && <div style={{ color: "#8B949E", fontSize: 13, marginTop: 2 }}>👤 {dm.contact_name}</div>}
+                      {dm.phone && <div style={{ color: "#8B949E", fontSize: 13 }}>📞 {dm.phone}</div>}
+                      {dm.address && <div style={{ color: "#8B949E", fontSize: 13 }}>📍 {dm.address}</div>}
+                      <div style={{ marginTop: 12, background: "rgba(102,187,106,0.1)", borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                        <span style={{ fontSize: 12, color: "#8B949E" }}>{dmOrders.length} orden{dmOrders.length!==1?"es":""}</span>
+                        <span style={{ fontWeight: 800, color: "#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</span>
+                      </div>
+                      <button onClick={() => {
+                        const defaultSvc = emptyItem.service, defaultType = emptyItem.garment_type;
+                        const priceByService = precioByService[defaultSvc]?.[defaultType];
+                        const priceDefault = precioDefaults[defaultType];
+                        const defaultPrice = priceByService || priceDefault || "";
+                        setNewOrder({ ...emptyOrder, client_name: dm.name, phone: dm.phone||"", domiciliario_id: dm.id, delivery_date: getDeliveryDefault() });
+                        setItems([{ ...emptyItem, price: defaultPrice }]);
+                        setModal("newOrder");
+                      }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff", padding: 10, fontSize: 13, fontWeight: 700 }}>+ Nueva Orden</button>
+                    </div>;
+                  })}
+                  {filteredDomiciliarios.length === 0 && <p style={{ color: "#484F58" }}>No se encontraron domiciliarios</p>}
+                </div>;
+              })()}
+
+              <div style={{ ...card }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                  <h3 style={{ margin: 0, fontSize: 16, color: "#8B949E" }}>Órdenes de domiciliarios</h3>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <select value={selectedDomiciliarioId} onChange={e => setSelectedDomiciliarioId(e.target.value)} style={{ ...inp, width: 180, fontSize: 13 }}>
+                      <option value="" style={{ background:"#1a1a2e" }}>Todos los domiciliarios</option>
+                      {domiciliarios.map(dm => <option key={dm.id} value={dm.id} style={{ background:"#1a1a2e" }}>{dm.name}</option>)}
+                    </select>
+                    <input type="date" value={domiciliarioOrderFilterDate} onChange={e => setDomiciliarioOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    {domiciliarioOrderFilterDate && <button onClick={() => setDomiciliarioOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
+                  </div>
+                </div>
+                {(() => {
+                  const domiciliarioOrders = orders.filter(o => o.domiciliario_id && (!selectedDomiciliarioId || o.domiciliario_id === selectedDomiciliarioId) && (!domiciliarioOrderFilterDate || o.date === domiciliarioOrderFilterDate));
+                  return domiciliarioOrders.length === 0
+                    ? <div style={{ textAlign: "center", padding: 32, color: "#484F58" }}><div style={{ fontSize: 36, marginBottom: 8 }}>🛵</div><div>No hay órdenes de domiciliarios con este filtro</div></div>
+                    : <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                          <thead><tr style={{ background: "#21262D" }}>{["# Orden","Domiciliario","Prendas","Total","Fecha","Entrega","Estado",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
+                          <tbody>
+                            {domiciliarioOrders.map(o => (
+                              <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(102,187,106,0.15)", color: "#66BB6A", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number||"—"}</span></td>
+                                <td style={{ padding: "12px 14px", fontWeight: 600 }}>{o.client_name}</td>
+                                <td style={{ padding: "12px 14px" }}>{o.garments} prendas</td>
+                                <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
+                                <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
+                                <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.delivery_date||"—"}</td>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                <td style={{ padding: "12px 14px" }}>
+                                  <div style={{ display: "flex", gap: 6 }}>
+                                    <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
+                                    <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden de domiciliario?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
                                   </div>
                                 </td>
                               </tr>
@@ -2074,6 +2184,200 @@ export default function LavanderiaApp() {
                 })()}
               </div>
 
+              {/* DOMICILIARIOS POR RANGO */}
+              <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#66BB6A" }}>🛵 Informe de Domiciliarios</h3>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={domiciliarioReportFrom} onChange={e => setDomiciliarioReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={domiciliarioReportTo} onChange={e => setDomiciliarioReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DOMICILIARIO</label>
+                    <select value={domiciliarioReportId} onChange={e => setDomiciliarioReportId(e.target.value)} style={{ ...inp, width: 180, fontSize: 13 }}>
+                      <option value="todas" style={{ background:"#1a1a2e" }}>Todos los domiciliarios</option>
+                      {domiciliarios.map(dm => <option key={dm.id} value={dm.id} style={{ background:"#1a1a2e" }}>{dm.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {(() => {
+                  const rango = orders.filter(o => o.domiciliario_id && o.date >= domiciliarioReportFrom && o.date <= domiciliarioReportTo && (domiciliarioReportId === "todas" || o.domiciliario_id === domiciliarioReportId));
+                  const totalValor = rango.reduce((s,o) => s+Number(o.price), 0);
+                  const totalPrendas = rango.reduce((s,o) => s+Number(o.garments), 0);
+                  const porDomiciliario = {};
+                  rango.forEach(o => {
+                    const key = o.domiciliario_id;
+                    if (!porDomiciliario[key]) porDomiciliario[key] = { name: o.client_name, total: 0, garments: 0, count: 0 };
+                    porDomiciliario[key].total += Number(o.price);
+                    porDomiciliario[key].garments += Number(o.garments);
+                    porDomiciliario[key].count += 1;
+                  });
+                  const domiciliariosList = Object.values(porDomiciliario).sort((a,b) => b.total - a.total);
+
+                  const exportDomiciliarios = () => {
+                    const csv = [
+                      ["# Orden","Domiciliario","Prendas","Servicio","Total","Fecha","Entrega","Estado"],
+                      ...rango.map(o => [o.order_number||"", o.client_name, o.garments, getServiceLabel(o.service, services), Math.round(Number(o.price)), o.date, o.delivery_date||"", STATUS_LABELS[o.status]?.label||""]),
+                      ["","","","","TOTAL", Math.round(totalValor), "", ""]
+                    ].map(r => r.join(",")).join("\n");
+                    const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
+                    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                    a.href = url; a.download = `domiciliarios_${domiciliarioReportFrom}_${domiciliarioReportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                  };
+
+                  return rango.length === 0
+                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay órdenes de domiciliarios en este rango de fechas</p>
+                    : <>
+                        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16 }}>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total facturado</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#FFD54F" }}>{rango.length}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Órdenes</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#4FC3F7" }}>{totalPrendas}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Prendas</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FF8A65" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#FF8A65" }}>{domiciliariosList.length}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Domiciliarios activos</div>
+                          </div>
+                        </div>
+
+                        {domiciliarioReportId === "todas" && domiciliariosList.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:8 }}>TOTAL A FACTURAR POR DOMICILIARIO</div>
+                            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12 }}>
+                              {domiciliariosList.map((dm,i) => (
+                                <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 16px",borderLeft:"3px solid #66BB6A" }}>
+                                  <div style={{ fontWeight:700,fontSize:14,marginBottom:4 }}>{dm.name}</div>
+                                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"baseline" }}>
+                                    <span style={{ fontSize:11,color:"#8B949E" }}>{dm.count} orden{dm.count!==1?"es":""} · {dm.garments} prendas</span>
+                                    <span style={{ fontWeight:800,fontSize:17,color:"#66BB6A" }}>${Math.round(dm.total).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                          <button onClick={exportDomiciliarios} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                        </div>}
+
+                        <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                            <thead><tr style={{ background:"#21262D" }}>{["# Orden","Domiciliario","Prendas","Total","Fecha","Entrega","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {rango.map(o => (
+                                <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(102,187,106,0.15)",color:"#66BB6A",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
+                                  <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
+                                  <td style={{ padding:"10px 12px" }}>{o.garments}</td>
+                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
+                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.date}</td>
+                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.delivery_date||"—"}</td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                </tr>
+                              ))}
+                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                                <td colSpan={3} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
+                                <td colSpan={3}></td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </>;
+                })()}
+              </div>
+
+              {/* DOMICILIOS PROPIOS POR RANGO */}
+              <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#4FC3F7" }}>🛵 Domicilios Propios (recogidos en casa del cliente)</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Órdenes marcadas como "Recibido a domicilio"</p>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={domicilioReportFrom} onChange={e => setDomicilioReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={domicilioReportTo} onChange={e => setDomicilioReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                </div>
+                {(() => {
+                  const rango = orders.filter(o => o.a_domicilio && o.date >= domicilioReportFrom && o.date <= domicilioReportTo);
+                  const totalValor = rango.reduce((s,o) => s+Number(o.price), 0);
+                  const totalPrendas = rango.reduce((s,o) => s+Number(o.garments), 0);
+
+                  const exportDomicilios = () => {
+                    const csv = [
+                      ["# Orden","Cliente","Empleado","Prendas","Servicio","Total","Fecha","Entrega","Estado"],
+                      ...rango.map(o => [o.order_number||"", o.client_name, o.employee||"", o.garments, getServiceLabel(o.service, services), Math.round(Number(o.price)), o.date, o.delivery_date||"", STATUS_LABELS[o.status]?.label||""]),
+                      ["","","","","","TOTAL", Math.round(totalValor), "", ""]
+                    ].map(r => r.join(",")).join("\n");
+                    const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
+                    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                    a.href = url; a.download = `domicilios_propios_${domicilioReportFrom}_${domicilioReportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                  };
+
+                  return rango.length === 0
+                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay órdenes a domicilio en este rango de fechas</p>
+                    : <>
+                        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16 }}>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#4FC3F7" }}>${Math.round(totalValor).toLocaleString()}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total recaudado</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#FFD54F" }}>{rango.length}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Órdenes a domicilio</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#66BB6A" }}>{totalPrendas}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Prendas</div>
+                          </div>
+                        </div>
+
+                        {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                          <button onClick={exportDomicilios} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                        </div>}
+
+                        <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                            <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Empleado","Prendas","Total","Fecha","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {rango.map(o => (
+                                <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
+                                  <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
+                                  <td style={{ padding:"10px 12px",color:"#C792EA" }}>{o.employee||"—"}</td>
+                                  <td style={{ padding:"10px 12px" }}>{o.garments}</td>
+                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
+                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.date}</td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                </tr>
+                              ))}
+                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                                <td colSpan={4} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
+                                <td colSpan={2}></td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </>;
+                })()}
+              </div>
+
               {/* PAGOS POR MÉTODO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
                 <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#C792EA" }}>💳 Pagos por Método — Rango de Fechas</h3>
@@ -2674,6 +2978,7 @@ export default function LavanderiaApp() {
               <>
                 <h3 style={{ margin:"0 0 20px",fontSize:18 }}>➕ Nueva Orden</h3>
                 {newOrder.agencia_id && <div style={{ background:"rgba(255,138,101,0.1)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#FF8A65",display:"flex",alignItems:"center",gap:6 }}>🏢 Orden para agencia: <b>{newOrder.client_name}</b></div>}
+                {newOrder.domiciliario_id && <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#66BB6A",display:"flex",alignItems:"center",gap:6 }}>🛵 Orden para domiciliario: <b>{newOrder.client_name}</b></div>}
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div style={{ position:"relative" }}>
                     <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label>
@@ -2734,6 +3039,12 @@ export default function LavanderiaApp() {
                     <input type="date" style={{ ...inp,colorScheme:"dark",borderColor:"#FFD54F44" }} value={newOrder.delivery_date} onChange={e=>setNewOrder(p=>({...p,delivery_date:e.target.value}))} />
                     <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>Por defecto: 2 días después de hoy. Puedes cambiarla.</div>
                   </div>
+                  {!newOrder.agencia_id && !newOrder.domiciliario_id && (
+                    <label onClick={()=>setNewOrder(p=>({...p,a_domicilio:!p.a_domicilio}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newOrder.a_domicilio?"rgba(102,187,106,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newOrder.a_domicilio?"#66BB6A":"#30363D"}`,borderRadius:10,padding:"10px 14px" }}>
+                      <input type="checkbox" checked={!!newOrder.a_domicilio} onChange={e=>setNewOrder(p=>({...p,a_domicilio:e.target.checked}))} style={{ width:18,height:18,accentColor:"#66BB6A" }} />
+                      <div><div style={{ fontWeight:600,color:newOrder.a_domicilio?"#66BB6A":"#8B949E" }}>🛵 Recibido a domicilio</div><div style={{ fontSize:11,color:"#484F58" }}>Marca esto si fuiste tú (o tu empleado) a recoger la ropa donde el cliente</div></div>
+                    </label>
+                  )}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:12,fontSize:13,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"💾 Solo Guardar"}
@@ -2743,12 +3054,12 @@ export default function LavanderiaApp() {
                       setSaving(true);
                       const garments=totalGarments(items), price=totalPrice(items);
                       const uniqueServices=[...new Set(items.map(it=>it.service))];
-                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null};
+                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null,domiciliario_id:newOrder.domiciliario_id||null,a_domicilio:!!newOrder.a_domicilio};
                       const res=await db.post("orders",o);
                       if(Array.isArray(res)&&res[0]){
                         const savedOrder=res[0], orderId=savedOrder.id;
                         for(const item of items)await db.post("order_items",{order_id:orderId,garment_type:item.garment_type,quantity:Number(item.quantity),price:Number(item.price),color:(item.colors||[]).join(", "),service:item.service});
-                        if(!newOrder.agencia_id){
+                        if(!newOrder.agencia_id&&!newOrder.domiciliario_id){
                           const existing=clients.find(c=>c.phone===newOrder.phone);
                           if(existing){await db.patch("clients",existing.id,{total_orders:(existing.total_orders||0)+1});setClients(prev=>prev.map(c=>c.id===existing.id?{...c,total_orders:(c.total_orders||0)+1}:c));}
                           else if(newOrder.client_name){const nc=await db.post("clients",{name:newOrder.client_name,phone:newOrder.phone,email:"",total_orders:1});if(Array.isArray(nc))setClients(prev=>[nc[0],...prev]);}
@@ -2866,6 +3177,19 @@ export default function LavanderiaApp() {
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newAgency.phone} onChange={e=>setNewAgency(p=>({...p,phone:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={inp} placeholder="Dirección de la agencia" value={newAgency.address} onChange={e=>setNewAgency(p=>({...p,address:e.target.value}))} /></div>
                   <button onClick={addAgency} disabled={saving||!newAgency.name} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",padding:12,opacity:(saving||!newAgency.name)?0.6:1 }}>{saving?"Guardando...":"Guardar Agencia"}</button>
+                </div>
+              </>
+            )}
+
+            {modal === "newDomiciliario" && (
+              <>
+                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>🛵 Nuevo Domiciliario</h3>
+                <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={inp} placeholder="Nombre del domiciliario" value={newDomiciliario.name} onChange={e=>setNewDomiciliario(p=>({...p,name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={inp} placeholder="Si aplica" value={newDomiciliario.contact_name} onChange={e=>setNewDomiciliario(p=>({...p,contact_name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newDomiciliario.phone} onChange={e=>setNewDomiciliario(p=>({...p,phone:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={inp} placeholder="Si aplica" value={newDomiciliario.address} onChange={e=>setNewDomiciliario(p=>({...p,address:e.target.value}))} /></div>
+                  <button onClick={addDomiciliario} disabled={saving||!newDomiciliario.name} style={{ ...btn,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,opacity:(saving||!newDomiciliario.name)?0.6:1 }}>{saving?"Guardando...":"Guardar Domiciliario"}</button>
                 </div>
               </>
             )}
@@ -3336,6 +3660,24 @@ export default function LavanderiaApp() {
               <div style={{ display:"flex",gap:10,marginTop:8 }}>
                 <button onClick={()=>setEditingAgency(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
                 <button onClick={updateAgency} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingDomiciliario && (
+        <div onClick={() => setEditingDomiciliario(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #66BB6A",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 20px",fontSize:18,color:"#E6EDF3" }}>✏️ Editar Domiciliario</h3>
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.name} onChange={e=>setEditingDomiciliario(p=>({...p,name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.contact_name||""} onChange={e=>setEditingDomiciliario(p=>({...p,contact_name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.phone||""} onChange={e=>setEditingDomiciliario(p=>({...p,phone:e.target.value}))} /></div>
+              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.address||""} onChange={e=>setEditingDomiciliario(p=>({...p,address:e.target.value}))} /></div>
+              <div style={{ display:"flex",gap:10,marginTop:8 }}>
+                <button onClick={()=>setEditingDomiciliario(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
+                <button onClick={updateDomiciliario} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
               </div>
             </div>
           </div>
