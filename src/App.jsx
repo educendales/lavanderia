@@ -953,6 +953,14 @@ export default function LavanderiaApp() {
           .lv-sidebar-close { display:block !important; }
           .lv-main { padding:14px !important; }
         }
+        .lv-item-grid { display:grid; grid-template-columns:2fr 55px 75px 1fr 30px; gap:6px; align-items:center; }
+        @media (max-width: 600px) {
+          .lv-item-header { display:none !important; }
+          .lv-item-grid { grid-template-columns: 1fr 1fr; row-gap:8px; }
+          .lv-item-grid > *:nth-child(1) { grid-column: 1 / -1; }
+          .lv-item-grid > *:nth-child(4) { grid-column: 1 / -1; }
+          .lv-item-grid > *:nth-child(5) { grid-column: 1 / -1; justify-self:end; }
+        }
         @media (max-width: 480px) {
           .lv-kpi-grid { grid-template-columns: 1fr 1fr !important; }
         }
@@ -2459,13 +2467,13 @@ export default function LavanderiaApp() {
                       <label style={{ fontSize:12,color:"#8B949E",fontWeight:600 }}>PRENDAS</label>
                       <button onClick={addItem} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"4px 10px",fontSize:12 }}>+ Agregar</button>
                     </div>
-                    <div style={{ display:"grid",gridTemplateColumns:"2fr 55px 75px 1fr 30px",gap:6,marginBottom:4 }}>{["Tipo de prenda","Cant.","Precio c/u","Colores",""].map((h,i)=><div key={i} style={{ fontSize:10,color:"#484F58",fontWeight:600 }}>{h}</div>)}</div>
+                    <div className="lv-item-grid lv-item-header" style={{ marginBottom:4 }}>{["Tipo de prenda","Cant.","Precio c/u","Colores",""].map((h,i)=><div key={i} style={{ fontSize:10,color:"#484F58",fontWeight:600 }}>{h}</div>)}</div>
                     {items.map((item,i) => (
                       <div key={i} style={{ marginBottom:10,background:"rgba(255,255,255,0.02)",borderRadius:10,padding:10,border:"1px solid #21262D" }}>
                         <div style={{ display:"flex",gap:4,marginBottom:8 }}>{services.map(sv=>{ const sel=item.service===sv.id; return <label key={sv.id} onClick={()=>updateItem(i,"service",sv.id)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:3,cursor:"pointer",fontSize:10,fontWeight:600,background:sel?sv.color+"22":"rgba(255,255,255,0.03)",border:`1.5px solid ${sel?sv.color:"#30363D"}`,borderRadius:6,padding:"4px 2px",color:sel?sv.color:"#484F58",userSelect:"none" }}>{sv.icon} {sv.label}</label>; })}</div>
-                        <div style={{ display:"grid",gridTemplateColumns:"2fr 55px 75px 1fr 30px",gap:6,alignItems:"center",marginBottom:8 }}>
+                        <div className="lv-item-grid" style={{ alignItems:"center",marginBottom:8 }}>
                           <select value={item.garment_type} onChange={e=>updateItem(i,"garment_type",e.target.value)} style={{ ...inp,padding:"8px 10px" }}>{garmentTypes.map(g=><option key={g} value={g} style={{ background:"#1a1a2e" }}>{GARMENT_ICONS[g]||"👕"} {g}</option>)}</select>
-                          <input type="number" min={1} value={item.quantity} onChange={e=>updateItem(i,"quantity",e.target.value)} style={{ ...inp,padding:"8px 6px",textAlign:"center" }} />
+                          <input type="number" min={1} placeholder="Cant." value={item.quantity} onChange={e=>updateItem(i,"quantity",e.target.value)} style={{ ...inp,padding:"8px 6px",textAlign:"center" }} />
                           <input type="number" min={0} placeholder="0" value={item.price} onChange={e=>updateItem(i,"price",e.target.value)} style={{ ...inp,padding:"8px 6px" }} />
                           <div style={{ position:"relative" }}>
                             {(item.colors||[]).length>0&&<div style={{ display:"flex",flexWrap:"wrap",gap:3,marginBottom:3 }}>{(item.colors||[]).map((c,ci)=><span key={ci} style={{ fontSize:10,background:"rgba(199,146,234,0.2)",color:"#C792EA",border:"1px solid rgba(199,146,234,0.4)",borderRadius:10,padding:"1px 6px",display:"flex",alignItems:"center",gap:2 }}>{c}<span onMouseDown={()=>updateItem(i,"colors",(item.colors||[]).filter((_,idx)=>idx!==ci))} style={{ cursor:"pointer",color:"#EF5350",fontWeight:700 }}>×</span></span>)}</div>}
