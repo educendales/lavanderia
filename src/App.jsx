@@ -371,7 +371,7 @@ export default function LavanderiaApp() {
   const handleLogin = () => { if (selectedEmp && pin === selectedEmp.pin) { setUser(selectedEmp); setPinError(false); } else { setPinError(true); setPin(""); } };
   const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity), 0);
   const totalPrice = (its) => its.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0);
-  const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length) return null; return `${it.garment_type}${it.colors?.length ? " "+it.colors[0] : ""}: ${found.join(", ")}`; }).filter(Boolean); return lines.join(" | "); };
+  const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length) return null; const qty = Number(it.quantity)||1; const colorLabel = it.colors?.length ? (qty>1 ? ` (${it.colors.join(", ")})` : ` ${it.colors[0]}`) : ""; return `${qty>1?qty+" ":""}${it.garment_type}${colorLabel}: ${found.join(", ")}`; }).filter(Boolean); return lines.join(" | "); };
 
   const addOrder = async () => {
     if (!newOrder.client_name || items.length === 0) return;
@@ -544,7 +544,7 @@ export default function LavanderiaApp() {
         ${its.map(it => {
           const svcLabel = it.service === 'lavado_normal' ? 'LAV. NORMAL' : it.service === 'planchado' ? 'PLANCHADO' : it.service === 'tintura' ? 'TINTURA' : it.service === 'secado' ? 'SECADO' : (it.service||"").toUpperCase();
           const total = Math.round(Number(it.price) * Number(it.quantity));
-          const color = it.color ? it.color.toUpperCase().substring(0,14) : '';
+          const color = it.color ? it.color.toUpperCase() : '';
           return `<tr>
             <td>${(it.garment_type||"").toUpperCase().substring(0,13)}</td>
             <td>${svcLabel}</td>
@@ -598,7 +598,7 @@ export default function LavanderiaApp() {
           <tr style="border-bottom:1px solid #000"><th style="text-align:left">Prenda</th><th style="text-align:left">Serv.</th><th style="text-align:right">Cant</th><th style="text-align:right">Total</th></tr>
           ${its.map(it => {
             const svc = it.service==="lavado_normal"?"LAV.NOR":it.service==="planchado"?"PLANCH":it.service==="lavado_express"?"EXPRESS":it.service==="secado"?"SECADO":"";
-            const color = it.color ? it.color.substring(0,20) : '';
+            const color = it.color || '';
             return `<tr><td>${(it.garment_type||"").substring(0,10)}</td><td>${svc}</td><td style="text-align:right">${it.quantity}</td><td style="text-align:right">$${Math.round(Number(it.price)*Number(it.quantity)).toLocaleString("es-CO")}</td></tr>${color ? `<tr><td colspan="4" style="font-size:9px;color:#555;padding-top:0">${color}</td></tr>` : ''}`;
           }).join("")}
         </table>
