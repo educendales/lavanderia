@@ -395,7 +395,7 @@ export default function LavanderiaApp() {
     setSaving(false);
     loadData();
     if (Array.isArray(res) && res[0]) {
-      const imap = { [res[0].id]: savedItems.map((it,i) => ({ ...it, id: i, order_id: res[0].id })) };
+      const imap = { [res[0].id]: savedItems.map((it,i) => ({ ...it, color: (it.colors||[]).join(", "), id: i, order_id: res[0].id })) };
       setSavedOrder({ order: res[0], itemsMap: imap });
       setModal("reciboOpciones");
     }
@@ -605,6 +605,7 @@ export default function LavanderiaApp() {
         <hr style="border:1px dashed #000;margin:6px 0"/>
         <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px"><span>Total a Pagar</span><span>$${Math.round(Number(order.price)).toLocaleString("es-CO")}</span></div>
         <div style="display:flex;justify-content:space-between"><span>No. Piezas</span><span>${order.garments}</span></div>
+        ${order.notes ? `<hr style="border:1px dashed #000;margin:6px 0"/><div style="font-size:9px"><b>Obs:</b> ${order.notes}</div>` : ''}
         <hr style="border:1px dashed #000;margin:6px 0"/>
         <div style="font-size:8px;text-align:center;margin-top:4px">${reciboLegal}</div>
       `;
