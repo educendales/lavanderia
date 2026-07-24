@@ -55,7 +55,7 @@ const STATUS_LABELS = {
 const getToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const getDeliveryDefault = () => { const d = new Date(); d.setDate(d.getDate()+2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const today = getToday();
-const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault() };
+const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "" };
 const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
 const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = (svcs||DEFAULT_SERVICES).find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
 
@@ -83,6 +83,15 @@ export default function LavanderiaApp() {
   const [saving, setSaving] = useState(false);
   const [colorFocusIdx, setColorFocusIdx] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
+  const [agencies, setAgencies] = useState([]);
+  const [newAgency, setNewAgency] = useState({ name: "", phone: "", contact_name: "", address: "" });
+  const [editingAgency, setEditingAgency] = useState(null);
+  const [agencySearch, setAgencySearch] = useState("");
+  const [selectedAgencyId, setSelectedAgencyId] = useState("");
+  const [agencyOrderFilterDate, setAgencyOrderFilterDate] = useState("");
+  const [agencyReportFrom, setAgencyReportFrom] = useState(() => { const d = new Date(); d.setDate(1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; });
+  const [agencyReportTo, setAgencyReportTo] = useState(today);
+  const [agencyReportId, setAgencyReportId] = useState("todas");
   const [entregaSearch, setEntregaSearch] = useState("");
   const [selectedEntregas, setSelectedEntregas] = useState([]);
   const [entregaMultiPayment, setEntregaMultiPayment] = useState("efectivo");
@@ -336,13 +345,14 @@ export default function LavanderiaApp() {
   }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi, ab, adv] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances")]);
+    const [o, e, c, oi, ab, adv, ag] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
     if (Array.isArray(oi)) { const grouped = {}; oi.forEach(item => { if (!grouped[item.order_id]) grouped[item.order_id] = []; grouped[item.order_id].push(item); }); setOrderItems(grouped); }
     if (Array.isArray(ab)) setAbonos(ab);
     if (Array.isArray(adv)) setAdvances(adv);
+    if (Array.isArray(ag)) setAgencies(ag);
   };
   useEffect(() => { if (user) loadData(); }, [user]);
 
@@ -356,14 +366,16 @@ export default function LavanderiaApp() {
     setSaving(true);
     const garments = totalGarments(items), price = totalPrice(items);
     const uniqueServices = [...new Set(items.map(it => it.service))];
-    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price };
+    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null };
     const res = await db.post("orders", o);
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
       for (const item of items) await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors||[]).join(", "), service: item.service });
-      const existing = clients.find(c => c.phone === newOrder.phone);
-      if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
-      else if (newOrder.client_name) { const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 }); if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]); }
+      if (!newOrder.agencia_id) {
+        const existing = clients.find(c => c.phone === newOrder.phone);
+        if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
+        else if (newOrder.client_name) { const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 }); if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]); }
+      }
     }
     const savedItems = [...items];
     setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
@@ -416,6 +428,9 @@ export default function LavanderiaApp() {
   const addClient = async () => { setSaving(true); const res = await db.post("clients", { ...newClient, total_orders: 0 }); if (Array.isArray(res)) setClients(prev => [res[0], ...prev]); setNewClient({ name: "", phone: "", email: "" }); setModal(null); setSaving(false); };
   const deleteClient = async (id) => { setClients(prev => prev.filter(c => c.id !== id)); await db.delete("clients", id); };
   const updateClient = async () => { if (!editingClient) return; await db.patch("clients", editingClient.id, { name: editingClient.name, phone: editingClient.phone, email: editingClient.email }); setClients(prev => prev.map(c => c.id === editingClient.id ? { ...c, ...editingClient } : c)); setEditingClient(null); };
+  const addAgency = async () => { if (!newAgency.name) return; setSaving(true); const res = await db.post("agencies", newAgency); if (Array.isArray(res) && res[0]) setAgencies(prev => [res[0], ...prev]); setNewAgency({ name: "", phone: "", contact_name: "", address: "" }); setModal(null); setSaving(false); };
+  const deleteAgency = async (id) => { const ok = await checkClave("eliminar"); if (!ok) return; if (!window.confirm("¿Eliminar esta agencia? Sus órdenes históricas no se borran.")) return; await db.delete("agencies", id); setAgencies(prev => prev.filter(a => a.id !== id)); };
+  const updateAgency = async () => { if (!editingAgency) return; await db.patch("agencies", editingAgency.id, { name: editingAgency.name, phone: editingAgency.phone, contact_name: editingAgency.contact_name, address: editingAgency.address }); setAgencies(prev => prev.map(a => a.id === editingAgency.id ? { ...a, ...editingAgency } : a)); setEditingAgency(null); };
   const deleteOrder = async (id) => { setOrders(prev => prev.filter(o => o.id !== id)); await db.delete("orders", id); };
 
   const searchEntrega = () => {
@@ -481,7 +496,7 @@ export default function LavanderiaApp() {
       }
     </style></head><body>
       <div class="center">
-        <div style="font-size:11px">Factura No.: ${order.order_number?.replace("S","") || ""}</div>
+        <div style="font-size:11px">Factura No.: ${order.order_number?.replace(/^[A-Za-z]/,"") || ""}</div>
         ${logoEnRecibo && negocioLogo ? `<img src="${negocioLogo}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;margin:4px 0" />` : ''}
         <div class="big">${negocioNombre.toUpperCase()}</div>
         <div style="font-size:11px;margin-top:2px">${negocioDireccion}</div>
@@ -545,7 +560,7 @@ export default function LavanderiaApp() {
       div.style.cssText = "position:fixed;left:-9999px;top:0;width:300px;background:#fff;padding:16px;font-family:Courier New,monospace;font-size:11px;color:#000;";
       div.innerHTML = `
         <div style="text-align:center;margin-bottom:8px">
-          <div style="font-weight:bold;font-size:13px">Factura No.: ${order.order_number?.replace("S","")||""}</div>
+          <div style="font-weight:bold;font-size:13px">Factura No.: ${order.order_number?.replace(/^[A-Za-z]/,"")||""}</div>
           ${logoEnRecibo && negocioLogo ? `<img src="${negocioLogo}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;margin-bottom:4px" />` : ''}
           <div style="font-weight:bold;font-size:15px;margin:4px 0">${negocioNombre.toUpperCase()}</div>
           <div>${negocioDireccion}</div>
@@ -625,7 +640,7 @@ export default function LavanderiaApp() {
     data += ESC + "3\x18";  // reduce line spacing to 24 dots
     // Header - centered bold
     data += CENTER + BOLD_ON;
-    data += "Factura No.: " + (order.order_number?.replace("S","") || "") + LF;
+    data += "Factura No.: " + (order.order_number?.replace(/^[A-Za-z]/,"") || "") + LF;
     data += BOLD_OFF;
     data += LF;
     data += BOLD_ON + BIG_ON;
@@ -929,6 +944,7 @@ export default function LavanderiaApp() {
     { id: "orders", label: "Órdenes", icon: "👕" },
     { id: "entregas", label: "Entregas", icon: "📦" },
     { id: "clients", label: "Clientes", icon: "👤" },
+    { id: "agencias", label: "Agencias", icon: "🏢" },
     { id: "expenses", label: "Gastos", icon: "💰" },
     { id: "nomina", label: "Nómina", icon: "💸" },
     { id: "report", label: "Informes", icon: "📋" },
@@ -1315,6 +1331,95 @@ export default function LavanderiaApp() {
                   </div>
                 ))}
                 {filteredClients.length === 0 && <p style={{ color: "#484F58" }}>No se encontraron clientes</p>}
+              </div>
+            </div>
+          )}
+
+          {/* AGENCIAS */}
+          {tab === "agencias" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>🏢 Agencias</h2>
+                <button onClick={() => setModal("newAgency")} style={{ ...btn, background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff" }}>+ Nueva Agencia</button>
+              </div>
+              <div style={{ marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
+                <input style={{ ...inp, maxWidth: 320 }} placeholder="🔍 Buscar por nombre o teléfono..." value={agencySearch} onChange={e => setAgencySearch(e.target.value)} />
+                {agencySearch && <button onClick={() => setAgencySearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 14px", fontSize: 12 }}>✕ Limpiar</button>}
+              </div>
+
+              {(() => {
+                const filteredAgencies = agencies.filter(a => a.name?.toLowerCase().includes(agencySearch.toLowerCase()) || a.phone?.includes(agencySearch));
+                return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 16, marginBottom: 24 }}>
+                  {filteredAgencies.map(ag => {
+                    const agOrders = orders.filter(o => o.agencia_id === ag.id);
+                    const totalValor = agOrders.reduce((s,o) => s+Number(o.price), 0);
+                    return <div key={ag.id} style={{ ...card, borderTop: "3px solid #FF8A65" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                        <div style={{ fontSize: 28 }}>🏢</div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => setEditingAgency({ ...ag })} title="Editar" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
+                          <button onClick={() => deleteAgency(ag.id)} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{ag.name}</div>
+                      {ag.contact_name && <div style={{ color: "#8B949E", fontSize: 13, marginTop: 2 }}>👤 {ag.contact_name}</div>}
+                      {ag.phone && <div style={{ color: "#8B949E", fontSize: 13 }}>📞 {ag.phone}</div>}
+                      {ag.address && <div style={{ color: "#8B949E", fontSize: 13 }}>📍 {ag.address}</div>}
+                      <div style={{ marginTop: 12, background: "rgba(255,138,101,0.1)", borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                        <span style={{ fontSize: 12, color: "#8B949E" }}>{agOrders.length} orden{agOrders.length!==1?"es":""}</span>
+                        <span style={{ fontWeight: 800, color: "#FF8A65" }}>${Math.round(totalValor).toLocaleString()}</span>
+                      </div>
+                      <button onClick={() => {
+                        const defaultSvc = emptyItem.service, defaultType = emptyItem.garment_type;
+                        const priceByService = precioByService[defaultSvc]?.[defaultType];
+                        const priceDefault = precioDefaults[defaultType];
+                        const defaultPrice = priceByService || priceDefault || "";
+                        setNewOrder({ ...emptyOrder, client_name: ag.name, phone: ag.phone||"", agencia_id: ag.id, delivery_date: getDeliveryDefault() });
+                        setItems([{ ...emptyItem, price: defaultPrice }]);
+                        setModal("newOrder");
+                      }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff", padding: 10, fontSize: 13, fontWeight: 700 }}>+ Nueva Orden</button>
+                    </div>;
+                  })}
+                  {filteredAgencies.length === 0 && <p style={{ color: "#484F58" }}>No se encontraron agencias</p>}
+                </div>;
+              })()}
+
+              <div style={{ ...card }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                  <h3 style={{ margin: 0, fontSize: 16, color: "#8B949E" }}>Órdenes de agencias</h3>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <select value={selectedAgencyId} onChange={e => setSelectedAgencyId(e.target.value)} style={{ ...inp, width: 180, fontSize: 13 }}>
+                      <option value="" style={{ background:"#1a1a2e" }}>Todas las agencias</option>
+                      {agencies.map(ag => <option key={ag.id} value={ag.id} style={{ background:"#1a1a2e" }}>{ag.name}</option>)}
+                    </select>
+                    <input type="date" value={agencyOrderFilterDate} onChange={e => setAgencyOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    {agencyOrderFilterDate && <button onClick={() => setAgencyOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
+                  </div>
+                </div>
+                {(() => {
+                  const agencyOrders = orders.filter(o => o.agencia_id && (!selectedAgencyId || o.agencia_id === selectedAgencyId) && (!agencyOrderFilterDate || o.date === agencyOrderFilterDate));
+                  return agencyOrders.length === 0
+                    ? <div style={{ textAlign: "center", padding: 32, color: "#484F58" }}><div style={{ fontSize: 36, marginBottom: 8 }}>🏢</div><div>No hay órdenes de agencias con este filtro</div></div>
+                    : <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                          <thead><tr style={{ background: "#21262D" }}>{["# Orden","Agencia","Prendas","Total","Fecha","Entrega","Estado",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
+                          <tbody>
+                            {agencyOrders.map(o => (
+                              <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,138,101,0.15)", color: "#FF8A65", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number||"—"}</span></td>
+                                <td style={{ padding: "12px 14px", fontWeight: 600 }}>{o.client_name}</td>
+                                <td style={{ padding: "12px 14px" }}>{o.garments} prendas</td>
+                                <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
+                                <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
+                                <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.delivery_date||"—"}</td>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                <td style={{ padding: "12px 14px" }}><button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>;
+                })()}
               </div>
             </div>
           )}
@@ -1841,6 +1946,121 @@ export default function LavanderiaApp() {
                               <tr style={{ background:"#21262D",fontWeight:800 }}>
                                 <td colSpan={5} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </>;
+                })()}
+              </div>
+
+              {/* AGENCIAS POR RANGO */}
+              <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#FF8A65" }}>🏢 Informe de Agencias</h3>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={agencyReportFrom} onChange={e => setAgencyReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={agencyReportTo} onChange={e => setAgencyReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>AGENCIA</label>
+                    <select value={agencyReportId} onChange={e => setAgencyReportId(e.target.value)} style={{ ...inp, width: 180, fontSize: 13 }}>
+                      <option value="todas" style={{ background:"#1a1a2e" }}>Todas las agencias</option>
+                      {agencies.map(ag => <option key={ag.id} value={ag.id} style={{ background:"#1a1a2e" }}>{ag.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {(() => {
+                  const rango = orders.filter(o => o.agencia_id && o.date >= agencyReportFrom && o.date <= agencyReportTo && (agencyReportId === "todas" || o.agencia_id === agencyReportId));
+                  const totalValor = rango.reduce((s,o) => s+Number(o.price), 0);
+                  const totalPrendas = rango.reduce((s,o) => s+Number(o.garments), 0);
+                  const porAgencia = {};
+                  rango.forEach(o => {
+                    const key = o.agencia_id;
+                    if (!porAgencia[key]) porAgencia[key] = { name: o.client_name, total: 0, garments: 0, count: 0 };
+                    porAgencia[key].total += Number(o.price);
+                    porAgencia[key].garments += Number(o.garments);
+                    porAgencia[key].count += 1;
+                  });
+                  const agenciasList = Object.values(porAgencia).sort((a,b) => b.total - a.total);
+
+                  const exportAgencias = () => {
+                    const csv = [
+                      ["# Orden","Agencia","Prendas","Servicio","Total","Fecha","Entrega","Estado"],
+                      ...rango.map(o => [o.order_number||"", o.client_name, o.garments, getServiceLabel(o.service, services), Math.round(Number(o.price)), o.date, o.delivery_date||"", STATUS_LABELS[o.status]?.label||""]),
+                      ["","","","","TOTAL", Math.round(totalValor), "", ""]
+                    ].map(r => r.join(",")).join("\n");
+                    const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
+                    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                    a.href = url; a.download = `agencias_${agencyReportFrom}_${agencyReportTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                  };
+
+                  return rango.length === 0
+                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay órdenes de agencias en este rango de fechas</p>
+                    : <>
+                        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16 }}>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FF8A65" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#FF8A65" }}>${Math.round(totalValor).toLocaleString()}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total facturado</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#FFD54F" }}>{rango.length}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Órdenes</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#4FC3F7" }}>{totalPrendas}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Prendas</div>
+                          </div>
+                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
+                            <div style={{ fontWeight:800,fontSize:18,color:"#66BB6A" }}>{agenciasList.length}</div>
+                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Agencias activas</div>
+                          </div>
+                        </div>
+
+                        {agencyReportId === "todas" && agenciasList.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:8 }}>TOTAL A FACTURAR POR AGENCIA</div>
+                            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12 }}>
+                              {agenciasList.map((ag,i) => (
+                                <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 16px",borderLeft:"3px solid #FF8A65" }}>
+                                  <div style={{ fontWeight:700,fontSize:14,marginBottom:4 }}>{ag.name}</div>
+                                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"baseline" }}>
+                                    <span style={{ fontSize:11,color:"#8B949E" }}>{ag.count} orden{ag.count!==1?"es":""} · {ag.garments} prendas</span>
+                                    <span style={{ fontWeight:800,fontSize:17,color:"#FF8A65" }}>${Math.round(ag.total).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                          <button onClick={exportAgencias} style={{ ...btn,background:"rgba(255,138,101,0.15)",color:"#FF8A65",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                        </div>}
+
+                        <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                            <thead><tr style={{ background:"#21262D" }}>{["# Orden","Agencia","Prendas","Total","Fecha","Entrega","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {rango.map(o => (
+                                <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,138,101,0.15)",color:"#FF8A65",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
+                                  <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
+                                  <td style={{ padding:"10px 12px" }}>{o.garments}</td>
+                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
+                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.date}</td>
+                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.delivery_date||"—"}</td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                </tr>
+                              ))}
+                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                                <td colSpan={3} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
+                                <td colSpan={3}></td>
                               </tr>
                             </tbody>
                           </table>
@@ -2448,6 +2668,7 @@ export default function LavanderiaApp() {
             {modal === "newOrder" && (
               <>
                 <h3 style={{ margin:"0 0 20px",fontSize:18 }}>➕ Nueva Orden</h3>
+                {newOrder.agencia_id && <div style={{ background:"rgba(255,138,101,0.1)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#FF8A65",display:"flex",alignItems:"center",gap:6 }}>🏢 Orden para agencia: <b>{newOrder.client_name}</b></div>}
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div style={{ position:"relative" }}>
                     <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label>
@@ -2517,14 +2738,16 @@ export default function LavanderiaApp() {
                       setSaving(true);
                       const garments=totalGarments(items), price=totalPrice(items);
                       const uniqueServices=[...new Set(items.map(it=>it.service))];
-                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price};
+                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null};
                       const res=await db.post("orders",o);
                       if(Array.isArray(res)&&res[0]){
                         const savedOrder=res[0], orderId=savedOrder.id;
                         for(const item of items)await db.post("order_items",{order_id:orderId,garment_type:item.garment_type,quantity:Number(item.quantity),price:Number(item.price),color:(item.colors||[]).join(", "),service:item.service});
-                        const existing=clients.find(c=>c.phone===newOrder.phone);
-                        if(existing){await db.patch("clients",existing.id,{total_orders:(existing.total_orders||0)+1});setClients(prev=>prev.map(c=>c.id===existing.id?{...c,total_orders:(c.total_orders||0)+1}:c));}
-                        else if(newOrder.client_name){const nc=await db.post("clients",{name:newOrder.client_name,phone:newOrder.phone,email:"",total_orders:1});if(Array.isArray(nc))setClients(prev=>[nc[0],...prev]);}
+                        if(!newOrder.agencia_id){
+                          const existing=clients.find(c=>c.phone===newOrder.phone);
+                          if(existing){await db.patch("clients",existing.id,{total_orders:(existing.total_orders||0)+1});setClients(prev=>prev.map(c=>c.id===existing.id?{...c,total_orders:(c.total_orders||0)+1}:c));}
+                          else if(newOrder.client_name){const nc=await db.post("clients",{name:newOrder.client_name,phone:newOrder.phone,email:"",total_orders:1});if(Array.isArray(nc))setClients(prev=>[nc[0],...prev]);}
+                        }
                         await loadData();
                         const freshOrders=await db.get("orders");
                         const freshOrder=Array.isArray(freshOrders)?freshOrders.find(ord=>ord.id===orderId):null;
@@ -2625,6 +2848,19 @@ export default function LavanderiaApp() {
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newClient.phone} onChange={e=>setNewClient(p=>({...p,phone:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>EMAIL</label><input style={inp} type="email" placeholder="correo@email.com" value={newClient.email} onChange={e=>setNewClient(p=>({...p,email:e.target.value}))} /></div>
                   <button onClick={addClient} disabled={saving} style={{ ...btn,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,opacity:saving?0.7:1 }}>{saving?"Guardando...":"Guardar Cliente"}</button>
+                </div>
+              </>
+            )}
+
+            {modal === "newAgency" && (
+              <>
+                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>🏢 Nueva Agencia</h3>
+                <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE DE LA AGENCIA</label><input style={inp} placeholder="Ej: Lavandería El Rápido" value={newAgency.name} onChange={e=>setNewAgency(p=>({...p,name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={inp} placeholder="Nombre del contacto" value={newAgency.contact_name} onChange={e=>setNewAgency(p=>({...p,contact_name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newAgency.phone} onChange={e=>setNewAgency(p=>({...p,phone:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={inp} placeholder="Dirección de la agencia" value={newAgency.address} onChange={e=>setNewAgency(p=>({...p,address:e.target.value}))} /></div>
+                  <button onClick={addAgency} disabled={saving||!newAgency.name} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",padding:12,opacity:(saving||!newAgency.name)?0.6:1 }}>{saving?"Guardando...":"Guardar Agencia"}</button>
                 </div>
               </>
             )}
@@ -3077,6 +3313,24 @@ export default function LavanderiaApp() {
               <div style={{ display:"flex",gap:10,marginTop:8 }}>
                 <button onClick={()=>setEditingClient(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
                 <button onClick={updateClient} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingAgency && (
+        <div onClick={() => setEditingAgency(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #FF8A65",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 20px",fontSize:18,color:"#E6EDF3" }}>✏️ Editar Agencia</h3>
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.name} onChange={e=>setEditingAgency(p=>({...p,name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.contact_name||""} onChange={e=>setEditingAgency(p=>({...p,contact_name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.phone||""} onChange={e=>setEditingAgency(p=>({...p,phone:e.target.value}))} /></div>
+              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.address||""} onChange={e=>setEditingAgency(p=>({...p,address:e.target.value}))} /></div>
+              <div style={{ display:"flex",gap:10,marginTop:8 }}>
+                <button onClick={()=>setEditingAgency(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
+                <button onClick={updateAgency} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
               </div>
             </div>
           </div>
