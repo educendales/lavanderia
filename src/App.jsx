@@ -55,7 +55,7 @@ const STATUS_LABELS = {
 const getToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const getDeliveryDefault = () => { const d = new Date(); d.setDate(d.getDate()+2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const today = getToday();
-const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false };
+const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "" };
 const emptyItem = { garment_type: "Camisa", quantity: 1, price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
 const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = (svcs||DEFAULT_SERVICES).find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
 
@@ -378,7 +378,7 @@ export default function LavanderiaApp() {
     setSaving(true);
     const garments = totalGarments(items), price = totalPrice(items);
     const uniqueServices = [...new Set(items.map(it => it.service))];
-    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null, domiciliario_id: newOrder.domiciliario_id || null, a_domicilio: !!newOrder.a_domicilio };
+    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null, domiciliario_id: newOrder.domiciliario_id || null, a_domicilio: !!newOrder.a_domicilio, address: newOrder.address || "" };
     const res = await db.post("orders", o);
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
@@ -530,6 +530,7 @@ export default function LavanderiaApp() {
         <tr><td class="bold">Fecha Entrega:</td><td>${order.delivery_date||"—"}</td></tr>
         <tr><td class="bold">Cliente</td><td>${order.client_name||"—"}</td></tr>
         <tr><td class="bold">Telefono</td><td>${order.phone||"—"}</td></tr>
+        ${order.a_domicilio && order.address ? `<tr><td class="bold">Direccion</td><td>${order.address}</td></tr>` : ''}
       </table>
       <div class="line"></div>
       <table>
@@ -590,6 +591,7 @@ export default function LavanderiaApp() {
           <tr><td><b>Fecha Entrega:</b></td><td>${order.delivery_date||""}</td></tr>
           <tr><td><b>Cliente:</b></td><td>${order.client_name||""}</td></tr>
           <tr><td><b>Teléfono:</b></td><td>${order.phone||""}</td></tr>
+          ${order.a_domicilio && order.address ? `<tr><td><b>📍 Dirección:</b></td><td>${order.address}</td></tr>` : ''}
         </table>
         <hr style="border:1px dashed #000;margin:6px 0"/>
         <table style="width:100%;font-size:10px;border-collapse:collapse">
@@ -700,6 +702,7 @@ export default function LavanderiaApp() {
     data += BOLD_ON + rpad("Fecha Entrega:", order.delivery_date||"") + BOLD_OFF + LF;
     data += rpad("Cliente:", normalize(order.client_name||"")) + LF;
     data += rpad("Telefono:", order.phone||"") + LF;
+    if (order.a_domicilio && order.address) data += rpad("Direccion:", normalize(order.address)) + LF;
     data += LINE + LF;
 
     // Items header
@@ -2320,9 +2323,9 @@ export default function LavanderiaApp() {
 
                   const exportDomicilios = () => {
                     const csv = [
-                      ["# Orden","Cliente","Empleado","Prendas","Servicio","Total","Fecha","Entrega","Estado"],
-                      ...rango.map(o => [o.order_number||"", o.client_name, o.employee||"", o.garments, getServiceLabel(o.service, services), Math.round(Number(o.price)), o.date, o.delivery_date||"", STATUS_LABELS[o.status]?.label||""]),
-                      ["","","","","","TOTAL", Math.round(totalValor), "", ""]
+                      ["# Orden","Cliente","Dirección","Empleado","Prendas","Servicio","Total","Fecha","Entrega","Estado"],
+                      ...rango.map(o => [o.order_number||"", o.client_name, `"${(o.address||"").replace(/"/g,'""')}"`, o.employee||"", o.garments, getServiceLabel(o.service, services), Math.round(Number(o.price)), o.date, o.delivery_date||"", STATUS_LABELS[o.status]?.label||""]),
+                      ["","","","","","","TOTAL", Math.round(totalValor), "", ""]
                     ].map(r => r.join(",")).join("\n");
                     const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
                     const url = URL.createObjectURL(blob); const a = document.createElement("a");
@@ -2353,12 +2356,13 @@ export default function LavanderiaApp() {
 
                         <div style={{ overflowX:"auto" }}>
                           <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                            <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Empleado","Prendas","Total","Fecha","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
+                            <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Dirección","Empleado","Prendas","Total","Fecha","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
                             <tbody>
                               {rango.map(o => (
                                 <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
                                   <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
+                                  <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.address||"—"}</td>
                                   <td style={{ padding:"10px 12px",color:"#C792EA" }}>{o.employee||"—"}</td>
                                   <td style={{ padding:"10px 12px" }}>{o.garments}</td>
                                   <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
@@ -2367,7 +2371,7 @@ export default function LavanderiaApp() {
                                 </tr>
                               ))}
                               <tr style={{ background:"#21262D",fontWeight:800 }}>
-                                <td colSpan={4} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td colSpan={5} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
                                 <td colSpan={2}></td>
                               </tr>
@@ -3045,6 +3049,12 @@ export default function LavanderiaApp() {
                       <div><div style={{ fontWeight:600,color:newOrder.a_domicilio?"#66BB6A":"#8B949E" }}>🛵 Recibido a domicilio</div><div style={{ fontSize:11,color:"#484F58" }}>Marca esto si fuiste tú (o tu empleado) a recoger la ropa donde el cliente</div></div>
                     </label>
                   )}
+                  {newOrder.a_domicilio && (
+                    <div>
+                      <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>📍 DIRECCIÓN DEL CLIENTE</label>
+                      <input style={{ ...inp,borderColor:"rgba(102,187,106,0.4)" }} placeholder="Ej: Calle 45 # 20-10, apto 302" value={newOrder.address} onChange={e=>setNewOrder(p=>({...p,address:e.target.value}))} />
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:12,fontSize:13,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"💾 Solo Guardar"}
@@ -3054,7 +3064,7 @@ export default function LavanderiaApp() {
                       setSaving(true);
                       const garments=totalGarments(items), price=totalPrice(items);
                       const uniqueServices=[...new Set(items.map(it=>it.service))];
-                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null,domiciliario_id:newOrder.domiciliario_id||null,a_domicilio:!!newOrder.a_domicilio};
+                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null,domiciliario_id:newOrder.domiciliario_id||null,a_domicilio:!!newOrder.a_domicilio,address:newOrder.address||""};
                       const res=await db.post("orders",o);
                       if(Array.isArray(res)&&res[0]){
                         const savedOrder=res[0], orderId=savedOrder.id;
