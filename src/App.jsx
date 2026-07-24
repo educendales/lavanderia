@@ -371,7 +371,7 @@ export default function LavanderiaApp() {
   const handleLogin = () => { if (selectedEmp && pin === selectedEmp.pin) { setUser(selectedEmp); setPinError(false); } else { setPinError(true); setPin(""); } };
   const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity), 0);
   const totalPrice = (its) => its.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0);
-  const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length) return null; const qty = Number(it.quantity)||1; const colorLabel = it.colors?.length ? (qty>1 ? ` (${it.colors.join(", ")})` : ` ${it.colors[0]}`) : ""; return `${qty>1?qty+" ":""}${it.garment_type}${colorLabel}: ${found.join(", ")}`; }).filter(Boolean); return lines.join(" | "); };
+  const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length) return null; const qty = Number(it.quantity)||1; return `${qty>1?qty+" ":""}${it.garment_type}: ${found.join(", ")}`; }).filter(Boolean); return lines.join(" | "); };
 
   const addOrder = async () => {
     if (!newOrder.client_name || items.length === 0) return;
