@@ -598,7 +598,8 @@ export default function LavanderiaApp() {
           <tr style="border-bottom:1px solid #000"><th style="text-align:left">Prenda</th><th style="text-align:left">Serv.</th><th style="text-align:right">Cant</th><th style="text-align:right">Total</th></tr>
           ${its.map(it => {
             const svc = it.service==="lavado_normal"?"LAV.NOR":it.service==="planchado"?"PLANCH":it.service==="lavado_express"?"EXPRESS":it.service==="secado"?"SECADO":"";
-            return `<tr><td>${(it.garment_type||"").substring(0,10)}</td><td>${svc}</td><td style="text-align:right">${it.quantity}</td><td style="text-align:right">$${Math.round(Number(it.price)*Number(it.quantity)).toLocaleString("es-CO")}</td></tr>`;
+            const color = it.color ? it.color.substring(0,20) : '';
+            return `<tr><td>${(it.garment_type||"").substring(0,10)}</td><td>${svc}</td><td style="text-align:right">${it.quantity}</td><td style="text-align:right">$${Math.round(Number(it.price)*Number(it.quantity)).toLocaleString("es-CO")}</td></tr>${color ? `<tr><td colspan="4" style="font-size:9px;color:#555;padding-top:0">${color}</td></tr>` : ''}`;
           }).join("")}
         </table>
         <hr style="border:1px dashed #000;margin:6px 0"/>
