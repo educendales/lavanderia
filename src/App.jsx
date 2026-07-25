@@ -935,7 +935,12 @@ export default function LavanderiaApp() {
   const todayRevenue = todayOrders.reduce((s, o) => s + Number(o.price), 0);
   const todayExp = expenses.filter(e => e.date === filterDate && !e.eliminado).reduce((s, e) => s + Number(e.amount), 0);
   const todayGarments = todayOrders.reduce((s, o) => s + Number(o.garments), 0);
-  const filteredOrders = (orderFilterDate ? orders.filter(o => o.date === orderFilterDate) : orders).filter(o => !orderStatusFilter || o.status === orderStatusFilter);
+  const filteredOrders = orders.filter(o => {
+    if (orderStatusFilter && o.status !== orderStatusFilter) return false;
+    if (!orderFilterDate) return true;
+    if (orderStatusFilter === "entregado") return o.delivered_at === orderFilterDate;
+    return o.date === orderFilterDate;
+  });
   const filteredExpenses = expenseFilterDate ? expenses.filter(e => e.date === expenseFilterDate && !e.eliminado) : expenses.filter(e => !e.eliminado);
   const filteredClients = clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch));
   const isAdmin = user?.role === "admin";
@@ -1133,8 +1138,8 @@ export default function LavanderiaApp() {
           {/* ORDERS */}
           {tab === "orders" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Órdenes</h2>
                   <input type="date" value={orderFilterDate} onChange={e => setOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 13 }} />
                   {orderFilterDate && <button onClick={() => setOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
@@ -1153,6 +1158,7 @@ export default function LavanderiaApp() {
                   setModal("newOrder");
                 }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
               </div>
+              {orderFilterDate && <p style={{ margin: "0 0 14px", fontSize: 12, color: "#8B949E" }}>{orderStatusFilter === "entregado" ? "📅 Filtrando por fecha de entrega" : "📅 Filtrando por fecha de ingreso"}</p>}
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead><tr style={{ background: "#21262D" }}>{["# Orden","Cliente","Prendas","Servicio","Total","Fecha","Entrega","Estado","Recibo",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
