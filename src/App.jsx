@@ -136,6 +136,9 @@ export default function LavanderiaApp() {
   const [abonoModal, setAbonoModal] = useState(null);
   const [newAbono, setNewAbono] = useState({ amount: "", payment_method: "efectivo" });
   const [advances, setAdvances] = useState([]);
+  const [cajaBaseList, setCajaBaseList] = useState([]);
+  const [cajaBaseInput, setCajaBaseInput] = useState("");
+  const [savingBase, setSavingBase] = useState(false);
   const [newAdvance, setNewAdvance] = useState({ employee_id: "", amount: "", date: today, note: "", payment_method: "efectivo" });
   const [advanceFrom, setAdvanceFrom] = useState(() => { const d = new Date(); return d.getDate() <= 15 ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01` : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-16`; });
   const [advanceTo, setAdvanceTo] = useState(() => { const d = new Date(); if (d.getDate() <= 15) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-15`; const lastDay = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`; });
@@ -384,7 +387,7 @@ export default function LavanderiaApp() {
   }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi, ab, adv, ag, dom] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios")]);
+    const [o, e, c, oi, ab, adv, ag, dom, cb] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
@@ -393,8 +396,14 @@ export default function LavanderiaApp() {
     if (Array.isArray(adv)) setAdvances(adv);
     if (Array.isArray(ag)) setAgencies(ag);
     if (Array.isArray(dom)) setDomiciliarios(dom);
+    if (Array.isArray(cb)) setCajaBaseList(cb);
   };
   useEffect(() => { if (user) loadData(); }, [user]);
+  useEffect(() => {
+    if (!showInformeDiario) return;
+    const existing = cajaBaseList.find(cb => cb.date === filterDate);
+    setCajaBaseInput(existing ? String(existing.amount) : "");
+  }, [showInformeDiario, filterDate, cajaBaseList]);
 
   const handleLogin = () => { if (selectedEmp && pin === selectedEmp.pin) { setUser(selectedEmp); setPinError(false); } else { setPinError(true); setPin(""); } };
   const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity), 0);
@@ -464,6 +473,19 @@ export default function LavanderiaApp() {
     if (!window.confirm("¿Eliminar este adelanto?")) return;
     await db.delete("employee_advances", id);
     setAdvances(prev => prev.filter(a => a.id !== id));
+  };
+  const getCajaBase = (date) => cajaBaseList.find(cb => cb.date === date);
+  const saveCajaBase = async (date, amount) => {
+    setSavingBase(true);
+    const existing = getCajaBase(date);
+    if (existing) {
+      await db.patch("caja_base", existing.id, { amount: Number(amount), employee: user.name });
+      setCajaBaseList(prev => prev.map(cb => cb.id === existing.id ? { ...cb, amount: Number(amount), employee: user.name } : cb));
+    } else {
+      const res = await db.post("caja_base", { date, amount: Number(amount), employee: user.name });
+      if (Array.isArray(res) && res[0]) setCajaBaseList(prev => [...prev, res[0]]);
+    }
+    setSavingBase(false);
   };
   const addClient = async () => { setSaving(true); const res = await db.post("clients", { ...newClient, total_orders: 0 }); if (Array.isArray(res)) setClients(prev => [res[0], ...prev]); setNewClient({ name: "", phone: "", email: "" }); setModal(null); setSaving(false); };
   const deleteClient = async (id) => { setClients(prev => prev.filter(c => c.id !== id)); await db.delete("clients", id); };
@@ -3401,7 +3423,39 @@ export default function LavanderiaApp() {
               const totalAdvancesHoy = advancesHoy.reduce((s,a) => s+Number(a.amount), 0);
               const netoCaja = totalGeneral + totalAbonos - totalAdvancesHoy;
 
+              const baseHoy = getCajaBase(filterDate)?.amount || 0;
+              const efectivoEntregas = entregadasHoy.filter(o => (o.payment_method||"efectivo")==="efectivo").reduce((s,o)=>s+Number(o.price),0);
+              const efectivoAbonos = abonos.filter(a => a.date===filterDate && (a.payment_method||"efectivo")==="efectivo").reduce((s,a)=>s+Number(a.amount),0);
+              const efectivoGastos = expenses.filter(e => e.date===filterDate && !e.eliminado && (e.payment_method||"efectivo")==="efectivo").reduce((s,e)=>s+Number(e.amount),0);
+              const efectivoAdelantos = advancesHoy.filter(a => (a.payment_method||"efectivo")==="efectivo").reduce((s,a)=>s+Number(a.amount),0);
+              const totalEnCaja = baseHoy + efectivoEntregas + efectivoAbonos - efectivoGastos - efectivoAdelantos;
+
               return <>
+                {/* Base de caja */}
+                <div style={{ background:"rgba(102,187,106,0.06)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:10,padding:"14px 16px",marginBottom:16 }}>
+                  <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:8 }}>💵 BASE DE CAJA (lo que le dejaste al empleado)</div>
+                  <div style={{ display:"flex",gap:8 }}>
+                    <input type="number" placeholder="0" value={cajaBaseInput} onChange={e=>setCajaBaseInput(e.target.value)} style={{ flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #66BB6A",background:"#0D1117",color:"#E6EDF3",fontSize:16,fontWeight:700 }} />
+                    <button onClick={()=>saveCajaBase(filterDate, cajaBaseInput||0)} disabled={savingBase} style={{ ...btn,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:"10px 18px",opacity:savingBase?0.7:1 }}>{savingBase?"Guardando...":"💾 Guardar"}</button>
+                  </div>
+                </div>
+
+                {/* Cuadre de caja (solo efectivo) */}
+                <div style={{ background:"rgba(255,213,79,0.06)",border:"1px solid rgba(255,213,79,0.3)",borderRadius:10,padding:"14px 16px",marginBottom:16 }}>
+                  <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:10 }}>🧮 CUADRE DE CAJA (solo efectivo)</div>
+                  <div style={{ display:"flex",flexDirection:"column",gap:4,fontSize:13 }}>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>Base inicial</span><span>${Math.round(baseHoy).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>+ Entregas en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoEntregas).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>+ Abonos en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoAbonos).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>− Gastos en efectivo</span><span style={{ color:"#EF5350" }}>${Math.round(efectivoGastos).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>− Adelantos en efectivo</span><span style={{ color:"#EF5350" }}>${Math.round(efectivoAdelantos).toLocaleString()}</span></div>
+                  </div>
+                  <div style={{ borderTop:"1px solid rgba(255,213,79,0.3)",marginTop:10,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                    <span style={{ fontWeight:700,color:"#FFD54F" }}>Total que debe haber en caja</span>
+                    <span style={{ fontWeight:800,fontSize:22,color:"#FFD54F" }}>${Math.round(totalEnCaja).toLocaleString()}</span>
+                  </div>
+                </div>
+
                 {/* Totales por método */}
                 <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:16 }}>
                   {metodos.map(m => {
