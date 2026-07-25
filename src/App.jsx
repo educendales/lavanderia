@@ -931,6 +931,22 @@ export default function LavanderiaApp() {
     URL.revokeObjectURL(url);
   };
 
+  const exportOrders = () => {
+    const csv = [
+      ["# Orden","Cliente","Telefono","Prendas","Servicio","Total","Fecha Ingreso","Fecha Entrega","Estado","Recibo","Empleado"],
+      ...filteredOrders.map(o => [
+        o.order_number||"", o.client_name||"", o.phone||"", o.garments, getServiceLabel(o.service, services),
+        Math.round(Number(o.price)), o.date||"", o.delivery_date||"", STATUS_LABELS[o.status]?.label||o.status||"",
+        o.recibo_enviado==="whatsapp"?"WhatsApp":o.recibo_enviado==="impreso"?"Impreso":"—", o.employee||""
+      ])
+    ].map(r => r.join(",")).join("\n");
+    const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `ordenes_${orderFilterDate||today}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const todayOrders = orders.filter(o => o.date === filterDate);
   const todayRevenue = todayOrders.reduce((s, o) => s + Number(o.price), 0);
   const todayExp = expenses.filter(e => e.date === filterDate && !e.eliminado).reduce((s, e) => s + Number(e.amount), 0);
@@ -1148,15 +1164,18 @@ export default function LavanderiaApp() {
                     {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k} style={{ background:"#1a1a2e" }}>{v.label}</option>)}
                   </select>
                 </div>
-                <button onClick={() => {
-                  const defaultSvc = emptyItem.service;
-                  const defaultType = emptyItem.garment_type;
-                  const priceByService = precioByService[defaultSvc]?.[defaultType];
-                  const priceDefault = precioDefaults[defaultType];
-                  const defaultPrice = priceByService || priceDefault || "";
-                  setItems([{ ...emptyItem, price: defaultPrice }]);
-                  setModal("newOrder");
-                }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {isAdmin && <button onClick={exportOrders} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "8px 14px", fontSize: 12 }}>📥 Exportar Excel</button>}
+                  <button onClick={() => {
+                    const defaultSvc = emptyItem.service;
+                    const defaultType = emptyItem.garment_type;
+                    const priceByService = precioByService[defaultSvc]?.[defaultType];
+                    const priceDefault = precioDefaults[defaultType];
+                    const defaultPrice = priceByService || priceDefault || "";
+                    setItems([{ ...emptyItem, price: defaultPrice }]);
+                    setModal("newOrder");
+                  }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
+                </div>
               </div>
               {orderFilterDate && <p style={{ margin: "0 0 14px", fontSize: 12, color: "#8B949E" }}>{orderStatusFilter === "entregado" ? "📅 Filtrando por fecha de entrega" : "📅 Filtrando por fecha de ingreso"}</p>}
               <div style={{ overflowX: "auto" }}>
