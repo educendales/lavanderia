@@ -3434,10 +3434,14 @@ export default function LavanderiaApp() {
                 {/* Base de caja */}
                 <div style={{ background:"rgba(102,187,106,0.06)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:10,padding:"14px 16px",marginBottom:16 }}>
                   <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:8 }}>💵 BASE DE CAJA (lo que le dejaste al empleado)</div>
-                  <div style={{ display:"flex",gap:8 }}>
-                    <input type="number" placeholder="0" value={cajaBaseInput} onChange={e=>setCajaBaseInput(e.target.value)} style={{ flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #66BB6A",background:"#0D1117",color:"#E6EDF3",fontSize:16,fontWeight:700 }} />
-                    <button onClick={()=>saveCajaBase(filterDate, cajaBaseInput||0)} disabled={savingBase} style={{ ...btn,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:"10px 18px",opacity:savingBase?0.7:1 }}>{savingBase?"Guardando...":"💾 Guardar"}</button>
-                  </div>
+                  {isAdmin ? (
+                    <div style={{ display:"flex",gap:8 }}>
+                      <input type="number" placeholder="0" value={cajaBaseInput} onChange={e=>setCajaBaseInput(e.target.value)} style={{ flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #66BB6A",background:"#0D1117",color:"#E6EDF3",fontSize:16,fontWeight:700 }} />
+                      <button onClick={()=>saveCajaBase(filterDate, cajaBaseInput||0)} disabled={savingBase} style={{ ...btn,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:"10px 18px",opacity:savingBase?0.7:1 }}>{savingBase?"Guardando...":"💾 Guardar"}</button>
+                    </div>
+                  ) : (
+                    <div style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#66BB6A",fontSize:16,fontWeight:700 }}>${Math.round(Number(cajaBaseInput)||0).toLocaleString()}</div>
+                  )}
                 </div>
 
                 {/* Cuadre de caja (solo efectivo) */}
