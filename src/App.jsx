@@ -333,6 +333,33 @@ export default function LavanderiaApp() {
     }
   }, []);
 
+  useEffect(() => {
+    // Load Twemoji so icons (📦🛵🏢💸 etc.) look identical on every computer,
+    // regardless of Windows version or installed emoji font.
+    const parseEmojis = (root) => {
+      if (window.twemoji && root) window.twemoji.parse(root, { folder: "svg", ext: ".svg" });
+    };
+    const startObserving = () => {
+      parseEmojis(document.body);
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach(m => {
+          m.addedNodes.forEach(node => {
+            if (node.nodeType === 1) parseEmojis(node);
+          });
+        });
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    };
+    if (!window.twemoji) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js';
+      script.onload = startObserving;
+      document.head.appendChild(script);
+    } else {
+      startObserving();
+    }
+  }, []);
+
   useEffect(() => { db.get("employees").then(data => { if (Array.isArray(data) && data.length) { setEmployees(data); setSelectedEmp(data[0]); } setLoading(false); }); }, []);
 
   useEffect(() => {
@@ -978,6 +1005,7 @@ export default function LavanderiaApp() {
   return (
     <div style={s}>
       <style>{`
+        img.emoji { height:1em; width:1em; margin:0 .05em 0 .1em; vertical-align:-0.15em; display:inline-block; }
         .lv-mobile-topbar { display:none; }
         .lv-sidebar-overlay { display:none; }
         .lv-sidebar-close { display:none; }
