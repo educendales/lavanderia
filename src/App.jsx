@@ -76,6 +76,7 @@ export default function LavanderiaApp() {
   const [modal, setModal] = useState(null);
   const [filterDate, setFilterDate] = useState(today);
   const [orderFilterDate, setOrderFilterDate] = useState(today);
+  const [orderStatusFilter, setOrderStatusFilter] = useState("");
   const [newOrder, setNewOrder] = useState(emptyOrder);
   const [items, setItems] = useState([{ ...emptyItem }]);
   const [newExpense, setNewExpense] = useState({ concept: "", amount: "", date: today, category: "insumos", payment_method: "efectivo" });
@@ -934,7 +935,7 @@ export default function LavanderiaApp() {
   const todayRevenue = todayOrders.reduce((s, o) => s + Number(o.price), 0);
   const todayExp = expenses.filter(e => e.date === filterDate && !e.eliminado).reduce((s, e) => s + Number(e.amount), 0);
   const todayGarments = todayOrders.reduce((s, o) => s + Number(o.garments), 0);
-  const filteredOrders = orderFilterDate ? orders.filter(o => o.date === orderFilterDate) : orders;
+  const filteredOrders = (orderFilterDate ? orders.filter(o => o.date === orderFilterDate) : orders).filter(o => !orderStatusFilter || o.status === orderStatusFilter);
   const filteredExpenses = expenseFilterDate ? expenses.filter(e => e.date === expenseFilterDate && !e.eliminado) : expenses.filter(e => !e.eliminado);
   const filteredClients = clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch));
   const isAdmin = user?.role === "admin";
@@ -1137,6 +1138,10 @@ export default function LavanderiaApp() {
                   <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Órdenes</h2>
                   <input type="date" value={orderFilterDate} onChange={e => setOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 13 }} />
                   {orderFilterDate && <button onClick={() => setOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
+                  <select value={orderStatusFilter} onChange={e => setOrderStatusFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 13 }}>
+                    <option value="" style={{ background:"#1a1a2e" }}>Todos los estados</option>
+                    {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k} style={{ background:"#1a1a2e" }}>{v.label}</option>)}
+                  </select>
                 </div>
                 <button onClick={() => {
                   const defaultSvc = emptyItem.service;
@@ -1150,7 +1155,7 @@ export default function LavanderiaApp() {
               </div>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                  <thead><tr style={{ background: "#21262D" }}>{["# Orden","Cliente","Prendas","Servicio","Total","Fecha","Entrega","Recibo",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{ background: "#21262D" }}>{["# Orden","Cliente","Prendas","Servicio","Total","Fecha","Entrega","Estado","Recibo",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {filteredOrders.map(o => (
                       <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
@@ -1164,6 +1169,7 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(Number(o.price))}</td>
                         <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
                         <td style={{ padding: "12px 14px" }}><span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date||"—"}</span></td>
+                        <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                         <td style={{ padding: "12px 14px" }}>
                           {o.recibo_enviado === "whatsapp"
                             ? <span style={{ background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>📱 WA</span>
