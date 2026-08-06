@@ -1343,33 +1343,8 @@ export default function LavanderiaApp() {
                       </button>
                     )}
                   </div>
-                  {entregaResults.map(o => {
-                    const isSelected=selectedEntregas.some(s=>s.id===o.id), isPending=o.status!=="entregado";
-                    const yaSinRecibo = !isPending && o.sin_recibo;
-                    return <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${yaSinRecibo?"#EF5350":isSelected?"#66BB6A":STATUS_LABELS[o.status]?.color||"#30363D"}`, background: yaSinRecibo?"rgba(239,83,80,0.06)":isSelected?"rgba(102,187,106,0.06)":"#161B22" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
-                          {isPending && <input type="checkbox" checked={isSelected} onChange={() => setSelectedEntregas(prev=>isSelected?prev.filter(s=>s.id!==o.id):[...prev,o])} style={{ width:20,height:20,accentColor:"#66BB6A",cursor:"pointer",flexShrink:0 }} />}
-                          {!isPending && <span style={{ fontSize: 18, flexShrink: 0 }}>{yaSinRecibo?"⚠️":"✅"}</span>}
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                              <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number||"—"}</span>
-                              <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
-                              {yaSinRecibo && <span style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>⚠️ Entregada sin recibo</span>}
-                            </div>
-                            <div style={{ fontSize: 13, color: "#8B949E" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
-                            <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date||"—"}{o.delivered_by&&<span style={{ color:"#C792EA" }}> · 👤 {o.delivered_by}</span>}</div>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right", marginLeft: 12 }}>
-                          <div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A", marginBottom: 4 }}>${Math.round(Number(o.price))}</div>
-                          <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(o.payment_method||"efectivo"); }} style={{ ...btn, background: yaSinRecibo?"rgba(239,83,80,0.15)":"rgba(79,195,247,0.1)", color: yaSinRecibo?"#EF5350":"#4FC3F7", padding: "4px 10px", fontSize: 11 }}>Ver detalle →</button>
-                        </div>
-                      </div>
-                    </div>;
-                  })}
                   {selectedEntregas.length > 0 && (
-                    <div style={{ ...card, border: "1px solid #66BB6A", background: "rgba(102,187,106,0.06)", marginTop: 8 }}>
+                    <div style={{ ...card, border: "1px solid #66BB6A", background: "#161B22", marginBottom: 12, position: "sticky", top: 8, zIndex: 40, boxShadow: "0 6px 20px rgba(0,0,0,0.5)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                         <div>
                           <div style={{ fontWeight: 700, color: "#66BB6A", fontSize: 16 }}>{selectedEntregas.length} orden{selectedEntregas.length>1?"es":""} seleccionada{selectedEntregas.length>1?"s":""}</div>
@@ -1396,6 +1371,31 @@ export default function LavanderiaApp() {
                       </button>
                     </div>
                   )}
+                  {entregaResults.map(o => {
+                    const isSelected=selectedEntregas.some(s=>s.id===o.id), isPending=o.status!=="entregado";
+                    const yaSinRecibo = !isPending && o.sin_recibo;
+                    return <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${yaSinRecibo?"#EF5350":isSelected?"#66BB6A":STATUS_LABELS[o.status]?.color||"#30363D"}`, background: yaSinRecibo?"rgba(239,83,80,0.06)":isSelected?"rgba(102,187,106,0.06)":"#161B22" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
+                          {isPending && <input type="checkbox" checked={isSelected} onChange={() => setSelectedEntregas(prev=>isSelected?prev.filter(s=>s.id!==o.id):[...prev,o])} style={{ width:20,height:20,accentColor:"#66BB6A",cursor:"pointer",flexShrink:0 }} />}
+                          {!isPending && <span style={{ fontSize: 18, flexShrink: 0 }}>{yaSinRecibo?"⚠️":"✅"}</span>}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                              <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number||"—"}</span>
+                              <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
+                              {yaSinRecibo && <span style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>⚠️ Entregada sin recibo</span>}
+                            </div>
+                            <div style={{ fontSize: 13, color: "#8B949E" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
+                            <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date||"—"}{o.delivered_by&&<span style={{ color:"#C792EA" }}> · 👤 {o.delivered_by}</span>}</div>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", marginLeft: 12 }}>
+                          <div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A", marginBottom: 4 }}>${Math.round(Number(o.price))}</div>
+                          <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(o.payment_method||"efectivo"); }} style={{ ...btn, background: yaSinRecibo?"rgba(239,83,80,0.15)":"rgba(79,195,247,0.1)", color: yaSinRecibo?"#EF5350":"#4FC3F7", padding: "4px 10px", fontSize: 11 }}>Ver detalle →</button>
+                        </div>
+                      </div>
+                    </div>;
+                  })}
                 </div>
               )}
 
