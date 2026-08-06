@@ -1126,6 +1126,8 @@ export default function LavanderiaApp() {
     <div style={s}>
       <style>{`
         img.emoji { height:1em; width:1em; margin:0 .05em 0 .1em; vertical-align:-0.15em; display:inline-block; }
+        .lv-fixed-actionbar { position:fixed; left:0; right:0; bottom:0; z-index:200; padding:12px 16px; max-height:70vh; overflow-y:auto; }
+        @media (min-width: 861px) { .lv-fixed-actionbar { left:200px; } }
         .lv-mobile-topbar { display:none; }
         .lv-sidebar-overlay { display:none; }
         .lv-sidebar-close { display:none; }
@@ -1334,7 +1336,7 @@ export default function LavanderiaApp() {
               {entregaResults !== null && entregaResults.length === 0 && <div style={{ ...card, textAlign: "center", color: "#EF5350", padding: 32 }}><div style={{ fontSize: 40, marginBottom: 8 }}>😕</div><div style={{ fontWeight: 600 }}>No se encontró ninguna orden</div></div>}
 
               {entregaResults !== null && entregaResults.length > 0 && !entregaResult && (
-                <div>
+                <div style={{ paddingBottom: selectedEntregas.length > 0 ? 280 : 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div style={{ fontSize: 13, color: "#8B949E" }}>Se encontraron <strong style={{ color: "#4FC3F7" }}>{entregaResults.length} órdenes</strong> para este cliente</div>
                     {entregaResults.some(o => o.status !== "entregado") && (
@@ -1344,7 +1346,7 @@ export default function LavanderiaApp() {
                     )}
                   </div>
                   {selectedEntregas.length > 0 && (
-                    <div style={{ ...card, border: "1px solid #66BB6A", background: "#161B22", marginBottom: 12, position: "sticky", top: 8, zIndex: 40, boxShadow: "0 6px 20px rgba(0,0,0,0.5)" }}>
+                    <div className="lv-fixed-actionbar" style={{ ...card, border: "1px solid #66BB6A", background: "#161B22", boxShadow: "0 -6px 24px rgba(0,0,0,0.6)", borderRadius: "16px 16px 0 0" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                         <div>
                           <div style={{ fontWeight: 700, color: "#66BB6A", fontSize: 16 }}>{selectedEntregas.length} orden{selectedEntregas.length>1?"es":""} seleccionada{selectedEntregas.length>1?"s":""}</div>
