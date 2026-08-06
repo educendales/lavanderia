@@ -83,6 +83,7 @@ export default function LavanderiaApp() {
   const [newClient, setNewClient] = useState({ name: "", phone: "", email: "" });
   const [saving, setSaving] = useState(false);
   const [colorFocusIdx, setColorFocusIdx] = useState(null);
+  const [phoneSuggestIdx, setPhoneSuggestIdx] = useState(-1);
   const [editingClient, setEditingClient] = useState(null);
   const [agencies, setAgencies] = useState([]);
   const [newAgency, setNewAgency] = useState({ name: "", phone: "", contact_name: "", address: "" });
@@ -3070,8 +3071,22 @@ export default function LavanderiaApp() {
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div style={{ position:"relative" }}>
                     <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label>
-                    <input style={{ ...inp,borderColor:clients.find(c=>c.phone===newOrder.phone)?"#66BB6A":"#30363D" }} placeholder="Escribe el teléfono..." value={newOrder.phone} onChange={e=>setNewOrder(p=>({...p,phone:e.target.value,client_name:""}))} onKeyDown={e=>{if(e.key==="Enter"){const f=clients.find(c=>c.phone===newOrder.phone);if(f)setNewOrder(p=>({...p,client_name:f.name}));}}} />
-                    {newOrder.phone.length>=3&&(()=>{ const matches=clients.filter(c=>c.phone.includes(newOrder.phone)&&c.phone!==newOrder.phone); return matches.length>0?<div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#1C2128",border:"1px solid #30363D",borderRadius:8,zIndex:50,overflow:"hidden",marginTop:2 }}>{matches.slice(0,4).map(c=><div key={c.id} onClick={()=>setNewOrder(p=>({...p,phone:c.phone,client_name:c.name}))} style={{ padding:"10px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",borderBottom:"1px solid #21262D" }} onMouseEnter={e=>e.currentTarget.style.background="#21262D"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><span style={{ fontWeight:600 }}>{c.name}</span><span style={{ color:"#8B949E",fontSize:12 }}>{c.phone}</span></div>)}</div>:null; })()}
+                    {(() => {
+                      const phoneMatches = newOrder.phone.length>=3 ? clients.filter(c=>c.phone.includes(newOrder.phone)&&c.phone!==newOrder.phone).slice(0,4) : [];
+                      return <>
+                        <input style={{ ...inp,borderColor:clients.find(c=>c.phone===newOrder.phone)?"#66BB6A":"#30363D" }} placeholder="Escribe el teléfono..." value={newOrder.phone} onChange={e=>{setNewOrder(p=>({...p,phone:e.target.value,client_name:""}));setPhoneSuggestIdx(-1);}} onKeyDown={e=>{
+                          if(e.key==="ArrowDown"&&phoneMatches.length>0){ e.preventDefault(); setPhoneSuggestIdx(i=>Math.min(i+1,phoneMatches.length-1)); }
+                          else if(e.key==="ArrowUp"&&phoneMatches.length>0){ e.preventDefault(); setPhoneSuggestIdx(i=>Math.max(i-1,0)); }
+                          else if(e.key==="Enter"){
+                            e.preventDefault();
+                            if(phoneSuggestIdx>=0&&phoneMatches[phoneSuggestIdx]){ const c=phoneMatches[phoneSuggestIdx]; setNewOrder(p=>({...p,phone:c.phone,client_name:c.name})); setPhoneSuggestIdx(-1); }
+                            else { const f=clients.find(c=>c.phone===newOrder.phone); if(f)setNewOrder(p=>({...p,client_name:f.name})); }
+                          }
+                          else if(e.key==="Escape"){ setPhoneSuggestIdx(-1); }
+                        }} />
+                        {phoneMatches.length>0&&<div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#1C2128",border:"1px solid #30363D",borderRadius:8,zIndex:50,overflow:"hidden",marginTop:2 }}>{phoneMatches.map((c,i)=><div key={c.id} onClick={()=>{setNewOrder(p=>({...p,phone:c.phone,client_name:c.name}));setPhoneSuggestIdx(-1);}} style={{ padding:"10px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",borderBottom:"1px solid #21262D",background:i===phoneSuggestIdx?"#21262D":"transparent" }} onMouseEnter={()=>setPhoneSuggestIdx(i)}><span style={{ fontWeight:600 }}>{c.name}</span><span style={{ color:"#8B949E",fontSize:12 }}>{c.phone}</span></div>)}</div>}
+                      </>;
+                    })()}
                     {clients.find(c=>c.phone===newOrder.phone)&&!newOrder.client_name&&<div style={{ marginTop:6,background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ fontSize:13 }}>👤 {clients.find(c=>c.phone===newOrder.phone)?.name}</span><button onClick={()=>setNewOrder(p=>({...p,client_name:clients.find(c=>c.phone===p.phone)?.name||""}))} style={{ ...btn,background:"#66BB6A",color:"#fff",padding:"4px 10px",fontSize:12 }}>↵ Seleccionar</button></div>}
                   </div>
                   <div>
