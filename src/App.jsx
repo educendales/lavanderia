@@ -3594,7 +3594,8 @@ export default function LavanderiaApp() {
               const totalAbonos = abonos.filter(a => a.date === filterDate).reduce((s,a) => s+Number(a.amount), 0);
               const advancesHoy = advances.filter(a => a.date === filterDate);
               const totalAdvancesHoy = advancesHoy.reduce((s,a) => s+Number(a.amount), 0);
-              const netoCaja = totalGeneral + totalAbonos - totalAdvancesHoy;
+              const totalParcialesHoy = partialDeliveries.filter(p => p.date === filterDate).reduce((s,p) => s+Number(p.amount), 0);
+              const netoCaja = totalGeneral + totalAbonos + totalParcialesHoy - totalAdvancesHoy;
 
               const baseHoy = getCajaBase(filterDate)?.amount || 0;
               const efectivoEntregas = entregadasHoy.filter(o => (o.payment_method||"efectivo")==="efectivo").reduce((s,o)=>s+Number(o.price),0);
@@ -3642,12 +3643,13 @@ export default function LavanderiaApp() {
                     const total = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+Number(o.price), 0);
                     const count = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).length;
                     const abonosMetodo = abonos.filter(a => a.date === filterDate && (a.payment_method||"efectivo") === m.key).reduce((s,a) => s+Number(a.amount), 0);
+                    const parcialesMetodo = parcialesHoy.filter(p => (p.payment_method||"efectivo") === m.key).reduce((s,p) => s+Number(p.amount), 0);
                     const advancesMetodo = advancesHoy.filter(a => (a.payment_method||"efectivo") === m.key).reduce((s,a) => s+Number(a.amount), 0);
                     return (
                       <div key={m.key} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${m.color}` }}>
                         <div style={{ fontSize:13,color:"#8B949E",marginBottom:4 }}>{m.label}</div>
-                        <div style={{ fontWeight:800,fontSize:18,color:m.color }}>${Math.round(total+abonosMetodo-advancesMetodo).toLocaleString()}</div>
-                        <div style={{ fontSize:11,color:"#484F58",marginTop:2 }}>{count} entrega{count!==1?"s":""}{abonosMetodo>0?` + $${Math.round(abonosMetodo).toLocaleString()} abono`:""}{advancesMetodo>0?` − $${Math.round(advancesMetodo).toLocaleString()} adelanto`:""}</div>
+                        <div style={{ fontWeight:800,fontSize:18,color:m.color }}>${Math.round(total+abonosMetodo+parcialesMetodo-advancesMetodo).toLocaleString()}</div>
+                        <div style={{ fontSize:11,color:"#484F58",marginTop:2 }}>{count} entrega{count!==1?"s":""}{abonosMetodo>0?` + $${Math.round(abonosMetodo).toLocaleString()} abono`:""}{parcialesMetodo>0?` + $${Math.round(parcialesMetodo).toLocaleString()} parcial`:""}{advancesMetodo>0?` − $${Math.round(advancesMetodo).toLocaleString()} adelanto`:""}</div>
                       </div>
                     );
                   })}
@@ -3658,13 +3660,13 @@ export default function LavanderiaApp() {
                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                     <div>
                       <div style={{ fontSize:13,color:"#8B949E" }}>Neto en caja (después de adelantos)</div>
-                      <div style={{ fontSize:11,color:"#484F58" }}>{entregadasHoy.length} entregas · {abonos.filter(a=>a.date===filterDate).length} abonos · {advancesHoy.length} adelanto{advancesHoy.length!==1?"s":""}</div>
+                      <div style={{ fontSize:11,color:"#484F58" }}>{entregadasHoy.length} entregas · {abonos.filter(a=>a.date===filterDate).length} abonos · {parcialesHoy.length} parcial{parcialesHoy.length!==1?"es":""} · {advancesHoy.length} adelanto{advancesHoy.length!==1?"s":""}</div>
                     </div>
                     <div style={{ fontWeight:800,fontSize:24,color:"#C792EA" }}>${Math.round(netoCaja).toLocaleString()}</div>
                   </div>
                 </div>
 
-                {/* Desglose entregas vs abonos vs adelantos */}
+                {/* Desglose entregas vs abonos vs parciales vs adelantos */}
                 <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16 }}>
                   <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #66BB6A" }}>
                     <div style={{ fontSize:11,color:"#8B949E" }}>Entregas</div>
@@ -3674,13 +3676,17 @@ export default function LavanderiaApp() {
                     <div style={{ fontSize:11,color:"#8B949E" }}>Abonos</div>
                     <div style={{ fontWeight:800,color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</div>
                   </div>
+                  <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #FF8A65" }}>
+                    <div style={{ fontSize:11,color:"#8B949E" }}>Parciales</div>
+                    <div style={{ fontWeight:800,color:"#FF8A65" }}>${Math.round(totalParcialesHoy).toLocaleString()}</div>
+                  </div>
                   <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #EF5350" }}>
                     <div style={{ fontSize:11,color:"#8B949E" }}>Adelantos</div>
                     <div style={{ fontWeight:800,color:"#EF5350" }}>− ${Math.round(totalAdvancesHoy).toLocaleString()}</div>
                   </div>
                 </div>
 
-                {entregadasHoy.length === 0 && totalAbonos === 0 && totalAdvancesHoy === 0 && (
+                {entregadasHoy.length === 0 && totalAbonos === 0 && totalParcialesHoy === 0 && totalAdvancesHoy === 0 && (
                   <p style={{ textAlign:"center",color:"#484F58",fontSize:13 }}>No hay entregas, abonos ni adelantos hoy</p>
                 )}
 
