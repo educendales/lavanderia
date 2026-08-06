@@ -551,7 +551,7 @@ export default function LavanderiaApp() {
     if (!entregaResult) return;
     const its = orderItems[entregaResult.id] || [];
     const seleccionados = its.map(it => ({ it, qty: Math.min(Number(parcialQtys[it.id])||0, Number(it.quantity)-(Number(it.delivered_qty)||0)) })).filter(x => x.qty > 0);
-    if (seleccionados.length === 0) return;
+    if (seleccionados.length === 0) { alert("⚠️ No ingresaste ninguna cantidad. Escribe cuántas prendas se lleva el cliente antes de confirmar."); return; }
     setSavingParcial(true);
     const amount = seleccionados.reduce((s,x) => s + x.qty*Number(x.it.price), 0);
     const itemsSummary = seleccionados.map(x => `${x.qty} ${x.it.garment_type}${x.it.color?" "+x.it.color:""}`).join(", ");
@@ -1479,15 +1479,17 @@ export default function LavanderiaApp() {
                         {(() => {
                           const its = getItemsPendientes(entregaResult.id);
                           const subtotal = its.reduce((s,it) => s + (Math.min(Number(parcialQtys[it.id])||0,it.pendiente))*Number(it.price), 0);
-                          return <div style={{ background:"rgba(255,138,101,0.08)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:16,display:"flex",justifyContent:"space-between" }}>
-                            <span style={{ color:"#8B949E",fontSize:13 }}>Subtotal a cobrar ahora</span>
-                            <span style={{ fontWeight:800,color:"#FF8A65",fontSize:17 }}>${Math.round(subtotal).toLocaleString()}</span>
-                          </div>;
+                          return <>
+                            <div style={{ background:"rgba(255,138,101,0.08)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:16,display:"flex",justifyContent:"space-between" }}>
+                              <span style={{ color:"#8B949E",fontSize:13 }}>Subtotal a cobrar ahora</span>
+                              <span style={{ fontWeight:800,color:"#FF8A65",fontSize:17 }}>${Math.round(subtotal).toLocaleString()}</span>
+                            </div>
+                            <div style={{ display:"flex",gap:10 }}>
+                              <button onClick={() => { setShowParcialForm(false); setParcialQtys({}); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",flex:1,padding:12 }}>‹ Cancelar</button>
+                              <button onClick={confirmarEntregaParcial} disabled={savingParcial||subtotal<=0} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",flex:2,padding:14,fontSize:14,fontWeight:800,opacity:(savingParcial||subtotal<=0)?0.5:1,cursor:(savingParcial||subtotal<=0)?"not-allowed":"pointer" }}>{savingParcial?"Guardando...":subtotal<=0?"Ingresa una cantidad primero":"📦 Confirmar Entrega Parcial"}</button>
+                            </div>
+                          </>;
                         })()}
-                        <div style={{ display:"flex",gap:10 }}>
-                          <button onClick={() => { setShowParcialForm(false); setParcialQtys({}); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",flex:1,padding:12 }}>‹ Cancelar</button>
-                          <button onClick={confirmarEntregaParcial} disabled={savingParcial} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",flex:2,padding:14,fontSize:14,fontWeight:800,opacity:savingParcial?0.7:1 }}>{savingParcial?"Guardando...":"📦 Confirmar Entrega Parcial"}</button>
-                        </div>
                       </div>
                     )}
 
