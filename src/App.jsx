@@ -49,6 +49,7 @@ const STATUS_LABELS = {
   recibido: { label: "Recibido", color: "#64B5F6" },
   en_proceso: { label: "En Proceso", color: "#FFD54F" },
   listo: { label: "Listo", color: "#66BB6A" },
+  parcial: { label: "Entrega Parcial", color: "#FF8A65" },
   entregado: { label: "Entregado", color: "#9E9E9E" },
 };
 
@@ -116,6 +117,12 @@ export default function LavanderiaApp() {
   const [entregaPayment, setEntregaPayment] = useState("efectivo");
   const [entregaSinRecibo, setEntregaSinRecibo] = useState(false);
   const [entregaConfirmed, setEntregaConfirmed] = useState(false);
+  const [partialDeliveries, setPartialDeliveries] = useState([]);
+  const [showParcialForm, setShowParcialForm] = useState(false);
+  const [parcialQtys, setParcialQtys] = useState({});
+  const [parcialPayment, setParcialPayment] = useState("efectivo");
+  const [parcialConfirmedInfo, setParcialConfirmedInfo] = useState(null);
+  const [savingParcial, setSavingParcial] = useState(false);
   const [garmentTypes, setGarmentTypes] = useState(() => { try { const s = localStorage.getItem("garmentTypes"); return s ? JSON.parse(s) : DEFAULT_GARMENT_TYPES; } catch { return DEFAULT_GARMENT_TYPES; } });
   const [services, setServices] = useState(() => { try { const s = localStorage.getItem("services"); return s ? JSON.parse(s) : DEFAULT_SERVICES; } catch { return DEFAULT_SERVICES; } });
   const [colors, setColors] = useState(() => { try { const s = localStorage.getItem("colors"); return s ? JSON.parse(s) : DEFAULT_COLORS; } catch { return DEFAULT_COLORS; } });
@@ -277,6 +284,12 @@ export default function LavanderiaApp() {
       await db.patch("orders", order.id, { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: today, delivered_by: user.name });
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today, delivered_by: user.name } : o));
       if (entregaMultiSinRecibo) await printConstanciaSinRecibo(order, null);
+      const its = orderItems[order.id] || [];
+      const pendientes = its.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
+      if (pendientes.length) {
+        for (const it of pendientes) await db.patch("order_items", it.id, { delivered_qty: Number(it.quantity) });
+        setOrderItems(prev => ({ ...prev, [order.id]: its.map(it => ({ ...it, delivered_qty: Number(it.quantity) })) }));
+      }
     }
     setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today, delivered_by: user.name } : o));
     setSelectedEntregas([]);
@@ -389,7 +402,7 @@ export default function LavanderiaApp() {
   }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi, ab, adv, ag, dom, cb] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base")]);
+    const [o, e, c, oi, ab, adv, ag, dom, cb, pd] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base"), db.get("partial_deliveries")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
@@ -399,6 +412,7 @@ export default function LavanderiaApp() {
     if (Array.isArray(ag)) setAgencies(ag);
     if (Array.isArray(dom)) setDomiciliarios(dom);
     if (Array.isArray(cb)) setCajaBaseList(cb);
+    if (Array.isArray(pd)) setPartialDeliveries(pd);
   };
   useEffect(() => { document.title = "LavaGest"; }, []);
   useEffect(() => { if (user) loadData(); }, [user]);
@@ -507,6 +521,7 @@ export default function LavanderiaApp() {
     const results = byOrder ? [byOrder] : orders.filter(o => o.phone?.toLowerCase().includes(q));
     setEntregaResults(results);
     setEntregaResult(null); setEntregaConfirmed(false); setEntregaSinRecibo(false); setEntregaPayment("efectivo");
+    setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null);
     const yaSinRecibo = results.filter(o => o.status === "entregado" && o.sin_recibo);
     if (yaSinRecibo.length > 0) {
       const msg = yaSinRecibo.map(o => {
@@ -524,6 +539,54 @@ export default function LavanderiaApp() {
     setEntregaResult(prev => ({ ...prev, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today, delivered_by: user.name }));
     setEntregaConfirmed(true);
     if (entregaSinRecibo) printConstanciaSinRecibo(entregaResult, null);
+    const its = orderItems[entregaResult.id] || [];
+    const pendientes = its.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
+    if (pendientes.length) {
+      for (const it of pendientes) await db.patch("order_items", it.id, { delivered_qty: Number(it.quantity) });
+      setOrderItems(prev => ({ ...prev, [entregaResult.id]: its.map(it => ({ ...it, delivered_qty: Number(it.quantity) })) }));
+    }
+  };
+
+  const confirmarEntregaParcial = async () => {
+    if (!entregaResult) return;
+    const its = orderItems[entregaResult.id] || [];
+    const seleccionados = its.map(it => ({ it, qty: Math.min(Number(parcialQtys[it.id])||0, Number(it.quantity)-(Number(it.delivered_qty)||0)) })).filter(x => x.qty > 0);
+    if (seleccionados.length === 0) return;
+    setSavingParcial(true);
+    const amount = seleccionados.reduce((s,x) => s + x.qty*Number(x.it.price), 0);
+    const itemsSummary = seleccionados.map(x => `${x.qty} ${x.it.garment_type}${x.it.color?" "+x.it.color:""}`).join(", ");
+
+    const updatedItems = its.map(it => {
+      const sel = seleccionados.find(x => x.it.id === it.id);
+      if (!sel) return it;
+      return { ...it, delivered_qty: (Number(it.delivered_qty)||0) + sel.qty };
+    });
+    for (const x of seleccionados) {
+      await db.patch("order_items", x.it.id, { delivered_qty: (Number(x.it.delivered_qty)||0) + x.qty });
+    }
+    setOrderItems(prev => ({ ...prev, [entregaResult.id]: updatedItems }));
+
+    const res = await db.post("partial_deliveries", { order_id: entregaResult.id, date: today, items_summary: itemsSummary, amount, payment_method: parcialPayment, employee: user.name });
+    if (Array.isArray(res) && res[0]) setPartialDeliveries(prev => [...prev, res[0]]);
+
+    const fullyDelivered = updatedItems.every(it => (Number(it.delivered_qty)||0) >= Number(it.quantity));
+    const newStatus = fullyDelivered ? "entregado" : "parcial";
+    const patchBody = fullyDelivered
+      ? { status: "entregado", payment_method: parcialPayment, delivered_at: today, delivered_by: user.name }
+      : { status: "parcial" };
+    await db.patch("orders", entregaResult.id, patchBody);
+    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, ...patchBody } : o));
+    setEntregaResult(prev => ({ ...prev, ...patchBody }));
+
+    const pendientes = updatedItems.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
+    setParcialConfirmedInfo({
+      itemsSummary, amount, fullyDelivered,
+      pendientesSummary: pendientes.map(it => `${Number(it.quantity)-(Number(it.delivered_qty)||0)} ${it.garment_type}${it.color?" "+it.color:""}`).join(", "),
+      saldo: Math.max(0, Number(entregaResult.price) - getAbonado(entregaResult.id) - (getParcialPagado(entregaResult.id)+amount)),
+    });
+    setParcialQtys({});
+    setShowParcialForm(false);
+    setSavingParcial(false);
   };
 
   const printOrder = (order, itemsMap) => {
@@ -986,7 +1049,17 @@ export default function LavanderiaApp() {
   const filteredClients = clients.filter(c => c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch));
   const isAdmin = user?.role === "admin";
   const getAbonado = (orderId) => abonos.filter(a => a.order_id === orderId).reduce((s,a) => s + Number(a.amount), 0);
-  const getSaldo = (order) => Math.max(0, Number(order.price) - getAbonado(order.id));
+  const getParcialPagado = (orderId) => partialDeliveries.filter(p => p.order_id === orderId).reduce((s,p) => s + Number(p.amount), 0);
+  const getSaldo = (order) => Math.max(0, Number(order.price) - getAbonado(order.id) - getParcialPagado(order.id));
+  const getItemsPendientes = (orderId) => {
+    const its = orderItems[orderId] || [];
+    return its.map(it => ({ ...it, delivered_qty: Number(it.delivered_qty)||0, pendiente: Number(it.quantity) - (Number(it.delivered_qty)||0) })).filter(it => it.pendiente > 0);
+  };
+  const isOrderFullyDelivered = (orderId) => {
+    const its = orderItems[orderId] || [];
+    if (!its.length) return false;
+    return its.every(it => (Number(it.delivered_qty)||0) >= Number(it.quantity));
+  };
 
   const s = { fontFamily: "'Segoe UI', sans-serif", minHeight: "100vh", background: "#0D1117", color: "#E6EDF3" };
   const card = { background: "#161B22", borderRadius: 14, padding: 20, border: "1px solid #30363D" };
@@ -1358,7 +1431,7 @@ export default function LavanderiaApp() {
                     </div>
                     {orderItems[entregaResult.id] && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 12, color: "#8B949E", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{orderItems[entregaResult.id].map((it,i) => <div key={i} style={{ background: "#21262D", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?<span style={{ color:sv.color }}>{sv.icon} </span>:null; })()}<span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>{it.color&&<span style={{ color:"#C792EA" }}> · {it.color}</span>}<span style={{ color:"#66BB6A",fontWeight:700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span></div>)}</div></div>}
                     {entregaResult.notes && <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#FFD54F" }}>📝 {entregaResult.notes}</div>}
-                    {entregaResult.status !== "entregado" && !entregaConfirmed && (
+                    {entregaResult.status !== "entregado" && !entregaConfirmed && !showParcialForm && !parcialConfirmedInfo && (
                       <>
                         <div style={{ marginBottom: 16 }}>
                           <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
@@ -1374,14 +1447,80 @@ export default function LavanderiaApp() {
                             <div><div style={{ fontWeight:600,color:entregaSinRecibo?"#FFD54F":"#8B949E" }}>📋 Entregado sin recibo</div><div style={{ fontSize:12,color:"#484F58" }}>El cliente no presentó recibo físico</div></div>
                           </label>
                         </div>
-                        <button onClick={confirmarEntrega} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:16,fontWeight:800,borderRadius:10 }}>✅ Confirmar Entrega · ${Math.round(Number(entregaResult.price))}</button>
+                        <button onClick={confirmarEntrega} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:16,fontWeight:800,borderRadius:10,marginBottom:10 }}>✅ Confirmar Entrega Completa · ${Math.round(getSaldo(entregaResult))}</button>
+                        {getItemsPendientes(entregaResult.id).length > 1 && (
+                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:14,fontWeight:700,borderRadius:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
+                        )}
                       </>
                     )}
-                    {(entregaResult.status === "entregado" || entregaConfirmed) && (
+
+                    {showParcialForm && !parcialConfirmedInfo && (
+                      <div>
+                        <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:10 }}>¿CUÁNTAS SE LLEVA EL CLIENTE AHORA?</div>
+                        <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:16 }}>
+                          {getItemsPendientes(entregaResult.id).map(it => (
+                            <div key={it.id} style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10 }}>
+                              <div>
+                                <div style={{ fontWeight:600,fontSize:13 }}>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color?<span style={{ color:"#C792EA" }}> · {it.color}</span>:null}</div>
+                                <div style={{ fontSize:11,color:"#8B949E" }}>Pendientes: {it.pendiente} · ${Math.round(Number(it.price)).toLocaleString()} c/u</div>
+                              </div>
+                              <input type="number" min={0} max={it.pendiente} placeholder="0" value={parcialQtys[it.id]||""} onChange={e=>{ const v=Math.max(0,Math.min(Number(e.target.value)||0,it.pendiente)); setParcialQtys(p=>({...p,[it.id]:v})); }} style={{ width:70,padding:"8px 6px",borderRadius:8,border:"1px solid #30363D",background:"#161B22",color:"#E6EDF3",fontSize:15,fontWeight:700,textAlign:"center" }} />
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ marginBottom: 16 }}>
+                          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
+                          <div style={{ display: "flex", gap: 10 }}>
+                            {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"}].map(opt => (
+                              <label key={opt.value} onClick={() => setParcialPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:parcialPayment===opt.value?"rgba(255,138,101,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${parcialPayment===opt.value?"#FF8A65":"#30363D"}`,borderRadius:10,padding:"8px 4px",color:parcialPayment===opt.value?"#FF8A65":"#8B949E" }}>{opt.label}</label>
+                            ))}
+                          </div>
+                        </div>
+                        {(() => {
+                          const its = getItemsPendientes(entregaResult.id);
+                          const subtotal = its.reduce((s,it) => s + (Math.min(Number(parcialQtys[it.id])||0,it.pendiente))*Number(it.price), 0);
+                          return <div style={{ background:"rgba(255,138,101,0.08)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:16,display:"flex",justifyContent:"space-between" }}>
+                            <span style={{ color:"#8B949E",fontSize:13 }}>Subtotal a cobrar ahora</span>
+                            <span style={{ fontWeight:800,color:"#FF8A65",fontSize:17 }}>${Math.round(subtotal).toLocaleString()}</span>
+                          </div>;
+                        })()}
+                        <div style={{ display:"flex",gap:10 }}>
+                          <button onClick={() => { setShowParcialForm(false); setParcialQtys({}); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",flex:1,padding:12 }}>‹ Cancelar</button>
+                          <button onClick={confirmarEntregaParcial} disabled={savingParcial} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",flex:2,padding:14,fontSize:14,fontWeight:800,opacity:savingParcial?0.7:1 }}>{savingParcial?"Guardando...":"📦 Confirmar Entrega Parcial"}</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {parcialConfirmedInfo && (
+                      <div>
+                        <div style={{ textAlign: "center", marginBottom: 20 }}>
+                          <div style={{ fontSize: 48, marginBottom: 8 }}>{parcialConfirmedInfo.fullyDelivered?"✅":"📦"}</div>
+                          <div style={{ fontWeight: 800, fontSize: 20, color: "#FF8A65" }}>{parcialConfirmedInfo.fullyDelivered?"¡Última entrega registrada!":"Entrega parcial registrada"}</div>
+                        </div>
+                        <div style={{ background:"#0D1117",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
+                          <div style={{ fontSize:11,color:"#8B949E",marginBottom:4,fontWeight:600 }}>SE ENTREGÓ AHORA</div>
+                          <div style={{ fontWeight:700,fontSize:14 }}>{parcialConfirmedInfo.itemsSummary}</div>
+                          <div style={{ fontWeight:800,fontSize:18,color:"#66BB6A",marginTop:4 }}>${Math.round(parcialConfirmedInfo.amount).toLocaleString()}</div>
+                        </div>
+                        {!parcialConfirmedInfo.fullyDelivered && <div style={{ background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.2)",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
+                          <div style={{ fontSize:11,color:"#8B949E",marginBottom:4,fontWeight:600 }}>PENDIENTE POR RECOGER</div>
+                          <div style={{ fontWeight:700,fontSize:14,color:"#FFD54F" }}>{parcialConfirmedInfo.pendientesSummary}</div>
+                          <div style={{ fontSize:13,color:"#8B949E",marginTop:4 }}>Saldo: <b style={{ color:"#FFD54F" }}>${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}</b></div>
+                        </div>}
+                        <div style={{ display:"flex",gap:10 }}>
+                          {entregaResult.phone && <button onClick={() => {
+                            const msg = `Hola ${entregaResult.client_name}, resumen de tu retiro en ${negocioNombre} (Orden ${entregaResult.order_number}):\n\nSe entregó: ${parcialConfirmedInfo.itemsSummary}\nPagado ahora: $${Math.round(parcialConfirmedInfo.amount).toLocaleString()}\n${!parcialConfirmedInfo.fullyDelivered?`\nPendiente por recoger: ${parcialConfirmedInfo.pendientesSummary}\nSaldo: $${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}`:"\n¡Ya recogiste todo! Gracias por preferirnos."}`;
+                            window.open("https://wa.me/" + negocioPais + entregaResult.phone.replace(/[^0-9]/g,"") + "?text=" + encodeURIComponent(msg), "_blank");
+                          }} style={{ ...btn, background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#fff", flex: 1, padding: 12 }}>📱 Enviar resumen por WhatsApp</button>}
+                          <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setParcialConfirmedInfo(null); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
+                        </div>
+                      </div>
+                    )}
+                    {(entregaResult.status === "entregado" || entregaConfirmed) && !parcialConfirmedInfo && (
                       <div style={{ padding: "16px 0" }}>
                         <div style={{ textAlign: "center", marginBottom: 20 }}><div style={{ fontSize: 48, marginBottom: 8 }}>✅</div><div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>¡Entrega confirmada!</div></div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginBottom: 16 }}>
-                          {[{label:"📅 FECHA DE ENTREGA",value:entregaResult.delivered_at||today,color:"#66BB6A"},{label:"💳 MÉTODO DE PAGO",value:entregaResult.payment_method==="nequi"?"📱 Nequi":entregaResult.payment_method==="daviplata"?"💜 Daviplata":"💵 Efectivo",color:"#4FC3F7"},{label:"💰 TOTAL COBRADO",value:`$${Math.round(Number(entregaResult.price))}`,color:"#66BB6A"},{label:"📋 RECIBO",value:entregaResult.sin_recibo?"⚠️ Sin recibo":"✅ Con recibo",color:entregaResult.sin_recibo?"#FFD54F":"#66BB6A"},{label:"👤 ENTREGADO POR",value:entregaResult.delivered_by||"—",color:"#C792EA"}].map((item,i) => (
+                          {[{label:"📅 FECHA DE ENTREGA",value:entregaResult.delivered_at||today,color:"#66BB6A"},{label:"💳 MÉTODO DE PAGO",value:entregaResult.payment_method==="nequi"?"📱 Nequi":entregaResult.payment_method==="daviplata"?"💜 Daviplata":"💵 Efectivo",color:"#4FC3F7"},{label:"💰 TOTAL COBRADO",value:`$${Math.round(getSaldo(entregaResult))}`,color:"#66BB6A"},{label:"📋 RECIBO",value:entregaResult.sin_recibo?"⚠️ Sin recibo":"✅ Con recibo",color:entregaResult.sin_recibo?"#FFD54F":"#66BB6A"},{label:"👤 ENTREGADO POR",value:entregaResult.delivered_by||"—",color:"#C792EA"}].map((item,i) => (
                             <div key={i} style={{ background: "#0D1117", borderRadius: 10, padding: "14px 16px" }}>
                               <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 4, fontWeight: 600 }}>{item.label}</div>
                               <div style={{ fontWeight: 800, fontSize: 16, color: item.color }}>{item.value}</div>
@@ -3458,9 +3597,11 @@ export default function LavanderiaApp() {
               const baseHoy = getCajaBase(filterDate)?.amount || 0;
               const efectivoEntregas = entregadasHoy.filter(o => (o.payment_method||"efectivo")==="efectivo").reduce((s,o)=>s+Number(o.price),0);
               const efectivoAbonos = abonos.filter(a => a.date===filterDate && (a.payment_method||"efectivo")==="efectivo").reduce((s,a)=>s+Number(a.amount),0);
+              const parcialesHoy = partialDeliveries.filter(p => p.date === filterDate);
+              const efectivoParciales = parcialesHoy.filter(p => (p.payment_method||"efectivo")==="efectivo").reduce((s,p)=>s+Number(p.amount),0);
               const efectivoGastos = expenses.filter(e => e.date===filterDate && !e.eliminado && (e.payment_method||"efectivo")==="efectivo").reduce((s,e)=>s+Number(e.amount),0);
               const efectivoAdelantos = advancesHoy.filter(a => (a.payment_method||"efectivo")==="efectivo").reduce((s,a)=>s+Number(a.amount),0);
-              const totalEnCaja = baseHoy + efectivoEntregas + efectivoAbonos - efectivoGastos - efectivoAdelantos;
+              const totalEnCaja = baseHoy + efectivoEntregas + efectivoAbonos + efectivoParciales - efectivoGastos - efectivoAdelantos;
 
               return <>
                 {/* Base de caja */}
@@ -3483,6 +3624,7 @@ export default function LavanderiaApp() {
                     <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>Base inicial</span><span>${Math.round(baseHoy).toLocaleString()}</span></div>
                     <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>+ Entregas en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoEntregas).toLocaleString()}</span></div>
                     <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>+ Abonos en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoAbonos).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>+ Entregas parciales en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoParciales).toLocaleString()}</span></div>
                     <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>− Gastos en efectivo</span><span style={{ color:"#EF5350" }}>${Math.round(efectivoGastos).toLocaleString()}</span></div>
                     <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>− Adelantos en efectivo</span><span style={{ color:"#EF5350" }}>${Math.round(efectivoAdelantos).toLocaleString()}</span></div>
                   </div>
