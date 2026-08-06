@@ -3573,7 +3573,7 @@ export default function LavanderiaApp() {
       {/* INFORME DIARIO MODAL */}
       {showInformeDiario && (
         <div onClick={() => setShowInformeDiario(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,fontFamily:"'Segoe UI',sans-serif" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:20,padding:28,width:420,maxWidth:"92vw",border:"1px solid rgba(199,146,234,0.4)",boxShadow:"0 8px 40px rgba(0,0,0,0.8)" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:20,padding:"clamp(14px,4vw,28px)",width:420,maxWidth:"92vw",maxHeight:"88vh",overflowY:"auto",border:"1px solid rgba(199,146,234,0.4)",boxShadow:"0 8px 40px rgba(0,0,0,0.8)" }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
               <div>
                 <h2 style={{ margin:0,fontSize:20,fontWeight:800,color:"#C792EA" }}>💳 Informe Diario</h2>
@@ -3638,7 +3638,7 @@ export default function LavanderiaApp() {
                 </div>
 
                 {/* Totales por método */}
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:16 }}>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:16 }}>
                   {metodos.map(m => {
                     const total = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+Number(o.price), 0);
                     const count = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).length;
@@ -3667,7 +3667,7 @@ export default function LavanderiaApp() {
                 </div>
 
                 {/* Desglose entregas vs abonos vs parciales vs adelantos */}
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16 }}>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:16 }}>
                   <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #66BB6A" }}>
                     <div style={{ fontSize:11,color:"#8B949E" }}>Entregas</div>
                     <div style={{ fontWeight:800,color:"#66BB6A" }}>${Math.round(totalGeneral).toLocaleString()}</div>
