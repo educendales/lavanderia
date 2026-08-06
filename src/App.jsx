@@ -1132,7 +1132,7 @@ export default function LavanderiaApp() {
         @media (min-width: 861px) { .lv-fixed-actionbar { left:200px; } }
         .lv-mobile-topbar { display:none; }
         .lv-sidebar-overlay { display:none; }
-        .lv-sidebar-close { display:none; }
+        .lv-sidebar-close { display:none !important; }
         @media (max-width: 860px) {
           .lv-app-shell { flex-direction: column !important; }
           .lv-mobile-topbar { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:#161B22; border-bottom:1px solid #30363D; position:sticky; top:0; z-index:60; }
@@ -1165,7 +1165,7 @@ export default function LavanderiaApp() {
         {/* SIDEBAR */}
         <div className={`lv-sidebar${sidebarOpen ? " open" : ""}`} style={{ width: 200, background: "#161B22", borderRight: "1px solid #30363D", display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 12px 8px" }}>
-            <button className="lv-sidebar-close" onClick={() => setSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "transparent", border: "none", color: "#8B949E", fontSize: 20, cursor: "pointer", marginBottom: 8, display: "block", marginLeft: "auto" }}>✕</button>
+            <button className="lv-sidebar-close" onClick={() => setSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "transparent", border: "none", color: "#8B949E", fontSize: 20, cursor: "pointer", marginBottom: 8, marginLeft: "auto" }}>✕</button>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
               {negocioLogo
                 ? <img src={negocioLogo} alt="logo" style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", marginBottom: 6 }} />
