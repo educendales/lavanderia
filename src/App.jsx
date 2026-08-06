@@ -1161,20 +1161,22 @@ export default function LavanderiaApp() {
         </div>
         <div className={`lv-sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
         {/* SIDEBAR */}
-        <div className={`lv-sidebar${sidebarOpen ? " open" : ""}`} style={{ width: 200, background: "#161B22", borderRight: "1px solid #30363D", display: "flex", flexDirection: "column", padding: "20px 12px", flexShrink: 0, overflowY: "auto" }}>
-          <button className="lv-sidebar-close" onClick={() => setSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "transparent", border: "none", color: "#8B949E", fontSize: 20, cursor: "pointer", marginBottom: 8 }}>✕</button>
-          <div style={{ textAlign: "center", marginBottom: 28 }}>
-            {negocioLogo
-              ? <img src={negocioLogo} alt="logo" style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", marginBottom: 6 }} />
-              : <div style={{ fontSize: 28 }}>🫧</div>}
-            <div style={{ fontWeight: 800, fontSize: 15, color: "#4FC3F7", lineHeight: 1.2 }}>{negocioNombre}</div>
+        <div className={`lv-sidebar${sidebarOpen ? " open" : ""}`} style={{ width: 200, background: "#161B22", borderRight: "1px solid #30363D", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 12px 8px" }}>
+            <button className="lv-sidebar-close" onClick={() => setSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "transparent", border: "none", color: "#8B949E", fontSize: 20, cursor: "pointer", marginBottom: 8, display: "block", marginLeft: "auto" }}>✕</button>
+            <div style={{ textAlign: "center", marginBottom: 28 }}>
+              {negocioLogo
+                ? <img src={negocioLogo} alt="logo" style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", marginBottom: 6 }} />
+                : <div style={{ fontSize: 28 }}>🫧</div>}
+              <div style={{ fontWeight: 800, fontSize: 15, color: "#4FC3F7", lineHeight: 1.2 }}>{negocioNombre}</div>
+            </div>
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => { setTab(t.id); setSidebarOpen(false); }} style={{ ...btn, background: tab === t.id ? "rgba(79,195,247,0.15)" : "transparent", color: tab === t.id ? "#4FC3F7" : "#8B949E", textAlign: "left", padding: "10px 14px", marginBottom: 4, fontSize: 13, display: "flex", gap: 8, alignItems: "center", width: "100%", boxSizing: "border-box" }}>
+                {t.icon} {t.label}
+              </button>
+            ))}
           </div>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => { setTab(t.id); setSidebarOpen(false); }} style={{ ...btn, background: tab === t.id ? "rgba(79,195,247,0.15)" : "transparent", color: tab === t.id ? "#4FC3F7" : "#8B949E", textAlign: "left", padding: "10px 14px", marginBottom: 4, fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
-              {t.icon} {t.label}
-            </button>
-          ))}
-          <div style={{ marginTop: "auto" }}>
+          <div style={{ flexShrink: 0, padding: "10px 12px 16px", borderTop: "1px solid #30363D" }}>
             <button onClick={() => { setShowTotalPrendas(true); setEditingPrecio(false); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,rgba(255,213,79,0.2),rgba(245,127,23,0.2))", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "10px 14px", marginBottom: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               👕 Total Prendas
             </button>
@@ -1184,7 +1186,7 @@ export default function LavanderiaApp() {
             <button onClick={() => { setShowAyuda(true); setAyudaSeccion(tab); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "rgba(102,187,106,0.15)", color: "#66BB6A", border: "1px solid rgba(102,187,106,0.3)", padding: "8px 14px", marginBottom: 12, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               ❓ Ayuda
             </button>
-            <div style={{ borderTop: "1px solid #30363D", paddingTop: 16 }}>
+            <div style={{ paddingTop: 4 }}>
               <div style={{ fontSize: 12, color: "#8B949E" }}>👤 {user.name}</div>
               <div style={{ fontSize: 11, color: "#484F58", marginBottom: 8 }}>{user.role === "admin" ? "Administrador" : "Empleado"}</div>
               <button onClick={() => setUser(null)} style={{ ...btn, background: "transparent", color: "#EF5350", padding: "6px 10px", fontSize: 12 }}>Cerrar sesión</button>
