@@ -84,6 +84,7 @@ export default function LavanderiaApp() {
   const [saving, setSaving] = useState(false);
   const [colorFocusIdx, setColorFocusIdx] = useState(null);
   const [phoneSuggestIdx, setPhoneSuggestIdx] = useState(-1);
+  const [colorSuggestIdx, setColorSuggestIdx] = useState(-1);
   const [editingClient, setEditingClient] = useState(null);
   const [agencies, setAgencies] = useState([]);
   const [newAgency, setNewAgency] = useState({ name: "", phone: "", contact_name: "", address: "" });
@@ -3114,9 +3115,24 @@ export default function LavanderiaApp() {
                             {(item.colors||[]).length>0&&(item.colors||[]).length<Number(item.quantity)&&<div style={{ fontSize:10,color:"#FFD54F",marginBottom:2 }}>⚠️ Faltan {Number(item.quantity)-(item.colors||[]).length} color{Number(item.quantity)-(item.colors||[]).length>1?"es":""}</div>}
                             {(item.colors||[]).length>=Number(item.quantity)&&Number(item.quantity)>0
                               ?<div style={{ fontSize:10,color:"#66BB6A" }}>✅ {item.quantity} color{Number(item.quantity)>1?"es":""} asignado{Number(item.quantity)>1?"s":""}</div>
-                              :<input type="text" placeholder="Color..." value={item.colorInput||""} onChange={e=>updateItem(i,"colorInput",e.target.value)} onFocus={()=>setColorFocusIdx(i)} onBlur={()=>setTimeout(()=>setColorFocusIdx(null),150)} style={{ ...inp,padding:"6px 8px",fontSize:12 }} autoComplete="off" />
+                              :(() => {
+                                  const val = item.colorInput||"";
+                                  const colorMatches = colorFocusIdx===i ? (val.length>=1?colors.filter(c=>c.toLowerCase().includes(val.toLowerCase())):colors) : [];
+                                  return <>
+                                    <input type="text" placeholder="Color..." value={val} onChange={e=>{updateItem(i,"colorInput",e.target.value);setColorSuggestIdx(-1);}} onFocus={()=>{setColorFocusIdx(i);setColorSuggestIdx(-1);}} onBlur={()=>setTimeout(()=>setColorFocusIdx(null),150)} onKeyDown={e=>{
+                                      if(e.key==="ArrowDown"&&colorMatches.length>0){ e.preventDefault(); setColorSuggestIdx(idx=>Math.min(idx+1,colorMatches.length-1)); }
+                                      else if(e.key==="ArrowUp"&&colorMatches.length>0){ e.preventDefault(); setColorSuggestIdx(idx=>Math.max(idx-1,0)); }
+                                      else if(e.key==="Enter"){
+                                        e.preventDefault();
+                                        const chosen = colorSuggestIdx>=0&&colorMatches[colorSuggestIdx] ? colorMatches[colorSuggestIdx] : (colorMatches.length===1?colorMatches[0]:null);
+                                        if(chosen){ updateItem(i,"colors",[...(item.colors||[]),chosen]); updateItem(i,"colorInput",""); setColorSuggestIdx(-1); }
+                                      }
+                                      else if(e.key==="Escape"){ setColorSuggestIdx(-1); }
+                                    }} style={{ ...inp,padding:"6px 8px",fontSize:12 }} autoComplete="off" />
+                                    {colorMatches.length>0&&<div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#1C2128",border:"1px solid #30363D",borderRadius:8,zIndex:99,overflow:"hidden",marginTop:2,maxHeight:160,overflowY:"auto" }}>{colorMatches.map((c,idx)=><div key={c} onMouseDown={()=>{ updateItem(i,"colors",[...(item.colors||[]),c]); updateItem(i,"colorInput",""); setColorSuggestIdx(-1); }} onMouseEnter={()=>setColorSuggestIdx(idx)} style={{ padding:"7px 12px",cursor:"pointer",fontSize:12,borderBottom:"1px solid #21262D",background:idx===colorSuggestIdx?"#21262D":"transparent" }}>🎨 {c}</div>)}</div>}
+                                  </>;
+                                })()
                             }
-                            {colorFocusIdx===i&&(item.colors||[]).length<Number(item.quantity)&&(()=>{ const val=item.colorInput||""; const matches=val.length>=1?colors.filter(c=>c.toLowerCase().includes(val.toLowerCase())):colors; return matches.length>0?<div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#1C2128",border:"1px solid #30363D",borderRadius:8,zIndex:99,overflow:"hidden",marginTop:2,maxHeight:160,overflowY:"auto" }}>{matches.map(c=><div key={c} onMouseDown={()=>{ updateItem(i,"colors",[...(item.colors||[]),c]); updateItem(i,"colorInput",""); }} style={{ padding:"7px 12px",cursor:"pointer",fontSize:12,borderBottom:"1px solid #21262D" }} onMouseEnter={e=>e.currentTarget.style.background="#21262D"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>🎨 {c}</div>)}</div>:null; })()}
                           </div>
                           {items.length>1?<button onClick={()=>removeItem(i)} style={{ background:"rgba(239,83,80,0.2)",color:"#EF5350",border:"none",borderRadius:6,padding:"6px 8px",cursor:"pointer",fontSize:12 }}>✕</button>:<div/>}
                         </div>
