@@ -398,6 +398,7 @@ export default function LavanderiaApp() {
     if (Array.isArray(dom)) setDomiciliarios(dom);
     if (Array.isArray(cb)) setCajaBaseList(cb);
   };
+  useEffect(() => { document.title = "LavaGest"; }, []);
   useEffect(() => { if (user) loadData(); }, [user]);
   useEffect(() => {
     if (!showInformeDiario) return;
