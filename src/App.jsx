@@ -416,7 +416,7 @@ export default function LavanderiaApp() {
   };
   const mainContentRef = useRef(null);
   useEffect(() => { document.title = "LavaGest"; }, []);
-  useEffect(() => { mainContentRef.current?.scrollTo(0, 0); }, [tab]);
+  useEffect(() => { window.scrollTo(0, 0); mainContentRef.current?.scrollTo(0, 0); }, [tab]);
   useEffect(() => { if (user) loadData(); }, [user]);
   useEffect(() => {
     if (!showInformeDiario) return;
@@ -1154,7 +1154,7 @@ export default function LavanderiaApp() {
           .lv-kpi-grid { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
-      <div className="lv-app-shell" style={{ display: "flex", minHeight: "100vh" }}>
+      <div className="lv-app-shell" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         {/* MOBILE TOPBAR */}
         <div className="lv-mobile-topbar">
           <button onClick={() => setSidebarOpen(true)} style={{ background: "transparent", border: "1px solid #30363D", borderRadius: 8, color: "#4FC3F7", fontSize: 20, padding: "6px 12px", cursor: "pointer" }}>☰</button>
