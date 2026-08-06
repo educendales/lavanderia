@@ -1263,7 +1263,7 @@ export default function LavanderiaApp() {
                   <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Órdenes</h2>
                   <input type="date" value={orderFilterDate} onChange={e => setOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 13 }} />
                   {orderFilterDate && <button onClick={() => setOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
-                  <select value={orderStatusFilter} onChange={e => setOrderStatusFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 13 }}>
+                  <select value={orderStatusFilter} onChange={e => { setOrderStatusFilter(e.target.value); if (e.target.value) setOrderFilterDate(""); }} style={{ ...inp, width: 160, fontSize: 13 }}>
                     <option value="" style={{ background:"#1a1a2e" }}>Todos los estados</option>
                     {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k} style={{ background:"#1a1a2e" }}>{v.label}</option>)}
                   </select>
