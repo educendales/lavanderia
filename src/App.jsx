@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
 const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_KEY;
@@ -414,7 +414,9 @@ export default function LavanderiaApp() {
     if (Array.isArray(cb)) setCajaBaseList(cb);
     if (Array.isArray(pd)) setPartialDeliveries(pd);
   };
+  const mainContentRef = useRef(null);
   useEffect(() => { document.title = "LavaGest"; }, []);
+  useEffect(() => { mainContentRef.current?.scrollTo(0, 0); }, [tab]);
   useEffect(() => { if (user) loadData(); }, [user]);
   useEffect(() => {
     if (!showInformeDiario) return;
@@ -1195,7 +1197,7 @@ export default function LavanderiaApp() {
         </div>
 
         {/* MAIN CONTENT */}
-        <div className="lv-main" style={{ flex: 1, padding: 28, overflowY: "auto", minWidth: 0 }}>
+        <div className="lv-main" ref={mainContentRef} style={{ flex: 1, padding: 28, overflowY: "auto", minWidth: 0 }}>
 
           {/* DASHBOARD */}
           {tab === "dashboard" && (
