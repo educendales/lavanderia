@@ -86,6 +86,8 @@ export default function LavanderiaApp() {
   const [colorFocusIdx, setColorFocusIdx] = useState(null);
   const [phoneSuggestIdx, setPhoneSuggestIdx] = useState(-1);
   const [colorSuggestIdx, setColorSuggestIdx] = useState(-1);
+  const [garmentFocusIdx, setGarmentFocusIdx] = useState(null);
+  const [garmentSuggestIdx, setGarmentSuggestIdx] = useState(-1);
   const [editingClient, setEditingClient] = useState(null);
   const [agencies, setAgencies] = useState([]);
   const [newAgency, setNewAgency] = useState({ name: "", phone: "", contact_name: "", address: "" });
@@ -3254,7 +3256,25 @@ export default function LavanderiaApp() {
                       <div key={i} style={{ marginBottom:10,background:"rgba(255,255,255,0.02)",borderRadius:10,padding:10,border:"1px solid #21262D" }}>
                         <div style={{ display:"flex",gap:4,marginBottom:8 }}>{services.map(sv=>{ const sel=item.service===sv.id; return <label key={sv.id} onClick={()=>updateItem(i,"service",sv.id)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:3,cursor:"pointer",fontSize:10,fontWeight:600,background:sel?sv.color+"22":"rgba(255,255,255,0.03)",border:`1.5px solid ${sel?sv.color:"#30363D"}`,borderRadius:6,padding:"4px 2px",color:sel?sv.color:"#484F58",userSelect:"none" }}>{sv.icon} {sv.label}</label>; })}</div>
                         <div className="lv-item-grid" style={{ alignItems:"center",marginBottom:8 }}>
-                          <select value={item.garment_type} onChange={e=>updateItem(i,"garment_type",e.target.value)} style={{ ...inp,padding:"8px 10px" }}>{garmentTypes.map(g=><option key={g} value={g} style={{ background:"#1a1a2e" }}>{GARMENT_ICONS[g]||"👕"} {g}</option>)}</select>
+                          <div style={{ position:"relative" }}>
+                            <input type="text" placeholder="Prenda..." value={item.garment_type} onChange={e=>{updateItem(i,"garment_type",e.target.value);setGarmentSuggestIdx(-1);}} onFocus={()=>{setGarmentFocusIdx(i);setGarmentSuggestIdx(-1);}} onBlur={()=>setTimeout(()=>setGarmentFocusIdx(null),150)} onKeyDown={e=>{
+                              const matches = garmentTypes.filter(g=>g.toLowerCase().includes((item.garment_type||"").toLowerCase()));
+                              if(e.key==="ArrowDown"&&matches.length>0){ e.preventDefault(); setGarmentSuggestIdx(idx=>Math.min(idx+1,matches.length-1)); }
+                              else if(e.key==="ArrowUp"&&matches.length>0){ e.preventDefault(); setGarmentSuggestIdx(idx=>Math.max(idx-1,0)); }
+                              else if(e.key==="Enter"){
+                                e.preventDefault();
+                                const chosen = garmentSuggestIdx>=0&&matches[garmentSuggestIdx] ? matches[garmentSuggestIdx] : (matches.length===1?matches[0]:null);
+                                if(chosen){ updateItem(i,"garment_type",chosen); setGarmentFocusIdx(null); setGarmentSuggestIdx(-1); }
+                              }
+                              else if(e.key==="Escape"){ setGarmentSuggestIdx(-1); }
+                            }} style={{ ...inp,padding:"8px 10px" }} autoComplete="off" />
+                            {garmentFocusIdx===i && (() => {
+                              const matches = garmentTypes.filter(g=>g.toLowerCase().includes((item.garment_type||"").toLowerCase()));
+                              return matches.length>0 ? <div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#1C2128",border:"1px solid #30363D",borderRadius:8,zIndex:60,overflow:"hidden",marginTop:2,maxHeight:180,overflowY:"auto" }}>
+                                {matches.map((g,idx)=><div key={g} onMouseDown={()=>{ updateItem(i,"garment_type",g); setGarmentFocusIdx(null); setGarmentSuggestIdx(-1); }} onMouseEnter={()=>setGarmentSuggestIdx(idx)} style={{ padding:"7px 12px",cursor:"pointer",fontSize:12,borderBottom:"1px solid #21262D",background:idx===garmentSuggestIdx?"#21262D":"transparent" }}>{GARMENT_ICONS[g]||"👕"} {g}</div>)}
+                              </div> : null;
+                            })()}
+                          </div>
                           <input type="number" min={1} placeholder="Cant." value={item.quantity} onChange={e=>updateItem(i,"quantity",e.target.value)} style={{ ...inp,padding:"8px 6px",textAlign:"center" }} />
                           <input type="number" min={0} placeholder="0" value={item.price} onChange={e=>updateItem(i,"price",e.target.value)} style={{ ...inp,padding:"8px 6px" }} />
                           <div style={{ position:"relative" }}>
