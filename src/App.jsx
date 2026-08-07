@@ -149,7 +149,7 @@ export default function LavanderiaApp() {
   const [advances, setAdvances] = useState([]);
   const [cajaBaseList, setCajaBaseList] = useState([]);
   const [donationsLosses, setDonationsLosses] = useState([]);
-  const [newDonationLoss, setNewDonationLoss] = useState({ type: "donacion", description: "", quantity: "", estimated_value: "", foundation_name: "", date: today, notes: "" });
+  const [newDonationLoss, setNewDonationLoss] = useState({ type: "donacion", description: "", quantity: "", estimated_value: "", foundation_name: "", order_number: "", client_name: "", date: today, notes: "" });
   const [dlTypeFilter, setDlTypeFilter] = useState("");
   const [dlFrom, setDlFrom] = useState(() => { const d = new Date(); d.setDate(1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; });
   const [dlTo, setDlTo] = useState(today);
@@ -548,7 +548,7 @@ export default function LavanderiaApp() {
     setSaving(true);
     const res = await db.post("donations_losses", { ...newDonationLoss, quantity: Number(newDonationLoss.quantity)||0, estimated_value: Number(newDonationLoss.estimated_value)||0, employee: user.name });
     if (Array.isArray(res) && res[0]) setDonationsLosses(prev => [res[0], ...prev]);
-    setNewDonationLoss({ type: "donacion", description: "", quantity: "", estimated_value: "", foundation_name: "", date: today, notes: "" });
+    setNewDonationLoss({ type: "donacion", description: "", quantity: "", estimated_value: "", foundation_name: "", order_number: "", client_name: "", date: today, notes: "" });
     setModal(null); setSaving(false);
   };
   const deleteDonationLoss = async (id) => {
@@ -2976,8 +2976,8 @@ export default function LavanderiaApp() {
 
                 const exportDL = () => {
                   const csv = [
-                    ["Tipo","Descripción","Cantidad","Valor estimado","Fundación","Fecha","Empleado","Notas"],
-                    ...filtered.map(d => [d.type==="donacion"?"Donación":"Pérdida", d.description||"", d.quantity||0, Math.round(Number(d.estimated_value||0)), d.foundation_name||"", d.date, d.employee||"", `"${(d.notes||"").replace(/"/g,'""')}"`]),
+                    ["Tipo","Descripción","Cantidad","Valor estimado","# Orden","Cliente","Fundación","Fecha","Empleado","Notas"],
+                    ...filtered.map(d => [d.type==="donacion"?"Donación":"Pérdida", d.description||"", d.quantity||0, Math.round(Number(d.estimated_value||0)), d.order_number||"", d.client_name||"", d.foundation_name||"", d.date, d.employee||"", `"${(d.notes||"").replace(/"/g,'""')}"`]),
                   ].map(r => r.join(",")).join("\n");
                   const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
                   const url = URL.createObjectURL(blob); const a = document.createElement("a");
@@ -3016,7 +3016,7 @@ export default function LavanderiaApp() {
                     ? <div style={{ ...card, textAlign:"center", padding:40, color:"#484F58" }}><div style={{ fontSize:40,marginBottom:8 }}>🎁</div><div>No hay registros en este rango de fechas</div></div>
                     : <div style={{ overflowX:"auto" }}>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:14 }}>
-                          <thead><tr style={{ background:"#21262D" }}>{["Tipo","Descripción","Cant.","Valor","Fundación","Fecha","Empleado",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
+                          <thead><tr style={{ background:"#21262D" }}>{["Tipo","Descripción","Cant.","Valor","# Orden","Cliente","Fundación","Fecha","Empleado",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
                           <tbody>
                             {filtered.map(d => (
                               <tr key={d.id} style={{ borderBottom:"1px solid #21262D" }}>
@@ -3024,6 +3024,8 @@ export default function LavanderiaApp() {
                                 <td style={{ padding:"12px 14px",fontWeight:600 }}>{d.description}{d.notes && <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{d.notes}</div>}</td>
                                 <td style={{ padding:"12px 14px" }}>{d.quantity||0}</td>
                                 <td style={{ padding:"12px 14px",fontWeight:700,color:d.type==="donacion"?"#C792EA":"#EF5350" }}>${Math.round(Number(d.estimated_value||0)).toLocaleString()}</td>
+                                <td style={{ padding:"12px 14px" }}>{d.order_number?<span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:700,padding:"2px 8px",borderRadius:6,fontSize:12 }}>{d.order_number}</span>:"—"}</td>
+                                <td style={{ padding:"12px 14px",color:"#8B949E" }}>{d.client_name||"—"}</td>
                                 <td style={{ padding:"12px 14px",color:"#8B949E" }}>{d.foundation_name||"—"}</td>
                                 <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{d.date}</td>
                                 <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{d.employee||"—"}</td>
@@ -3597,6 +3599,14 @@ export default function LavanderiaApp() {
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>CANTIDAD DE PRENDAS</label><input style={inp} type="number" min={0} placeholder="0" value={newDonationLoss.quantity} onChange={e=>setNewDonationLoss(p=>({...p,quantity:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>VALOR ESTIMADO ($)</label><input style={inp} type="number" min={0} placeholder="0" value={newDonationLoss.estimated_value} onChange={e=>setNewDonationLoss(p=>({...p,estimated_value:e.target.value}))} /></div>
                   {newDonationLoss.type==="donacion" && <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FUNDACIÓN (opcional)</label><input style={inp} placeholder="Nombre de la fundación" value={newDonationLoss.foundation_name} onChange={e=>setNewDonationLoss(p=>({...p,foundation_name:e.target.value}))} /></div>}
+                  <div>
+                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}># DE ORDEN (opcional)</label>
+                    <input style={inp} placeholder="Ej: S069018" value={newDonationLoss.order_number} onChange={e=>setNewDonationLoss(p=>({...p,order_number:e.target.value}))} onBlur={e=>{
+                      const found = orders.find(o => o.order_number?.toLowerCase() === e.target.value.trim().toLowerCase());
+                      if (found && !newDonationLoss.client_name) setNewDonationLoss(p=>({...p,client_name:found.client_name}));
+                    }} />
+                  </div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>CLIENTE (opcional)</label><input style={inp} placeholder="Nombre del cliente" value={newDonationLoss.client_name} onChange={e=>setNewDonationLoss(p=>({...p,client_name:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newDonationLoss.date} onChange={e=>setNewDonationLoss(p=>({...p,date:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOTAS (opcional)</label><input style={inp} placeholder="Detalles adicionales" value={newDonationLoss.notes} onChange={e=>setNewDonationLoss(p=>({...p,notes:e.target.value}))} /></div>
                   <button onClick={addDonationLoss} disabled={saving||!newDonationLoss.description} style={{ ...btn,background:"linear-gradient(135deg,#C792EA,#9B59B6)",color:"#fff",padding:12,opacity:(saving||!newDonationLoss.description)?0.5:1 }}>{saving?"Guardando...":"Guardar Registro"}</button>
