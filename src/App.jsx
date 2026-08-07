@@ -148,6 +148,11 @@ export default function LavanderiaApp() {
   const [newAbono, setNewAbono] = useState({ amount: "", payment_method: "efectivo" });
   const [advances, setAdvances] = useState([]);
   const [cajaBaseList, setCajaBaseList] = useState([]);
+  const [donationsLosses, setDonationsLosses] = useState([]);
+  const [newDonationLoss, setNewDonationLoss] = useState({ type: "donacion", description: "", quantity: "", estimated_value: "", foundation_name: "", date: today, notes: "" });
+  const [dlTypeFilter, setDlTypeFilter] = useState("");
+  const [dlFrom, setDlFrom] = useState(() => { const d = new Date(); d.setDate(1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; });
+  const [dlTo, setDlTo] = useState(today);
   const [cajaBaseInput, setCajaBaseInput] = useState("");
   const [savingBase, setSavingBase] = useState(false);
   const [newAdvance, setNewAdvance] = useState({ employee_id: "", amount: "", date: today, note: "", payment_method: "efectivo" });
@@ -445,7 +450,7 @@ export default function LavanderiaApp() {
   }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi, ab, adv, ag, dom, cb, pd] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base"), db.get("partial_deliveries")]);
+    const [o, e, c, oi, ab, adv, ag, dom, cb, pd, dl] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base"), db.get("partial_deliveries"), db.get("donations_losses")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
@@ -456,6 +461,7 @@ export default function LavanderiaApp() {
     if (Array.isArray(dom)) setDomiciliarios(dom);
     if (Array.isArray(cb)) setCajaBaseList(cb);
     if (Array.isArray(pd)) setPartialDeliveries(pd);
+    if (Array.isArray(dl)) setDonationsLosses(dl);
   };
   const mainContentRef = useRef(null);
   useEffect(() => { document.title = "LavaGest"; }, []);
@@ -537,6 +543,20 @@ export default function LavanderiaApp() {
     setAdvances(prev => prev.filter(a => a.id !== id));
   };
   const getCajaBase = (date) => cajaBaseList.find(cb => cb.date === date);
+  const addDonationLoss = async () => {
+    if (!newDonationLoss.description) return;
+    setSaving(true);
+    const res = await db.post("donations_losses", { ...newDonationLoss, quantity: Number(newDonationLoss.quantity)||0, estimated_value: Number(newDonationLoss.estimated_value)||0, employee: user.name });
+    if (Array.isArray(res) && res[0]) setDonationsLosses(prev => [res[0], ...prev]);
+    setNewDonationLoss({ type: "donacion", description: "", quantity: "", estimated_value: "", foundation_name: "", date: today, notes: "" });
+    setModal(null); setSaving(false);
+  };
+  const deleteDonationLoss = async (id) => {
+    const ok = await checkClave("eliminar"); if (!ok) return;
+    if (!window.confirm("¿Eliminar este registro?")) return;
+    await db.delete("donations_losses", id);
+    setDonationsLosses(prev => prev.filter(d => d.id !== id));
+  };
   const saveCajaBase = async (date, amount) => {
     setSavingBase(true);
     const existing = getCajaBase(date);
@@ -1163,6 +1183,7 @@ export default function LavanderiaApp() {
     { id: "report", label: "Informes", icon: "📋" },
     { id: "config", label: "Configuración", icon: "⚙️" },
     { id: "reversar", label: "Reversar", icon: "↩️" },
+    { id: "donaciones", label: "Donaciones y Pérdidas", icon: "🎁" },
   ];
 
   const PayMethod = ({ m }) => { const map = { nequi: ["📱 Nequi","#C792EA","rgba(199,146,234,0.15)"], daviplata: ["💜 Daviplata","#667EEA","rgba(102,126,234,0.15)"], breb: ["🔵 Bre-b","#4FC3F7","rgba(79,195,247,0.15)"], tarjeta: ["💳 Tarjeta","#FFA726","rgba(255,167,38,0.15)"], efectivo: ["💵 Efectivo","#66BB6A","rgba(102,187,106,0.15)"] }; const [l,c,b] = map[m]||map.efectivo; return <span style={{ fontSize:12,background:b,color:c,padding:"3px 10px",borderRadius:20 }}>{l}</span>; };
@@ -2916,6 +2937,108 @@ export default function LavanderiaApp() {
             </div>
           )}
 
+          {/* DONACIONES Y PÉRDIDAS */}
+          {tab === "donaciones" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 10 }}>
+                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>🎁 Donaciones y Pérdidas</h2>
+                <button onClick={() => setModal("newDonationLoss")} style={{ ...btn, background: "linear-gradient(135deg,#C792EA,#9B59B6)", color: "#fff" }}>+ Registrar</button>
+              </div>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8B949E" }}>Este registro es solo informativo — no afecta tu inventario, órdenes ni el cuadre de caja.</p>
+
+              <div style={{ ...card, marginBottom: 20 }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={dlFrom} onChange={e => setDlFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={dlTo} onChange={e => setDlTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>TIPO</label>
+                    <select value={dlTypeFilter} onChange={e => setDlTypeFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 13 }}>
+                      <option value="" style={{ background:"#1a1a2e" }}>Todos</option>
+                      <option value="donacion" style={{ background:"#1a1a2e" }}>🎁 Donación</option>
+                      <option value="perdida" style={{ background:"#1a1a2e" }}>⚠️ Pérdida</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {(() => {
+                const filtered = donationsLosses.filter(d => d.date >= dlFrom && d.date <= dlTo && (!dlTypeFilter || d.type === dlTypeFilter));
+                const donaciones = filtered.filter(d => d.type === "donacion");
+                const perdidas = filtered.filter(d => d.type === "perdida");
+                const totalPerdidaValor = perdidas.reduce((s,d) => s+Number(d.estimated_value||0), 0);
+                const totalDonacionValor = donaciones.reduce((s,d) => s+Number(d.estimated_value||0), 0);
+
+                const exportDL = () => {
+                  const csv = [
+                    ["Tipo","Descripción","Cantidad","Valor estimado","Fundación","Fecha","Empleado","Notas"],
+                    ...filtered.map(d => [d.type==="donacion"?"Donación":"Pérdida", d.description||"", d.quantity||0, Math.round(Number(d.estimated_value||0)), d.foundation_name||"", d.date, d.employee||"", `"${(d.notes||"").replace(/"/g,'""')}"`]),
+                  ].map(r => r.join(",")).join("\n");
+                  const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob); const a = document.createElement("a");
+                  a.href = url; a.download = `donaciones_perdidas_${dlFrom}_${dlTo}.csv`; a.click(); URL.revokeObjectURL(url);
+                };
+
+                return <>
+                  <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:16,marginBottom:24 }}>
+                    <div style={{ ...card, borderLeft:"4px solid #C792EA" }}>
+                      <div style={{ fontSize:24,marginBottom:6 }}>🎁</div>
+                      <div style={{ fontSize:22,fontWeight:800,color:"#C792EA" }}>{donaciones.length}</div>
+                      <div style={{ fontSize:12,color:"#8B949E",marginTop:2 }}>Donaciones registradas</div>
+                    </div>
+                    <div style={{ ...card, borderLeft:"4px solid #EF5350" }}>
+                      <div style={{ fontSize:24,marginBottom:6 }}>⚠️</div>
+                      <div style={{ fontSize:22,fontWeight:800,color:"#EF5350" }}>{perdidas.length}</div>
+                      <div style={{ fontSize:12,color:"#8B949E",marginTop:2 }}>Pérdidas registradas</div>
+                    </div>
+                    <div style={{ ...card, borderLeft:"4px solid #EF5350" }}>
+                      <div style={{ fontSize:24,marginBottom:6 }}>💸</div>
+                      <div style={{ fontSize:22,fontWeight:800,color:"#EF5350" }}>${Math.round(totalPerdidaValor).toLocaleString()}</div>
+                      <div style={{ fontSize:12,color:"#8B949E",marginTop:2 }}>Valor estimado perdido</div>
+                    </div>
+                    <div style={{ ...card, borderLeft:"4px solid #C792EA" }}>
+                      <div style={{ fontSize:24,marginBottom:6 }}>💜</div>
+                      <div style={{ fontSize:22,fontWeight:800,color:"#C792EA" }}>${Math.round(totalDonacionValor).toLocaleString()}</div>
+                      <div style={{ fontSize:12,color:"#8B949E",marginTop:2 }}>Valor estimado donado</div>
+                    </div>
+                  </div>
+
+                  {isAdmin && filtered.length > 0 && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
+                    <button onClick={exportDL} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                  </div>}
+
+                  {filtered.length === 0
+                    ? <div style={{ ...card, textAlign:"center", padding:40, color:"#484F58" }}><div style={{ fontSize:40,marginBottom:8 }}>🎁</div><div>No hay registros en este rango de fechas</div></div>
+                    : <div style={{ overflowX:"auto" }}>
+                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:14 }}>
+                          <thead><tr style={{ background:"#21262D" }}>{["Tipo","Descripción","Cant.","Valor","Fundación","Fecha","Empleado",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
+                          <tbody>
+                            {filtered.map(d => (
+                              <tr key={d.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                <td style={{ padding:"12px 14px" }}>{d.type==="donacion"?<span style={{ background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:600 }}>🎁 Donación</span>:<span style={{ background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:600 }}>⚠️ Pérdida</span>}</td>
+                                <td style={{ padding:"12px 14px",fontWeight:600 }}>{d.description}{d.notes && <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{d.notes}</div>}</td>
+                                <td style={{ padding:"12px 14px" }}>{d.quantity||0}</td>
+                                <td style={{ padding:"12px 14px",fontWeight:700,color:d.type==="donacion"?"#C792EA":"#EF5350" }}>${Math.round(Number(d.estimated_value||0)).toLocaleString()}</td>
+                                <td style={{ padding:"12px 14px",color:"#8B949E" }}>{d.foundation_name||"—"}</td>
+                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{d.date}</td>
+                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{d.employee||"—"}</td>
+                                <td style={{ padding:"12px 14px" }}><button onClick={()=>deleteDonationLoss(d.id)} title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                  }
+                </>;
+              })()}
+            </div>
+          )}
+
           {/* CONFIG */}
           {tab === "config" && (
             <div>
@@ -3455,6 +3578,28 @@ export default function LavanderiaApp() {
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newAdvance.date} onChange={e=>setNewAdvance(p=>({...p,date:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOTA (opcional)</label><input style={inp} placeholder="Ej: Adelanto para transporte" value={newAdvance.note} onChange={e=>setNewAdvance(p=>({...p,note:e.target.value}))} /></div>
                   <button onClick={addAdvance} disabled={saving||!newAdvance.employee_id||!newAdvance.amount} style={{ ...btn,background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",padding:12,opacity:(saving||!newAdvance.employee_id||!newAdvance.amount)?0.5:1 }}>{saving?"Guardando...":"Guardar Adelanto"}</button>
+                </div>
+              </>
+            )}
+
+            {modal === "newDonationLoss" && (
+              <>
+                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>🎁 Registrar Donación o Pérdida</h3>
+                <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                  <div>
+                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>TIPO</label>
+                    <div style={{ display:"flex",gap:10 }}>
+                      <label onClick={()=>setNewDonationLoss(p=>({...p,type:"donacion"}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:newDonationLoss.type==="donacion"?"rgba(199,146,234,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newDonationLoss.type==="donacion"?"#C792EA":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newDonationLoss.type==="donacion"?"#C792EA":"#8B949E" }}>🎁 Donación</label>
+                      <label onClick={()=>setNewDonationLoss(p=>({...p,type:"perdida"}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:newDonationLoss.type==="perdida"?"rgba(239,83,80,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newDonationLoss.type==="perdida"?"#EF5350":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newDonationLoss.type==="perdida"?"#EF5350":"#8B949E" }}>⚠️ Pérdida</label>
+                    </div>
+                  </div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DESCRIPCIÓN</label><input style={inp} placeholder="Ej: Bolsa de ropa vieja sin reclamar" value={newDonationLoss.description} onChange={e=>setNewDonationLoss(p=>({...p,description:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>CANTIDAD DE PRENDAS</label><input style={inp} type="number" min={0} placeholder="0" value={newDonationLoss.quantity} onChange={e=>setNewDonationLoss(p=>({...p,quantity:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>VALOR ESTIMADO ($)</label><input style={inp} type="number" min={0} placeholder="0" value={newDonationLoss.estimated_value} onChange={e=>setNewDonationLoss(p=>({...p,estimated_value:e.target.value}))} /></div>
+                  {newDonationLoss.type==="donacion" && <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FUNDACIÓN (opcional)</label><input style={inp} placeholder="Nombre de la fundación" value={newDonationLoss.foundation_name} onChange={e=>setNewDonationLoss(p=>({...p,foundation_name:e.target.value}))} /></div>}
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newDonationLoss.date} onChange={e=>setNewDonationLoss(p=>({...p,date:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOTAS (opcional)</label><input style={inp} placeholder="Detalles adicionales" value={newDonationLoss.notes} onChange={e=>setNewDonationLoss(p=>({...p,notes:e.target.value}))} /></div>
+                  <button onClick={addDonationLoss} disabled={saving||!newDonationLoss.description} style={{ ...btn,background:"linear-gradient(135deg,#C792EA,#9B59B6)",color:"#fff",padding:12,opacity:(saving||!newDonationLoss.description)?0.5:1 }}>{saving?"Guardando...":"Guardar Registro"}</button>
                 </div>
               </>
             )}
