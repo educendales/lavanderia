@@ -276,6 +276,47 @@ export default function LavanderiaApp() {
     alert("✅ Todos los clientes han sido eliminados.");
   };
 
+  const resetAppToZero = async () => {
+    const clave = await getClave();
+    const pwd = prompt("Clave de administrador para REINICIAR TODA LA APP:");
+    if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
+    if (!window.confirm("⚠️⚠️ Esto va a borrar TODAS las órdenes, prendas, abonos, entregas parciales, gastos, adelantos de nómina, clientes, agencias, domiciliarios y la base de caja.\n\nLos empleados/usuarios, servicios, tipos de prenda, colores e información del negocio NO se tocan.\n\nEsta acción NO se puede deshacer. ¿Continuar?")) return;
+    const confirmText = prompt('Para confirmar, escribe exactamente: BORRAR TODO');
+    if (confirmText !== "BORRAR TODO") { alert("❌ Texto de confirmación incorrecto. No se borró nada."); return; }
+
+    const wipeTable = async (table) => {
+      await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=neq.00000000-0000-0000-0000-000000000000`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      });
+    };
+
+    try {
+      // Borrar primero las tablas "hijas" que dependen de orders
+      await wipeTable("order_items");
+      await wipeTable("abonos");
+      await wipeTable("partial_deliveries");
+      // Ahora orders (ya sin hijos que lo bloqueen)
+      await wipeTable("orders");
+      // Ahora las tablas que orders referenciaba
+      await wipeTable("agencies");
+      await wipeTable("domiciliarios");
+      // El resto, independientes
+      await wipeTable("clients");
+      await wipeTable("expenses");
+      await wipeTable("employee_advances");
+      await wipeTable("caja_base");
+
+      setOrders([]); setOrderItems({}); setAbonos([]); setPartialDeliveries([]);
+      setAgencies([]); setDomiciliarios([]); setClients([]); setExpenses([]);
+      setAdvances([]); setCajaBaseList([]);
+
+      alert("✅ La app quedó en cero. Empleados, servicios, tipos de prenda, colores e información del negocio se mantuvieron.");
+    } catch (e) {
+      alert("❌ Ocurrió un error durante el reinicio. Revisa qué tablas quedaron sin borrar: " + e.message);
+    }
+  };
+
   const saveServices = (list) => { setServices(list); try { localStorage.setItem("services", JSON.stringify(list)); } catch {} };
   const saveConditions = (list) => { setConditions(list); try { localStorage.setItem("conditions", JSON.stringify(list)); } catch {} };
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
@@ -3202,6 +3243,12 @@ export default function LavanderiaApp() {
                     <div style={{ fontWeight:700,fontSize:15,marginBottom:6 }}>Eliminar todos los clientes</div>
                     <div style={{ fontSize:13,color:"#8B949E",marginBottom:16 }}>Borra toda la base de datos de clientes. Las órdenes no se eliminan.</div>
                     <button onClick={deleteAllClients} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:13 }}>🗑 Eliminar todos los clientes</button>
+                  </div>
+                  <div style={{ background:"#0D1117",borderRadius:12,padding:20,border:"2px solid #EF5350" }}>
+                    <div style={{ fontSize:32,marginBottom:8 }}>💣</div>
+                    <div style={{ fontWeight:700,fontSize:15,marginBottom:6,color:"#EF5350" }}>Reiniciar app a cero (Cero KM)</div>
+                    <div style={{ fontSize:13,color:"#8B949E",marginBottom:16 }}>Borra TODAS las órdenes, prendas, abonos, entregas parciales, gastos, adelantos, clientes, agencias, domiciliarios y base de caja. Mantiene empleados, servicios, tipos de prenda, colores e información del negocio. Ideal antes de empezar a operar en serio.</div>
+                    <button onClick={resetAppToZero} style={{ ...btn,background:"linear-gradient(135deg,#EF5350,#B71C1C)",color:"#fff",width:"100%",padding:12,fontSize:13,fontWeight:800 }}>💣 Reiniciar TODA la app</button>
                   </div>
                 </div>
               </div>
