@@ -1124,7 +1124,7 @@ export default function LavanderiaApp() {
     { id: "reversar", label: "Reversar", icon: "↩️" },
   ];
 
-  const PayMethod = ({ m }) => { const map = { nequi: ["📱 Nequi","#C792EA","rgba(199,146,234,0.15)"], daviplata: ["💜 Daviplata","#667EEA","rgba(102,126,234,0.15)"], breb: ["🔵 Bre-b","#4FC3F7","rgba(79,195,247,0.15)"], efectivo: ["💵 Efectivo","#66BB6A","rgba(102,187,106,0.15)"] }; const [l,c,b] = map[m]||map.efectivo; return <span style={{ fontSize:12,background:b,color:c,padding:"3px 10px",borderRadius:20 }}>{l}</span>; };
+  const PayMethod = ({ m }) => { const map = { nequi: ["📱 Nequi","#C792EA","rgba(199,146,234,0.15)"], daviplata: ["💜 Daviplata","#667EEA","rgba(102,126,234,0.15)"], breb: ["🔵 Bre-b","#4FC3F7","rgba(79,195,247,0.15)"], tarjeta: ["💳 Tarjeta","#FFA726","rgba(255,167,38,0.15)"], efectivo: ["💵 Efectivo","#66BB6A","rgba(102,187,106,0.15)"] }; const [l,c,b] = map[m]||map.efectivo; return <span style={{ fontSize:12,background:b,color:c,padding:"3px 10px",borderRadius:20 }}>{l}</span>; };
 
   return (
     <div style={s}>
@@ -1363,7 +1363,7 @@ export default function LavanderiaApp() {
                       <div style={{ marginBottom: 12 }}>
                         <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
                         <div style={{ display: "flex", gap: 8 }}>
-                          {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"}].map(opt => (
+                          {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
                             <label key={opt.value} onClick={() => setEntregaMultiPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,fontWeight:600,background:entregaMultiPayment===opt.value?"rgba(102,187,106,0.2)":"rgba(255,255,255,0.04)",border:`2px solid ${entregaMultiPayment===opt.value?"#66BB6A":"#30363D"}`,borderRadius:8,padding:"8px 4px",color:entregaMultiPayment===opt.value?"#66BB6A":"#8B949E" }}>{opt.label}</label>
                           ))}
                         </div>
@@ -1444,7 +1444,7 @@ export default function LavanderiaApp() {
                         <div style={{ marginBottom: 16 }}>
                           <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
                           <div style={{ display: "flex", gap: 10 }}>
-                            {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"}].map(opt => (
+                            {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
                               <label key={opt.value} onClick={() => setEntregaPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:entregaPayment===opt.value?"rgba(79,195,247,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${entregaPayment===opt.value?"#4FC3F7":"#30363D"}`,borderRadius:10,padding:"8px 4px",color:entregaPayment===opt.value?"#4FC3F7":"#8B949E" }}>{opt.label}</label>
                             ))}
                           </div>
@@ -1479,7 +1479,7 @@ export default function LavanderiaApp() {
                         <div style={{ marginBottom: 16 }}>
                           <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
                           <div style={{ display: "flex", gap: 10 }}>
-                            {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"}].map(opt => (
+                            {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
                               <label key={opt.value} onClick={() => setParcialPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:parcialPayment===opt.value?"rgba(255,138,101,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${parcialPayment===opt.value?"#FF8A65":"#30363D"}`,borderRadius:10,padding:"8px 4px",color:parcialPayment===opt.value?"#FF8A65":"#8B949E" }}>{opt.label}</label>
                             ))}
                           </div>
@@ -2224,7 +2224,7 @@ export default function LavanderiaApp() {
                   const sortedDays = Object.keys(byDay).sort();
 
                   // By payment method
-                  const byMetodo = { efectivo:0, nequi:0, daviplata:0, breb:0 };
+                  const byMetodo = { efectivo:0, nequi:0, daviplata:0, breb:0, tarjeta:0 };
                   abonosRango.forEach(a => { byMetodo[a.payment_method||"efectivo"] = (byMetodo[a.payment_method||"efectivo"]||0) + Number(a.amount); });
 
                   const exportAbonos = () => {
@@ -2266,7 +2266,7 @@ export default function LavanderiaApp() {
 
                         {/* Por método */}
                         <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:16 }}>
-                          {[{k:"efectivo",l:"💵 Efectivo",c:"#66BB6A"},{k:"nequi",l:"📱 Nequi",c:"#C792EA"},{k:"daviplata",l:"💜 Daviplata",c:"#667EEA"},{k:"breb",l:"🔵 Bre-b",c:"#4FC3F7"}].filter(m=>byMetodo[m.k]>0).map(m=>(
+                          {[{k:"efectivo",l:"💵 Efectivo",c:"#66BB6A"},{k:"nequi",l:"📱 Nequi",c:"#C792EA"},{k:"daviplata",l:"💜 Daviplata",c:"#667EEA"},{k:"breb",l:"🔵 Bre-b",c:"#4FC3F7"},{k:"tarjeta",l:"💳 Tarjeta",c:"#FFA726"}].filter(m=>byMetodo[m.k]>0).map(m=>(
                             <div key={m.k} style={{ background:m.c+"15",border:`1px solid ${m.c}40`,borderRadius:10,padding:"8px 14px" }}>
                               <div style={{ fontSize:11,color:"#8B949E" }}>{m.l}</div>
                               <div style={{ fontWeight:800,color:m.c }}>${Math.round(byMetodo[m.k]).toLocaleString()}</div>
@@ -2637,6 +2637,7 @@ export default function LavanderiaApp() {
                     { key: "nequi", label: "📱 Nequi", color: "#C792EA" },
                     { key: "daviplata", label: "💜 Daviplata", color: "#667EEA" },
                     { key: "breb", label: "🔵 Bre-b", color: "#4FC3F7" },
+                    { key: "tarjeta", label: "💳 Tarjeta", color: "#FFA726" },
                   ];
                   const totalesPorMetodo = metodos.map(m => ({
                     ...m,
@@ -2649,7 +2650,7 @@ export default function LavanderiaApp() {
                   const byDay = {};
                   entregadas.forEach(o => {
                     const d = o.delivered_at;
-                    if (!byDay[d]) byDay[d] = { efectivo:0, nequi:0, daviplata:0, breb:0, total:0 };
+                    if (!byDay[d]) byDay[d] = { efectivo:0, nequi:0, daviplata:0, breb:0, tarjeta:0, total:0 };
                     const m = o.payment_method||"efectivo";
                     byDay[d][m] = (byDay[d][m]||0) + Number(o.price);
                     byDay[d].total += Number(o.price);
@@ -2658,9 +2659,9 @@ export default function LavanderiaApp() {
 
                   const exportPagos = () => {
                     const csv = [
-                      ["Fecha","Efectivo","Nequi","Daviplata","Bre-b","Total"],
-                      ...sortedDays.map(d => [d, Math.round(byDay[d].efectivo||0), Math.round(byDay[d].nequi||0), Math.round(byDay[d].daviplata||0), Math.round(byDay[d].breb||0), Math.round(byDay[d].total||0)]),
-                      ["TOTAL", Math.round(totalesPorMetodo.find(m=>m.key==="efectivo")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="nequi")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="daviplata")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="breb")?.total||0), Math.round(totalGeneral)]
+                      ["Fecha","Efectivo","Nequi","Daviplata","Bre-b","Tarjeta","Total"],
+                      ...sortedDays.map(d => [d, Math.round(byDay[d].efectivo||0), Math.round(byDay[d].nequi||0), Math.round(byDay[d].daviplata||0), Math.round(byDay[d].breb||0), Math.round(byDay[d].tarjeta||0), Math.round(byDay[d].total||0)]),
+                      ["TOTAL", Math.round(totalesPorMetodo.find(m=>m.key==="efectivo")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="nequi")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="daviplata")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="breb")?.total||0), Math.round(totalesPorMetodo.find(m=>m.key==="tarjeta")?.total||0), Math.round(totalGeneral)]
                     ].map(r => r.join(",")).join("\n");
                     const blob = new Blob(["﻿"+csv], {type:"text/csv;charset=utf-8;"});
                     const url = URL.createObjectURL(blob); const a = document.createElement("a");
@@ -2695,7 +2696,7 @@ export default function LavanderiaApp() {
                         {sortedDays.length > 0 && <div style={{ overflowX:"auto" }}>
                           <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
                             <thead><tr style={{ background:"#21262D" }}>
-                              {["Fecha","💵 Efectivo","📱 Nequi","💜 Daviplata","🔵 Bre-b","Total"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
+                              {["Fecha","💵 Efectivo","📱 Nequi","💜 Daviplata","🔵 Bre-b","💳 Tarjeta","Total"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
                             </tr></thead>
                             <tbody>
                               {sortedDays.map(d => (
@@ -2705,6 +2706,7 @@ export default function LavanderiaApp() {
                                   <td style={{ padding:"10px 12px",color:"#C792EA",fontWeight:600 }}>{byDay[d].nequi>0?`$${Math.round(byDay[d].nequi).toLocaleString()}`:"—"}</td>
                                   <td style={{ padding:"10px 12px",color:"#667EEA",fontWeight:600 }}>{byDay[d].daviplata>0?`$${Math.round(byDay[d].daviplata).toLocaleString()}`:"—"}</td>
                                   <td style={{ padding:"10px 12px",color:"#4FC3F7",fontWeight:600 }}>{(byDay[d].breb||0)>0?`$${Math.round(byDay[d].breb).toLocaleString()}`:"—"}</td>
+                                  <td style={{ padding:"10px 12px",color:"#FFA726",fontWeight:600 }}>{(byDay[d].tarjeta||0)>0?`$${Math.round(byDay[d].tarjeta).toLocaleString()}`:"—"}</td>
                                   <td style={{ padding:"10px 12px",fontWeight:800 }}>${Math.round(byDay[d].total).toLocaleString()}</td>
                                 </tr>
                               ))}
@@ -2714,6 +2716,7 @@ export default function LavanderiaApp() {
                                 <td style={{ padding:"10px 12px",color:"#C792EA" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="nequi")?.total||0).toLocaleString()}</td>
                                 <td style={{ padding:"10px 12px",color:"#667EEA" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="daviplata")?.total||0).toLocaleString()}</td>
                                 <td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="breb")?.total||0).toLocaleString()}</td>
+                                <td style={{ padding:"10px 12px",color:"#FFA726" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="tarjeta")?.total||0).toLocaleString()}</td>
                                 <td style={{ padding:"10px 12px" }}>${Math.round(totalGeneral).toLocaleString()}</td>
                               </tr>
                             </tbody>
@@ -3381,7 +3384,7 @@ export default function LavanderiaApp() {
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>CONCEPTO</label><input style={inp} placeholder="Ej: Detergente" value={newExpense.concept} onChange={e=>setNewExpense(p=>({...p,concept:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>CATEGORÍA</label><select style={inp} value={newExpense.category} onChange={e=>setNewExpense(p=>({...p,category:e.target.value}))}>{["insumos","servicios","mantenimiento","otros"].map(c=><option key={c} value={c} style={{ background:"#1a1a2e" }}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}</select></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"}].map(opt=><label key={opt.value} onClick={()=>setNewExpense(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:newExpense.payment_method===opt.value?"rgba(79,195,247,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newExpense.payment_method===opt.value?"#4FC3F7":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newExpense.payment_method===opt.value?"#4FC3F7":"#8B949E" }}>{opt.label}</label>)}</div></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=><label key={opt.value} onClick={()=>setNewExpense(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:newExpense.payment_method===opt.value?"rgba(79,195,247,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newExpense.payment_method===opt.value?"#4FC3F7":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newExpense.payment_method===opt.value?"#4FC3F7":"#8B949E" }}>{opt.label}</label>)}</div></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newExpense.amount} onChange={e=>setNewExpense(p=>({...p,amount:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newExpense.date} onChange={e=>setNewExpense(p=>({...p,date:e.target.value}))} /></div>
                   <button onClick={addExpense} disabled={saving} style={{ ...btn,background:"linear-gradient(135deg,#EF5350,#B71C1C)",color:"#fff",padding:12,opacity:saving?0.7:1 }}>{saving?"Guardando...":"Guardar Gasto"}</button>
@@ -3401,7 +3404,7 @@ export default function LavanderiaApp() {
                     </select>
                   </div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newAdvance.amount} onChange={e=>setNewAdvance(p=>({...p,amount:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"}].map(opt=><label key={opt.value} onClick={()=>setNewAdvance(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:newAdvance.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAdvance.payment_method===opt.value?"#FFD54F":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newAdvance.payment_method===opt.value?"#FFD54F":"#8B949E" }}>{opt.label}</label>)}</div></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=><label key={opt.value} onClick={()=>setNewAdvance(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:newAdvance.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAdvance.payment_method===opt.value?"#FFD54F":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newAdvance.payment_method===opt.value?"#FFD54F":"#8B949E" }}>{opt.label}</label>)}</div></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newAdvance.date} onChange={e=>setNewAdvance(p=>({...p,date:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOTA (opcional)</label><input style={inp} placeholder="Ej: Adelanto para transporte" value={newAdvance.note} onChange={e=>setNewAdvance(p=>({...p,note:e.target.value}))} /></div>
                   <button onClick={addAdvance} disabled={saving||!newAdvance.employee_id||!newAdvance.amount} style={{ ...btn,background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",padding:12,opacity:(saving||!newAdvance.employee_id||!newAdvance.amount)?0.5:1 }}>{saving?"Guardando...":"Guardar Adelanto"}</button>
@@ -3525,7 +3528,7 @@ export default function LavanderiaApp() {
               <div>
                 <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:6 }}>MÉTODO DE PAGO</label>
                 <div style={{ display:"flex",gap:8 }}>
-                  {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"}].map(opt=>(
+                  {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=>(
                     <label key={opt.value} onClick={()=>setNewAbono(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,fontWeight:600,background:newAbono.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAbono.payment_method===opt.value?"#FFD54F":"#30363D"}`,borderRadius:8,padding:"8px 4px",color:newAbono.payment_method===opt.value?"#FFD54F":"#8B949E" }}>{opt.label}</label>
                   ))}
                 </div>
@@ -3615,6 +3618,7 @@ export default function LavanderiaApp() {
                 { key:"nequi", label:"📱 Nequi", color:"#C792EA" },
                 { key:"daviplata", label:"💜 Daviplata", color:"#667EEA" },
                 { key:"breb", label:"🔵 Bre-b", color:"#4FC3F7" },
+                { key:"tarjeta", label:"💳 Tarjeta", color:"#FFA726" },
               ];
               const totalGeneral = entregadasHoy.reduce((s,o) => s+Number(o.price), 0);
               const totalAbonos = abonos.filter(a => a.date === filterDate).reduce((s,a) => s+Number(a.amount), 0);
@@ -3798,7 +3802,7 @@ export default function LavanderiaApp() {
                   <h4 style={{ color:"#8B949E" }}>Registrar abono 💰</h4>
                   <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
                     <li>Clic en 💰 en la fila de la orden.</li>
-                    <li>Ingresa el monto y método de pago (Efectivo, Nequi, Daviplata, Bre-b).</li>
+                    <li>Ingresa el monto y método de pago (Efectivo, Nequi, Daviplata, Bre-b, Tarjeta).</li>
                     <li>El saldo pendiente se actualiza automáticamente.</li>
                     <li>Al entregar, el sistema muestra cuánto abonó y cuánto falta.</li>
                   </ul>
@@ -3810,7 +3814,7 @@ export default function LavanderiaApp() {
                     <li>Escribe el teléfono o número de orden y clic en 🔍 Buscar.</li>
                     <li>Si tienes pistola lectora, escanea el código de barras del recibo.</li>
                     <li>Selecciona las órdenes a entregar (una o varias).</li>
-                    <li>Elige método de pago: Efectivo, Nequi, Daviplata o Bre-b.</li>
+                    <li>Elige método de pago: Efectivo, Nequi, Daviplata, Bre-b o Tarjeta.</li>
                     <li>Marca "Sin recibo" si el cliente no presentó el recibo físico.</li>
                     <li>Clic en ✅ Confirmar Entrega.</li>
                   </ol>
@@ -3843,7 +3847,7 @@ export default function LavanderiaApp() {
                     <li><strong>Rango de Fechas:</strong> detalle por día o por mes con exportar Excel.</li>
                     <li><strong>Gastos por Rango:</strong> detalle de gastos por período.</li>
                     <li><strong>Abonos por Rango:</strong> lista de abonos recibidos.</li>
-                    <li><strong>Pagos por Método:</strong> cuánto se cobró en Efectivo, Nequi, Daviplata y Bre-b.</li>
+                    <li><strong>Pagos por Método:</strong> cuánto se cobró en Efectivo, Nequi, Daviplata, Bre-b y Tarjeta.</li>
                     <li><strong>Inventario:</strong> prendas sin retirar con envío de WhatsApp masivo.</li>
                     <li><strong>Órdenes Reversadas:</strong> historial de reversas.</li>
                   </ul>
@@ -3916,7 +3920,7 @@ export default function LavanderiaApp() {
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>💳 Informe Diario</h3>
                   <p style={{ color:"#C9D1D9" }}>Botón rápido en el sidebar que muestra el resumen de cobros del día.</p>
                   <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
-                    <li>Lo recaudado por <strong>Efectivo, Nequi, Daviplata y Bre-b</strong>.</li>
+                    <li>Lo recaudado por <strong>Efectivo, Nequi, Daviplata, Bre-b y Tarjeta</strong>.</li>
                     <li>Incluye tanto entregas como abonos del día.</li>
                     <li>Total general = entregas + abonos.</li>
                     <li>Usa la misma fecha del Dashboard.</li>
