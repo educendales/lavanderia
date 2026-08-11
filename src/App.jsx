@@ -464,6 +464,8 @@ export default function LavanderiaApp() {
     if (Array.isArray(dl)) setDonationsLosses(dl);
   };
   const mainContentRef = useRef(null);
+  const firstGarmentInputRef = useRef(null);
+  useEffect(() => { firstGarmentInputRef.current?.focus(); firstGarmentInputRef.current?.select(); }, [items.length]);
   useEffect(() => { document.title = "LavaGest"; }, []);
   useEffect(() => { window.scrollTo(0, 0); mainContentRef.current?.scrollTo(0, 0); }, [tab]);
   useEffect(() => { if (user) loadData(); }, [user]);
@@ -3433,7 +3435,7 @@ export default function LavanderiaApp() {
                         <div style={{ display:"flex",gap:4,marginBottom:8 }}>{services.map(sv=>{ const sel=item.service===sv.id; return <label key={sv.id} onClick={()=>updateItem(i,"service",sv.id)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:3,cursor:"pointer",fontSize:10,fontWeight:600,background:sel?sv.color+"22":"rgba(255,255,255,0.03)",border:`1.5px solid ${sel?sv.color:"#30363D"}`,borderRadius:6,padding:"4px 2px",color:sel?sv.color:"#484F58",userSelect:"none" }}>{sv.icon} {sv.label}</label>; })}</div>
                         <div className="lv-item-grid" style={{ alignItems:"center",marginBottom:8 }}>
                           <div style={{ position:"relative" }}>
-                            <input type="text" placeholder="Prenda..." value={item.garment_type} onChange={e=>{updateItem(i,"garment_type",e.target.value);setGarmentSuggestIdx(-1);}} onFocus={()=>{setGarmentFocusIdx(i);setGarmentSuggestIdx(-1);}} onBlur={()=>setTimeout(()=>setGarmentFocusIdx(null),150)} onKeyDown={e=>{
+                            <input type="text" ref={i===0 ? firstGarmentInputRef : null} placeholder="Prenda..." value={item.garment_type} onChange={e=>{updateItem(i,"garment_type",e.target.value);setGarmentSuggestIdx(-1);}} onFocus={()=>{setGarmentFocusIdx(i);setGarmentSuggestIdx(-1);}} onBlur={()=>setTimeout(()=>setGarmentFocusIdx(null),150)} onKeyDown={e=>{
                               const matches = garmentTypes.filter(g=>g.toLowerCase().includes((item.garment_type||"").toLowerCase()));
                               if(e.key==="ArrowDown"&&matches.length>0){ e.preventDefault(); setGarmentSuggestIdx(idx=>Math.min(idx+1,matches.length-1)); }
                               else if(e.key==="ArrowUp"&&matches.length>0){ e.preventDefault(); setGarmentSuggestIdx(idx=>Math.max(idx-1,0)); }
