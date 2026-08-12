@@ -1084,6 +1084,16 @@ export default function LavanderiaApp() {
     }
   };
 
+  const marcarSinReciboEImprimir = async (order) => {
+    if (!order.sin_recibo) {
+      await db.patch("orders", order.id, { sin_recibo: true });
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, sin_recibo: true } : o));
+      setEntregaResult(prev => prev && prev.id === order.id ? { ...prev, sin_recibo: true } : prev);
+      order = { ...order, sin_recibo: true };
+    }
+    printConstanciaSinRecibo(order, null);
+  };
+
   const exportClients = () => {
     const csv = [["Nombre","Telefono","Email","Total Ordenes"],...clients.map(c=>[c.name||"",c.phone||"",c.email||"",c.total_orders||0])].map(r=>r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
@@ -1610,7 +1620,7 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ display: "flex", gap: 10 }}>
                           <button onClick={() => printOrderQZ(entregaResult, null, 1)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
-                          {entregaResult.sin_recibo && <button onClick={() => printConstanciaSinRecibo(entregaResult, null)} title="Imprimir constancia sin recibo" style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", flex: 1, padding: 12 }}>📝 Reimprimir constancia</button>}
+                          <button onClick={() => marcarSinReciboEImprimir(entregaResult)} title="Imprimir constancia sin recibo" style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", flex: 1, padding: 12 }}>📝 {entregaResult.sin_recibo ? "Reimprimir constancia" : "Marcar sin recibo e imprimir"}</button>
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
                       </div>
