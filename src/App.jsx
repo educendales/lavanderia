@@ -983,6 +983,7 @@ export default function LavanderiaApp() {
       .center { text-align:center; }
       .bold { font-weight:bold; }
       .title { font-size:14px; font-weight:bold; margin-bottom:6px; }
+      .ordernum { font-size:22px; font-weight:bold; letter-spacing:2px; margin:8px 0; }
       .line { border-top:1px dashed #000; margin:6px 0; }
       .firma { border-top:1px solid #000; margin-top:36px; padding-top:4px; text-align:center; }
       p { margin:6px 0; line-height:1.4; }
@@ -990,6 +991,7 @@ export default function LavanderiaApp() {
     </style></head><body>
       <div class="center title">CONSTANCIA DE ENTREGA<br/>SIN RECIBO FÍSICO</div>
       <div class="center">${negocioNombre.toUpperCase()}</div>
+      <div class="center ordernum">*${order.order_number || ""}*</div>
       <div class="line"></div>
       <p><b>Fecha:</b> ${fechaHoy}</p>
       <p>Yo <b>${order.client_name || ""}</b>, recibí de parte de <b>${negocioNombre}</b> las siguientes prendas correspondientes a la orden de servicio <b>${order.order_number || ""}</b>:</p>
@@ -1021,6 +1023,8 @@ export default function LavanderiaApp() {
     const LEFT = ESC + "a\x00";
     const BOLD_ON = ESC + "E\x01";
     const BOLD_OFF = ESC + "E\x00";
+    const BIG_ON = GS + "!\x11";
+    const BIG_OFF = GS + "!\x00";
     const SMALL = ESC + "M\x01";
     const NORMAL_FONT = ESC + "M\x00";
     const CUT = GS + "V\x41\x00";
@@ -1046,6 +1050,9 @@ export default function LavanderiaApp() {
     data += "SIN RECIBO FISICO" + LF;
     data += BOLD_OFF;
     data += normalize(negocioNombre).toUpperCase() + LF;
+    data += BOLD_ON + BIG_ON;
+    data += "*" + (order.order_number||"") + "*" + LF;
+    data += BIG_OFF + BOLD_OFF;
     data += LINE + LF;
     data += LEFT;
     data += "Fecha: " + fechaHoy + LF + LF;
