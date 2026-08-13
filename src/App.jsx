@@ -113,16 +113,19 @@ export default function LavanderiaApp() {
   const [selectedEntregas, setSelectedEntregas] = useState([]);
   const [entregaMultiPayment, setEntregaMultiPayment] = useState("efectivo");
   const [entregaMultiSinRecibo, setEntregaMultiSinRecibo] = useState(false);
+  const [entregaMultiDate, setEntregaMultiDate] = useState(today);
   const [confirmingMulti, setConfirmingMulti] = useState(false);
   const [entregaResults, setEntregaResults] = useState(null);
   const [entregaResult, setEntregaResult] = useState(null);
   const [entregaPayment, setEntregaPayment] = useState("efectivo");
   const [entregaSinRecibo, setEntregaSinRecibo] = useState(false);
+  const [entregaDate, setEntregaDate] = useState(today);
   const [entregaConfirmed, setEntregaConfirmed] = useState(false);
   const [partialDeliveries, setPartialDeliveries] = useState([]);
   const [showParcialForm, setShowParcialForm] = useState(false);
   const [parcialQtys, setParcialQtys] = useState({});
   const [parcialPayment, setParcialPayment] = useState("efectivo");
+  const [parcialDate, setParcialDate] = useState(today);
   const [parcialConfirmedInfo, setParcialConfirmedInfo] = useState(null);
   const [savingParcial, setSavingParcial] = useState(false);
   const [garmentTypes, setGarmentTypes] = useState(() => { try { const s = localStorage.getItem("garmentTypes"); return s ? JSON.parse(s) : DEFAULT_GARMENT_TYPES; } catch { return DEFAULT_GARMENT_TYPES; } });
@@ -329,8 +332,8 @@ export default function LavanderiaApp() {
 
   const confirmarMultiEntrega = async () => {
     for (const order of selectedEntregas) {
-      await db.patch("orders", order.id, { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: today, delivered_by: user.name });
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today, delivered_by: user.name } : o));
+      await db.patch("orders", order.id, { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: entregaMultiDate, delivered_by: user.name });
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: entregaMultiDate, delivered_by: user.name } : o));
       if (entregaMultiSinRecibo) await printConstanciaSinRecibo(order, null);
       const its = orderItems[order.id] || [];
       const pendientes = its.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
@@ -339,7 +342,7 @@ export default function LavanderiaApp() {
         setOrderItems(prev => ({ ...prev, [order.id]: its.map(it => ({ ...it, delivered_qty: Number(it.quantity) })) }));
       }
     }
-    setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: today, delivered_by: user.name } : o));
+    setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: entregaMultiDate, delivered_by: user.name } : o));
     setSelectedEntregas([]);
     setConfirmingMulti(false);
   };
@@ -589,6 +592,7 @@ export default function LavanderiaApp() {
     setEntregaResults(results);
     setEntregaResult(null); setEntregaConfirmed(false); setEntregaSinRecibo(false); setEntregaPayment("efectivo");
     setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null);
+    setEntregaDate(today); setParcialDate(today); setEntregaMultiDate(today);
     const yaSinRecibo = results.filter(o => o.status === "entregado" && o.sin_recibo);
     if (yaSinRecibo.length > 0) {
       const msg = yaSinRecibo.map(o => {
@@ -601,9 +605,9 @@ export default function LavanderiaApp() {
 
   const confirmarEntrega = async () => {
     if (!entregaResult) return;
-    await db.patch("orders", entregaResult.id, { status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today, delivered_by: user.name });
-    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, status: "entregado", payment_method: entregaPayment, delivered_at: today, delivered_by: user.name } : o));
-    setEntregaResult(prev => ({ ...prev, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: today, delivered_by: user.name }));
+    await db.patch("orders", entregaResult.id, { status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: entregaDate, delivered_by: user.name });
+    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, status: "entregado", payment_method: entregaPayment, delivered_at: entregaDate, delivered_by: user.name } : o));
+    setEntregaResult(prev => ({ ...prev, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: entregaDate, delivered_by: user.name }));
     setEntregaConfirmed(true);
     if (entregaSinRecibo) printConstanciaSinRecibo(entregaResult, null);
     const its = orderItems[entregaResult.id] || [];
@@ -633,13 +637,13 @@ export default function LavanderiaApp() {
     }
     setOrderItems(prev => ({ ...prev, [entregaResult.id]: updatedItems }));
 
-    const res = await db.post("partial_deliveries", { order_id: entregaResult.id, date: today, items_summary: itemsSummary, amount, payment_method: parcialPayment, employee: user.name });
+    const res = await db.post("partial_deliveries", { order_id: entregaResult.id, date: parcialDate, items_summary: itemsSummary, amount, payment_method: parcialPayment, employee: user.name });
     if (Array.isArray(res) && res[0]) setPartialDeliveries(prev => [...prev, res[0]]);
 
     const fullyDelivered = updatedItems.every(it => (Number(it.delivered_qty)||0) >= Number(it.quantity));
     const newStatus = fullyDelivered ? "entregado" : "parcial";
     const patchBody = fullyDelivered
-      ? { status: "entregado", payment_method: parcialPayment, delivered_at: today, delivered_by: user.name }
+      ? { status: "entregado", payment_method: parcialPayment, delivered_at: parcialDate, delivered_by: user.name }
       : { status: "parcial" };
     await db.patch("orders", entregaResult.id, patchBody);
     setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, ...patchBody } : o));
@@ -1442,6 +1446,10 @@ export default function LavanderiaApp() {
                         <button onClick={() => setSelectedEntregas([])} style={{ ...btn, background: "transparent", color: "#8B949E", padding: "4px 10px", fontSize: 12 }}>✕ Cancelar</button>
                       </div>
                       <div style={{ marginBottom: 12 }}>
+                        <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE LA ENTREGA</label>
+                        <input type="date" value={entregaMultiDate} onChange={e=>setEntregaMultiDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 180 }} />
+                      </div>
+                      <div style={{ marginBottom: 12 }}>
                         <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
                         <div style={{ display: "flex", gap: 8 }}>
                           {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
@@ -1523,6 +1531,10 @@ export default function LavanderiaApp() {
                     {entregaResult.status !== "entregado" && !entregaConfirmed && !showParcialForm && !parcialConfirmedInfo && (
                       <>
                         <div style={{ marginBottom: 16 }}>
+                          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE LA ENTREGA</label>
+                          <input type="date" value={entregaDate} onChange={e=>setEntregaDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 180 }} />
+                        </div>
+                        <div style={{ marginBottom: 16 }}>
                           <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
                           <div style={{ display: "flex", gap: 10 }}>
                             {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
@@ -1556,6 +1568,10 @@ export default function LavanderiaApp() {
                               <input type="number" min={0} max={it.pendiente} placeholder="0" value={parcialQtys[it.id]||""} onChange={e=>{ const v=Math.max(0,Math.min(Number(e.target.value)||0,it.pendiente)); setParcialQtys(p=>({...p,[it.id]:v})); }} style={{ width:70,padding:"8px 6px",borderRadius:8,border:"1px solid #30363D",background:"#161B22",color:"#E6EDF3",fontSize:15,fontWeight:700,textAlign:"center" }} />
                             </div>
                           ))}
+                        </div>
+                        <div style={{ marginBottom: 16 }}>
+                          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE ESTA ENTREGA PARCIAL</label>
+                          <input type="date" value={parcialDate} onChange={e=>setParcialDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 180 }} />
                         </div>
                         <div style={{ marginBottom: 16 }}>
                           <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
