@@ -719,7 +719,11 @@ export default function LavanderiaApp() {
         <tr><td class="bold">Atendido Por:</td><td>${order.employee||"—"}</td></tr>
         <tr><td class="bold">Fecha Entrada:</td><td>${order.date||"—"}</td></tr>
         <tr><td class="bold">Hora:</td><td>${hora}</td></tr>
-        <tr><td class="bold">Fecha Entrega:</td><td>${order.delivery_date||"—"}</td></tr>
+      </table>
+      <div class="line"></div>
+      <div class="center" style="font-size:15px;font-weight:bold;background:#000;color:#fff;padding:4px 0;margin:4px 0">FECHA DE ENTREGA: ${order.delivery_date||"—"}</div>
+      <div class="line"></div>
+      <table>
         <tr><td class="bold">Cliente</td><td>${order.client_name||"—"}</td></tr>
         <tr><td class="bold">Telefono</td><td>${order.phone||"—"}</td></tr>
         ${order.a_domicilio && order.address ? `<tr><td class="bold">Direccion</td><td>${order.address}</td></tr>` : ''}
@@ -780,7 +784,9 @@ export default function LavanderiaApp() {
           <tr><td><b>Atendido Por:</b></td><td>${order.employee||""}</td></tr>
           <tr><td><b>Fecha Entrada:</b></td><td>${order.date||""}</td></tr>
           <tr><td><b>Hora:</b></td><td>${new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'})}</td></tr>
-          <tr><td><b>Fecha Entrega:</b></td><td>${order.delivery_date||""}</td></tr>
+        </table>
+        <div style="text-align:center;font-size:14px;font-weight:bold;background:#000;color:#fff;padding:5px 0;margin:6px 0;border-radius:4px">FECHA DE ENTREGA: ${order.delivery_date||""}</div>
+        <table style="width:100%;font-size:10px">
           <tr><td><b>Cliente:</b></td><td>${order.client_name||""}</td></tr>
           <tr><td><b>Teléfono:</b></td><td>${order.phone||""}</td></tr>
           ${order.a_domicilio && order.address ? `<tr><td><b>📍 Dirección:</b></td><td>${order.address}</td></tr>` : ''}
@@ -893,7 +899,11 @@ export default function LavanderiaApp() {
     data += rpad("Atendido Por:", normalize(order.employee||"")) + LF;
     data += rpad("Fecha Entrada:", order.date||"") + LF;
     data += rpad("Hora:", hora) + LF;
-    data += BOLD_ON + rpad("Fecha Entrega:", order.delivery_date||"") + BOLD_OFF + LF;
+    data += LINE + LF;
+    data += CENTER + BOLD_ON + BIG_ON;
+    data += "ENTREGA: " + (order.delivery_date||"") + LF;
+    data += BIG_OFF + BOLD_OFF + LEFT;
+    data += LINE + LF;
     data += rpad("Cliente:", normalize(order.client_name||"")) + LF;
     data += rpad("Telefono:", order.phone||"") + LF;
     if (order.a_domicilio && order.address) data += rpad("Direccion:", normalize(order.address)) + LF;
