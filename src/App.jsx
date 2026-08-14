@@ -129,6 +129,7 @@ export default function LavanderiaApp() {
   const [parcialConfirmedInfo, setParcialConfirmedInfo] = useState(null);
   const [savingParcial, setSavingParcial] = useState(false);
   const [garmentTypes, setGarmentTypes] = useState(() => { try { const s = localStorage.getItem("garmentTypes"); return s ? JSON.parse(s) : DEFAULT_GARMENT_TYPES; } catch { return DEFAULT_GARMENT_TYPES; } });
+  const [garmentPieces, setGarmentPieces] = useState(() => { try { const s = localStorage.getItem("garmentPieces"); return s ? JSON.parse(s) : {}; } catch { return {}; } });
   const [services, setServices] = useState(() => { try { const s = localStorage.getItem("services"); return s ? JSON.parse(s) : DEFAULT_SERVICES; } catch { return DEFAULT_SERVICES; } });
   const [colors, setColors] = useState(() => { try { const s = localStorage.getItem("colors"); return s ? JSON.parse(s) : DEFAULT_COLORS; } catch { return DEFAULT_COLORS; } });
   const [newGarment, setNewGarment] = useState("");
@@ -330,6 +331,8 @@ export default function LavanderiaApp() {
   const saveServices = (list) => { setServices(list); try { localStorage.setItem("services", JSON.stringify(list)); } catch {} };
   const saveConditions = (list) => { setConditions(list); try { localStorage.setItem("conditions", JSON.stringify(list)); } catch {} };
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
+  const saveGarmentPieces = (map) => { setGarmentPieces(map); try { localStorage.setItem("garmentPieces", JSON.stringify(map)); } catch {} };
+  const getPiecesPerUnit = (garmentType) => Number(garmentPieces[garmentType]) || 1;
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
 
   const confirmarMultiEntrega = async () => {
@@ -481,7 +484,7 @@ export default function LavanderiaApp() {
   }, [showInformeDiario, filterDate, cajaBaseList]);
 
   const handleLogin = () => { if (selectedEmp && pin === selectedEmp.pin) { setUser(selectedEmp); setPinError(false); } else { setPinError(true); setPin(""); } };
-  const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity), 0);
+  const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity) * getPiecesPerUnit(i.garment_type), 0);
   const totalPrice = (its) => its.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0);
   const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length) return null; const qty = Number(it.quantity)||1; return `${qty>1?qty+" ":""}${it.garment_type}: ${found.join(", ")}`; }).filter(Boolean); return lines.join(" | "); };
 
@@ -3175,11 +3178,16 @@ export default function LavanderiaApp() {
                     <button onClick={() => { if(newGarment.trim()){saveGarmentTypes([...garmentTypes,newGarment.trim()]);setNewGarment("");} }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 350, overflowY: "auto" }}>
-                    {garmentTypes.map((g,i) => <div key={i} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0D1117",borderRadius:8,padding:"8px 12px" }}>
-                      <span>{GARMENT_ICONS[g]||"👕"} {g}</span>
+                    {garmentTypes.map((g,i) => <div key={i} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0D1117",borderRadius:8,padding:"8px 12px",gap:8 }}>
+                      <span style={{ flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
+                      <div style={{ display:"flex",alignItems:"center",gap:4 }}>
+                        <span style={{ fontSize:10,color:"#8B949E" }}>piezas:</span>
+                        <input type="number" min={1} value={garmentPieces[g]||1} onChange={e => { const v = Math.max(1, Number(e.target.value)||1); saveGarmentPieces({ ...garmentPieces, [g]: v }); }} style={{ width:42,padding:"4px 6px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#FFD54F",fontSize:12,fontWeight:700,textAlign:"center" }} />
+                      </div>
                       <button onClick={() => { if(window.confirm(`¿Eliminar "${g}"?`))saveGarmentTypes(garmentTypes.filter((_,idx)=>idx!==i)); }} style={{ background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer" }}>✕</button>
                     </div>)}
                   </div>
+                  <div style={{ fontSize:11,color:"#484F58",marginTop:8 }}>"Piezas" = cuántas prendas físicas cuenta cada unidad (ej: Vestido de hombre = 2, uno normal = 1). Afecta el conteo del recibo, no el precio.</div>
                   <button onClick={() => { if(window.confirm("¿Restaurar lista por defecto?"))saveGarmentTypes(DEFAULT_GARMENT_TYPES); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid #30363D",background:"transparent",color:"#8B949E",cursor:"pointer",fontSize:12 }}>🔄 Restaurar por defecto</button>
                 </div>
                 <div style={card}>
