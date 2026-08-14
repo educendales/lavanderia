@@ -56,7 +56,7 @@ const STATUS_LABELS = {
 const getToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const getDeliveryDefault = () => { const d = new Date(); d.setDate(d.getDate()+2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const today = getToday();
-const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "" };
+const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "", paid_at_intake: false, payment_method: null };
 const emptyItem = { garment_type: "", quantity: 1, price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
 const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = (svcs||DEFAULT_SERVICES).find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
 
@@ -148,6 +148,8 @@ export default function LavanderiaApp() {
   const [selectedInventory, setSelectedInventory] = useState([]);
   const [abonos, setAbonos] = useState([]);
   const [abonoModal, setAbonoModal] = useState(null);
+  const [markPaidModal, setMarkPaidModal] = useState(null);
+  const [markPaidMethod, setMarkPaidMethod] = useState("efectivo");
   const [newAbono, setNewAbono] = useState({ amount: "", payment_method: "efectivo" });
   const [advances, setAdvances] = useState([]);
   const [cajaBaseList, setCajaBaseList] = useState([]);
@@ -488,7 +490,7 @@ export default function LavanderiaApp() {
     setSaving(true);
     const garments = totalGarments(items), price = totalPrice(items);
     const uniqueServices = [...new Set(items.map(it => it.service))];
-    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null, domiciliario_id: newOrder.domiciliario_id || null, a_domicilio: !!newOrder.a_domicilio, address: newOrder.address || "" };
+    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null, domiciliario_id: newOrder.domiciliario_id || null, a_domicilio: !!newOrder.a_domicilio, address: newOrder.address || "", paid_at_intake: !!newOrder.paid_at_intake, payment_method: newOrder.paid_at_intake ? newOrder.payment_method : null };
     const res = await db.post("orders", o);
     if (Array.isArray(res) && res[0]) {
       const orderId = res[0].id;
@@ -1098,6 +1100,14 @@ export default function LavanderiaApp() {
     printConstanciaSinRecibo(order, null);
   };
 
+  const confirmarMarcarPagada = async () => {
+    if (!markPaidModal) return;
+    await db.patch("orders", markPaidModal.id, { paid_at_intake: true, payment_method: markPaidMethod });
+    setOrders(prev => prev.map(o => o.id === markPaidModal.id ? { ...o, paid_at_intake: true, payment_method: markPaidMethod } : o));
+    setMarkPaidModal(null);
+    setMarkPaidMethod("efectivo");
+  };
+
   const exportClients = () => {
     const csv = [["Nombre","Telefono","Email","Total Ordenes"],...clients.map(c=>[c.name||"",c.phone||"",c.email||"",c.total_orders||0])].map(r=>r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8;" });
@@ -1138,7 +1148,7 @@ export default function LavanderiaApp() {
   const isAdmin = user?.role === "admin";
   const getAbonado = (orderId) => abonos.filter(a => a.order_id === orderId).reduce((s,a) => s + Number(a.amount), 0);
   const getParcialPagado = (orderId) => partialDeliveries.filter(p => p.order_id === orderId).reduce((s,p) => s + Number(p.amount), 0);
-  const getSaldo = (order) => Math.max(0, Number(order.price) - getAbonado(order.id) - getParcialPagado(order.id));
+  const getSaldo = (order) => order.paid_at_intake ? 0 : Math.max(0, Number(order.price) - getAbonado(order.id) - getParcialPagado(order.id));
   const getItemsPendientes = (orderId) => {
     const its = orderItems[orderId] || [];
     return its.map(it => ({ ...it, delivered_qty: Number(it.delivered_qty)||0, pendiente: Number(it.quantity) - (Number(it.delivered_qty)||0) })).filter(it => it.pendiente > 0);
@@ -1376,7 +1386,7 @@ export default function LavanderiaApp() {
                     {filteredOrders.map(o => (
                       <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
                         <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number||"—"}</span></td>
-                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 11, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}</div><div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div></td>
+                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 11, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}{o.paid_at_intake && <span title="Pagado al recibir" style={{ fontSize: 11, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "1px 6px", borderRadius: 10 }}>💰</span>}</div><div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div></td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ fontWeight: 600 }}>{o.garments} prendas</div>
                           {orderItems[o.id] && <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 10, background: "#21262D", borderRadius: 8, padding: "3px 7px" }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color&&<span style={{ color: "#C792EA" }}> · {it.color}</span>}<span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price)*Number(it.quantity))}</span></span>)}</div>}
@@ -1399,6 +1409,7 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo" }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "5px 10px", fontSize: 12 }}>💰</button>
+                            {!o.paid_at_intake && <button title="Marcar como pagada al recibir" onClick={() => { setMarkPaidModal(o); setMarkPaidMethod("efectivo"); }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "5px 10px", fontSize: 12 }}>✅💰</button>}
                             <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
                             <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
                           </div>
@@ -1527,6 +1538,7 @@ export default function LavanderiaApp() {
                       ))}
                     </div>
                     {orderItems[entregaResult.id] && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 12, color: "#8B949E", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{orderItems[entregaResult.id].map((it,i) => <div key={i} style={{ background: "#21262D", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?<span style={{ color:sv.color }}>{sv.icon} </span>:null; })()}<span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>{it.color&&<span style={{ color:"#C792EA" }}> · {it.color}</span>}<span style={{ color:"#66BB6A",fontWeight:700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span></div>)}</div></div>}
+                    {entregaResult.paid_at_intake && <div style={{ background: "rgba(255,213,79,0.1)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#FFD54F", fontWeight: 700 }}>💰 Esta orden ya fue pagada al recibir la ropa el {entregaResult.date} ({entregaResult.payment_method==="nequi"?"Nequi":entregaResult.payment_method==="daviplata"?"Daviplata":entregaResult.payment_method==="breb"?"Bre-b":entregaResult.payment_method==="tarjeta"?"Tarjeta":"Efectivo"}). No hay nada pendiente por cobrar.</div>}
                     {entregaResult.notes && <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#FFD54F" }}>📝 {entregaResult.notes}</div>}
                     {entregaResult.status !== "entregado" && !entregaConfirmed && !showParcialForm && !parcialConfirmedInfo && (
                       <>
@@ -2728,7 +2740,10 @@ export default function LavanderiaApp() {
                   </div>
                 </div>
                 {(() => {
-                  const entregadas = orders.filter(o => o.status === "entregado" && o.delivered_at >= reportFrom && o.delivered_at <= reportTo);
+                  const entregadas = orders.filter(o =>
+                    (o.status === "entregado" && o.delivered_at >= reportFrom && o.delivered_at <= reportTo && !o.paid_at_intake) ||
+                    (o.paid_at_intake && o.date >= reportFrom && o.date <= reportTo)
+                  );
                   const metodos = [
                     { key: "efectivo", label: "💵 Efectivo", color: "#66BB6A" },
                     { key: "nequi", label: "📱 Nequi", color: "#C792EA" },
@@ -2743,10 +2758,10 @@ export default function LavanderiaApp() {
                   }));
                   const totalGeneral = totalesPorMetodo.reduce((s,m) => s+m.total, 0);
 
-                  // Group by day for detail table
+                  // Group by day for detail table (fecha de cobro: dia de entrega, o dia de ingreso si se pago al recibir)
                   const byDay = {};
                   entregadas.forEach(o => {
-                    const d = o.delivered_at;
+                    const d = o.paid_at_intake ? o.date : o.delivered_at;
                     if (!byDay[d]) byDay[d] = { efectivo:0, nequi:0, daviplata:0, breb:0, tarjeta:0, total:0 };
                     const m = o.payment_method||"efectivo";
                     byDay[d][m] = (byDay[d][m]||0) + Number(o.price);
@@ -3550,6 +3565,20 @@ export default function LavanderiaApp() {
                       <input style={{ ...inp,borderColor:"rgba(102,187,106,0.4)" }} placeholder="Ej: Calle 45 # 20-10, apto 302" value={newOrder.address} onChange={e=>setNewOrder(p=>({...p,address:e.target.value}))} />
                     </div>
                   )}
+                  <label onClick={()=>setNewOrder(p=>({...p,paid_at_intake:!p.paid_at_intake,payment_method:!p.paid_at_intake?(p.payment_method||"efectivo"):null}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newOrder.paid_at_intake?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newOrder.paid_at_intake?"#FFD54F":"#30363D"}`,borderRadius:10,padding:"10px 14px" }}>
+                    <input type="checkbox" checked={!!newOrder.paid_at_intake} onChange={e=>setNewOrder(p=>({...p,paid_at_intake:e.target.checked,payment_method:e.target.checked?(p.payment_method||"efectivo"):null}))} style={{ width:18,height:18,accentColor:"#FFD54F" }} />
+                    <div><div style={{ fontWeight:600,color:newOrder.paid_at_intake?"#FFD54F":"#8B949E" }}>💰 Pagado al recibir la ropa</div><div style={{ fontSize:11,color:"#484F58" }}>Marca esto si el cliente ya pagó hoy, aunque venga a recogerla después</div></div>
+                  </label>
+                  {newOrder.paid_at_intake && (
+                    <div>
+                      <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label>
+                      <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                        {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
+                          <label key={opt.value} onClick={()=>setNewOrder(p=>({...p,payment_method:opt.value}))} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:newOrder.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newOrder.payment_method===opt.value?"#FFD54F":"#30363D"}`,borderRadius:10,padding:"8px 4px",color:newOrder.payment_method===opt.value?"#FFD54F":"#8B949E" }}>{opt.label}</label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:12,fontSize:13,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"💾 Solo Guardar"}
@@ -3559,7 +3588,7 @@ export default function LavanderiaApp() {
                       setSaving(true);
                       const garments=totalGarments(items), price=totalPrice(items);
                       const uniqueServices=[...new Set(items.map(it=>it.service))];
-                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null,domiciliario_id:newOrder.domiciliario_id||null,a_domicilio:!!newOrder.a_domicilio,address:newOrder.address||""};
+                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null,domiciliario_id:newOrder.domiciliario_id||null,a_domicilio:!!newOrder.a_domicilio,address:newOrder.address||"",paid_at_intake:!!newOrder.paid_at_intake,payment_method:newOrder.paid_at_intake?newOrder.payment_method:null};
                       const res=await db.post("orders",o);
                       if(Array.isArray(res)&&res[0]){
                         const savedOrder=res[0], orderId=savedOrder.id;
@@ -3793,6 +3822,36 @@ export default function LavanderiaApp() {
         </div>
       )}
 
+      {/* MARK PAID AT INTAKE MODAL */}
+      {markPaidModal && (
+        <div onClick={() => setMarkPaidModal(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #66BB6A",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 4px",fontSize:18,color:"#E6EDF3" }}>✅💰 Marcar como Pagada al Recibir</h3>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
+                <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{markPaidModal.order_number}</span>
+                <span style={{ fontWeight:600 }}>{markPaidModal.client_name}</span>
+              </div>
+              <p style={{ fontSize:13,color:"#8B949E",margin:0 }}>El cliente pagó ${Math.round(Number(markPaidModal.price)).toLocaleString()} al dejar la ropa (hoy). Esto va a contar la plata el día de hoy, aunque venga a recoger después.</p>
+            </div>
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:6 }}>MÉTODO DE PAGO</label>
+                <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                  {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=>(
+                    <label key={opt.value} onClick={()=>setMarkPaidMethod(opt.value)} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,fontWeight:600,background:markPaidMethod===opt.value?"rgba(102,187,106,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${markPaidMethod===opt.value?"#66BB6A":"#30363D"}`,borderRadius:8,padding:"8px 4px",color:markPaidMethod===opt.value?"#66BB6A":"#8B949E" }}>{opt.label}</label>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display:"flex",gap:10,marginTop:4 }}>
+                <button onClick={()=>setMarkPaidModal(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
+                <button onClick={confirmarMarcarPagada} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:13 }}>✅ Confirmar Pago</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* EDIT EMPLOYEE MODAL */}
       {editingEmployee && (
         <div onClick={() => setEditingEmployee(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
@@ -3852,7 +3911,10 @@ export default function LavanderiaApp() {
             </div>
 
             {(() => {
-              const entregadasHoy = orders.filter(o => o.status === "entregado" && o.delivered_at === filterDate);
+              const entregadasHoy = orders.filter(o =>
+                (o.status === "entregado" && o.delivered_at === filterDate && !o.paid_at_intake) ||
+                (o.paid_at_intake && o.date === filterDate)
+              );
               const metodos = [
                 { key:"efectivo", label:"💵 Efectivo", color:"#66BB6A" },
                 { key:"nequi", label:"📱 Nequi", color:"#C792EA" },
