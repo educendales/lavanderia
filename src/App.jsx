@@ -864,7 +864,7 @@ export default function LavanderiaApp() {
     data += "Factura No.: " + (order.order_number?.replace(/^[A-Za-z]/,"") || "") + LF;
     data += BOLD_OFF;
     data += LF;
-    data += BOLD_ON + NAME_BIG;
+    data += BOLD_ON + BIG_ON;
     data += normalize(negocioNombre).toUpperCase() + LF;
     data += BIG_OFF + BOLD_OFF;
     data += normalize(negocioDireccion) + LF;
@@ -908,8 +908,7 @@ export default function LavanderiaApp() {
     data += "ENTREGA: " + (order.delivery_date||"") + LF;
     data += BIG_OFF + BOLD_OFF + LEFT;
     data += LINE + LF;
-    data += BOLD_ON + "Cliente: ";
-    data += normalize(order.client_name||"") + BOLD_OFF + LF;
+    data += BOLD_ON + rpad("Cliente:", normalize(order.client_name||"")) + BOLD_OFF + LF;
     data += rpad("Telefono:", order.phone||"") + LF;
     if (order.a_domicilio && order.address) data += rpad("Direccion:", normalize(order.address)) + LF;
     data += LINE + LF;
