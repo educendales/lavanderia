@@ -839,6 +839,8 @@ export default function LavanderiaApp() {
     const BOLD_ON = ESC + "E\x01";
     const BOLD_OFF = ESC + "E\x00";
     const BIG_ON = GS + "!\x11";   // double width + double height
+    const NAME_BIG = GS + "!\x21"; // double width + triple height (para el nombre del negocio)
+    const CLIENT_BIG = GS + "!\x01"; // doble ancho, alto normal (para el nombre del cliente)
     const BIG_OFF = GS + "!\x00";
     const SMALL = ESC + "M\x01";   // small font
     const NORMAL_FONT = ESC + "M\x00";
@@ -862,7 +864,7 @@ export default function LavanderiaApp() {
     data += "Factura No.: " + (order.order_number?.replace(/^[A-Za-z]/,"") || "") + LF;
     data += BOLD_OFF;
     data += LF;
-    data += BOLD_ON + BIG_ON;
+    data += BOLD_ON + NAME_BIG;
     data += normalize(negocioNombre).toUpperCase() + LF;
     data += BIG_OFF + BOLD_OFF;
     data += normalize(negocioDireccion) + LF;
@@ -906,7 +908,8 @@ export default function LavanderiaApp() {
     data += "ENTREGA: " + (order.delivery_date||"") + LF;
     data += BIG_OFF + BOLD_OFF + LEFT;
     data += LINE + LF;
-    data += rpad("Cliente:", normalize(order.client_name||"")) + LF;
+    data += BOLD_ON + "Cliente: " + BOLD_OFF;
+    data += CLIENT_BIG + normalize(order.client_name||"") + BIG_OFF + LF;
     data += rpad("Telefono:", order.phone||"") + LF;
     if (order.a_domicilio && order.address) data += rpad("Direccion:", normalize(order.address)) + LF;
     data += LINE + LF;
