@@ -689,6 +689,7 @@ export default function LavanderiaApp() {
       .right { text-align: right; }
       .bold { font-weight: bold; }
       .big { font-size: 16px; font-weight: bold; }
+      .negocio-nombre { font-size: 19px; font-weight: bold; }
       .huge { font-size: 24px; font-weight: bold; letter-spacing: 3px; margin: 6px 0; }
       .line { border-top: 1px dashed #000; margin: 5px 0; }
       .line-solid { border-top: 1px solid #000; margin: 3px 0; }
@@ -706,7 +707,7 @@ export default function LavanderiaApp() {
       <div class="center">
         <div style="font-size:11px">Factura No.: ${order.order_number?.replace(/^[A-Za-z]/,"") || ""}</div>
         ${logoEnRecibo && negocioLogo ? `<img src="${negocioLogo}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;margin:4px 0" />` : ''}
-        <div class="big">${negocioNombre.toUpperCase()}</div>
+        <div class="negocio-nombre">${negocioNombre.toUpperCase()}</div>
         <div style="font-size:11px;margin-top:2px">${negocioDireccion}</div>
         <div style="font-size:11px">${reciboSubtitulo}</div>
         <div class="huge">*${order.order_number||""}*</div>
