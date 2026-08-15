@@ -908,8 +908,8 @@ export default function LavanderiaApp() {
     data += "ENTREGA: " + (order.delivery_date||"") + LF;
     data += BIG_OFF + BOLD_OFF + LEFT;
     data += LINE + LF;
-    data += BOLD_ON + "Cliente: " + BOLD_OFF;
-    data += CLIENT_BIG + normalize(order.client_name||"") + BIG_OFF + LF;
+    data += BOLD_ON + "Cliente: ";
+    data += normalize(order.client_name||"") + BOLD_OFF + LF;
     data += rpad("Telefono:", order.phone||"") + LF;
     if (order.a_domicilio && order.address) data += rpad("Direccion:", normalize(order.address)) + LF;
     data += LINE + LF;
