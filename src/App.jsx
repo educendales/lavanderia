@@ -530,7 +530,8 @@ export default function LavanderiaApp() {
         const newPrice = priceByService || priceDefault || "";
         if (newPrice) updated = updated.map((it, idx) => idx === i ? { ...it, price: newPrice } : it);
       }
-      if (["decolorado","percudido","roto","manchado"].includes(field)) setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
+      const conditionKeys = conditions.map(c => c.toLowerCase().replace(/\s+/g,"_"));
+      if (conditionKeys.includes(field)) setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
       return updated;
     });
   };
