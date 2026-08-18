@@ -489,8 +489,38 @@ export default function LavanderiaApp() {
   };
   const mainContentRef = useRef(null);
   const firstGarmentInputRef = useRef(null);
+  const [barcodeTrigger, setBarcodeTrigger] = useState(0);
+  const barcodeBufferRef = useRef("");
+  const barcodeLastTimeRef = useRef(0);
   useEffect(() => { firstGarmentInputRef.current?.focus(); firstGarmentInputRef.current?.select(); }, [items.length]);
   useEffect(() => { document.title = "LavaGest"; }, []);
+  useEffect(() => {
+    const handleGlobalKeydown = (e) => {
+      const active = document.activeElement;
+      const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT" || active.isContentEditable);
+      if (isTyping) { barcodeBufferRef.current = ""; return; }
+
+      const now = Date.now();
+      const gap = now - barcodeLastTimeRef.current;
+      barcodeLastTimeRef.current = now;
+      if (gap > 100) barcodeBufferRef.current = "";
+
+      if (e.key === "Enter") {
+        const code = barcodeBufferRef.current.trim();
+        barcodeBufferRef.current = "";
+        if (code.length >= 3) {
+          setTab("entregas");
+          setEntregaSearch(code);
+          setBarcodeTrigger(t => t + 1);
+        }
+        return;
+      }
+      if (e.key.length === 1) barcodeBufferRef.current += e.key;
+    };
+    window.addEventListener("keydown", handleGlobalKeydown);
+    return () => window.removeEventListener("keydown", handleGlobalKeydown);
+  }, []);
+  useEffect(() => { if (barcodeTrigger > 0) searchEntrega(); }, [barcodeTrigger]);
   useEffect(() => { window.scrollTo(0, 0); mainContentRef.current?.scrollTo(0, 0); }, [tab]);
   useEffect(() => { if (user) loadData(); }, [user]);
   useEffect(() => {
