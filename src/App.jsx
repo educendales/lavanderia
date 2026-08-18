@@ -4112,12 +4112,15 @@ export default function LavanderiaApp() {
       {showInformeDiario && (
         <div onClick={() => setShowInformeDiario(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,fontFamily:"'Segoe UI',sans-serif" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:20,padding:"clamp(14px,4vw,28px)",width:420,maxWidth:"92vw",maxHeight:"88vh",overflowY:"auto",border:"1px solid rgba(199,146,234,0.4)",boxShadow:"0 8px 40px rgba(0,0,0,0.8)" }}>
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
-              <div>
-                <h2 style={{ margin:0,fontSize:20,fontWeight:800,color:"#C792EA" }}>💳 Informe Diario</h2>
-                <p style={{ margin:0,fontSize:12,color:"#8B949E" }}>{filterDate}</p>
-              </div>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
+              <h2 style={{ margin:0,fontSize:20,fontWeight:800,color:"#C792EA" }}>💳 Informe Diario</h2>
               <button onClick={()=>setShowInformeDiario(false)} style={{ background:"none",border:"none",color:"#8B949E",fontSize:24,cursor:"pointer" }}>✕</button>
+            </div>
+            <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:20 }}>
+              <button onClick={()=>{ const d=new Date(filterDate+"T00:00:00"); d.setDate(d.getDate()-1); setFilterDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`); }} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"8px 12px",fontSize:14 }}>‹</button>
+              <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} style={{ ...inp,colorScheme:"dark",flex:1,fontSize:13,textAlign:"center" }} />
+              <button onClick={()=>{ const d=new Date(filterDate+"T00:00:00"); d.setDate(d.getDate()+1); setFilterDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`); }} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"8px 12px",fontSize:14 }}>›</button>
+              {filterDate !== today && <button onClick={()=>setFilterDate(today)} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"8px 12px",fontSize:12 }}>Hoy</button>}
             </div>
 
             {(() => {
