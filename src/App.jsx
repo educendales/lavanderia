@@ -490,10 +490,15 @@ export default function LavanderiaApp() {
   const mainContentRef = useRef(null);
   const firstGarmentInputRef = useRef(null);
   const [barcodeTrigger, setBarcodeTrigger] = useState(0);
+  const [scannedCodes, setScannedCodes] = useState([]);
+  const [comparisonResult, setComparisonResult] = useState(null);
+  const [lastScanFlash, setLastScanFlash] = useState("");
   const barcodeBufferRef = useRef("");
   const barcodeLastTimeRef = useRef(0);
   useEffect(() => { firstGarmentInputRef.current?.focus(); firstGarmentInputRef.current?.select(); }, [items.length]);
   useEffect(() => { document.title = "LavaGest"; }, []);
+  const tabRef = useRef(tab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
   useEffect(() => {
     const handleGlobalKeydown = (e) => {
       const active = document.activeElement;
@@ -509,9 +514,15 @@ export default function LavanderiaApp() {
         const code = barcodeBufferRef.current.trim();
         barcodeBufferRef.current = "";
         if (code.length >= 3) {
-          setTab("entregas");
-          setEntregaSearch(code);
-          setBarcodeTrigger(t => t + 1);
+          if (tabRef.current === "inventario_comparativo") {
+            setScannedCodes(prev => prev.some(c => c.toUpperCase() === code.toUpperCase()) ? prev : [...prev, code.toUpperCase()]);
+            setLastScanFlash(code.toUpperCase());
+            setTimeout(() => setLastScanFlash(""), 1200);
+          } else {
+            setTab("entregas");
+            setEntregaSearch(code);
+            setBarcodeTrigger(t => t + 1);
+          }
         }
         return;
       }
@@ -1153,6 +1164,23 @@ export default function LavanderiaApp() {
     }
   };
 
+  const compararInventario = () => {
+    const pendientes = orders.filter(o => o.status !== "entregado");
+    const scannedSet = new Set(scannedCodes.map(c => c.toUpperCase()));
+    const faltantes = pendientes.filter(o => !scannedSet.has((o.order_number||"").toUpperCase()));
+    const noEsperadas = scannedCodes.map(code => {
+      const found = orders.find(o => (o.order_number||"").toUpperCase() === code.toUpperCase());
+      return { code, order: found };
+    }).filter(x => !x.order || x.order.status === "entregado");
+    setComparisonResult({
+      totalPendientes: pendientes.length,
+      totalEscaneadas: scannedCodes.length,
+      coinciden: pendientes.length - faltantes.length,
+      faltantes,
+      noEsperadas,
+    });
+  };
+
   const marcarSinReciboEImprimir = async (order) => {
     if (!order.sin_recibo) {
       await db.patch("orders", order.id, { sin_recibo: true });
@@ -1280,6 +1308,7 @@ export default function LavanderiaApp() {
     { id: "config", label: "Configuración", icon: "⚙️" },
     { id: "reversar", label: "Reversar", icon: "↩️" },
     { id: "donaciones", label: "Donaciones y Pérdidas", icon: "🎁" },
+    { id: "inventario_comparativo", label: "Inventario Comparativo", icon: "🔍" },
   ];
 
   const PayMethod = ({ m }) => { const map = { nequi: ["📱 Nequi","#C792EA","rgba(199,146,234,0.15)"], daviplata: ["💜 Daviplata","#667EEA","rgba(102,126,234,0.15)"], breb: ["🔵 Bre-b","#4FC3F7","rgba(79,195,247,0.15)"], tarjeta: ["💳 Tarjeta","#FFA726","rgba(255,167,38,0.15)"], efectivo: ["💵 Efectivo","#66BB6A","rgba(102,187,106,0.15)"] }; const [l,c,b] = map[m]||map.efectivo; return <span style={{ fontSize:12,background:b,color:c,padding:"3px 10px",borderRadius:20 }}>{l}</span>; };
@@ -3151,6 +3180,114 @@ export default function LavanderiaApp() {
                   }
                 </>;
               })()}
+            </div>
+          )}
+
+          {/* INVENTARIO COMPARATIVO */}
+          {tab === "inventario_comparativo" && (
+            <div>
+              <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 800 }}>🔍 Inventario Comparativo</h2>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8B949E" }}>Escanea con la pistola cada recibo de las prendas que tienes colgadas. Se van acumulando aquí solas — al terminar, dale "Comparar" y te muestra las inconsistencias contra lo que el sistema cree que está pendiente.</p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 16, marginBottom: 20 }}>
+                <div style={{ ...card, borderLeft: "4px solid #4FC3F7" }}>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>📋</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#4FC3F7" }}>{orders.filter(o => o.status !== "entregado").length}</div>
+                  <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Pendientes en el sistema</div>
+                </div>
+                <div style={{ ...card, borderLeft: "4px solid #66BB6A" }}>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>📷</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#66BB6A" }}>{scannedCodes.length}</div>
+                  <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Escaneadas ahora</div>
+                </div>
+              </div>
+
+              <div style={{ ...card, marginBottom: 20, border: lastScanFlash ? "2px solid #66BB6A" : "1px solid #30363D", background: lastScanFlash ? "rgba(102,187,106,0.08)" : "#161B22" }}>
+                {lastScanFlash
+                  ? <div style={{ textAlign: "center", padding: "8px 0" }}><div style={{ fontSize: 28 }}>✅</div><div style={{ fontWeight: 800, fontSize: 16, color: "#66BB6A" }}>Escaneada: {lastScanFlash}</div></div>
+                  : <div style={{ textAlign: "center", padding: "8px 0", color: "#484F58" }}><div style={{ fontSize: 28 }}>📷</div><div style={{ fontSize: 13 }}>Esperando escaneo... (haz clic en cualquier parte vacía de esta pantalla y pasa la pistola)</div></div>
+                }
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+                <button onClick={compararInventario} disabled={scannedCodes.length === 0} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 20px", fontWeight: 700, opacity: scannedCodes.length === 0 ? 0.5 : 1 }}>🔍 Comparar con el sistema</button>
+                <button onClick={() => { setScannedCodes([]); setComparisonResult(null); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "10px 16px" }}>🗑 Limpiar todo</button>
+              </div>
+
+              {scannedCodes.length > 0 && (
+                <div style={{ ...card, marginBottom: 20 }}>
+                  <h3 style={{ margin: "0 0 12px", fontSize: 14, color: "#8B949E" }}>Escaneadas ({scannedCodes.length})</h3>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {scannedCodes.map((c,i) => (
+                      <span key={i} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                        {c}
+                        <span onClick={() => setScannedCodes(prev => prev.filter((_,idx) => idx !== i))} style={{ cursor: "pointer", color: "#EF5350", fontWeight: 800 }}>×</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {comparisonResult && (
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 16, marginBottom: 20 }}>
+                    <div style={{ ...card, borderLeft: "4px solid #66BB6A" }}>
+                      <div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>{comparisonResult.coinciden}</div>
+                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>✅ Coinciden</div>
+                    </div>
+                    <div style={{ ...card, borderLeft: "4px solid #EF5350" }}>
+                      <div style={{ fontWeight: 800, fontSize: 20, color: "#EF5350" }}>{comparisonResult.faltantes.length}</div>
+                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>⚠️ En sistema, no encontradas físicamente</div>
+                    </div>
+                    <div style={{ ...card, borderLeft: "4px solid #FFD54F" }}>
+                      <div style={{ fontWeight: 800, fontSize: 20, color: "#FFD54F" }}>{comparisonResult.noEsperadas.length}</div>
+                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>⚠️ Escaneadas sin coincidir</div>
+                    </div>
+                  </div>
+
+                  <div style={{ ...card, marginBottom: 20 }}>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#EF5350" }}>⚠️ Pendientes en el sistema pero no encontradas físicamente</h3>
+                    <p style={{ margin: "0 0 14px", fontSize: 12, color: "#8B949E" }}>El sistema dice que estas siguen esperando a ser recogidas, pero no las escaneaste — revisa si se perdieron, o si se entregaron sin marcarlas.</p>
+                    {comparisonResult.faltantes.length === 0
+                      ? <p style={{ color: "#66BB6A", fontSize: 13 }}>✅ Ninguna — todo lo pendiente en el sistema fue encontrado físicamente.</p>
+                      : <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                            <thead><tr style={{ background: "#21262D" }}>{["# Orden","Cliente","Fecha","Estado","Valor"].map(h=><th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 11 }}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {comparisonResult.faltantes.map(o => (
+                                <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
+                                  <td style={{ padding: "10px 12px" }}><span style={{ background: "rgba(239,83,80,0.15)", color: "#EF5350", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{o.order_number||"—"}</span></td>
+                                  <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.client_name}</td>
+                                  <td style={{ padding: "10px 12px", color: "#8B949E" }}>{o.date}</td>
+                                  <td style={{ padding: "10px 12px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                  <td style={{ padding: "10px 12px", fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                    }
+                  </div>
+
+                  <div style={{ ...card }}>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#FFD54F" }}>⚠️ Escaneadas pero no coinciden con lo pendiente</h3>
+                    <p style={{ margin: "0 0 14px", fontSize: 12, color: "#8B949E" }}>Encontraste físicamente esta prenda, pero el sistema no la tiene como pendiente — revisa por qué.</p>
+                    {comparisonResult.noEsperadas.length === 0
+                      ? <p style={{ color: "#66BB6A", fontSize: 13 }}>✅ Ninguna — todo lo escaneado coincide con lo pendiente.</p>
+                      : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {comparisonResult.noEsperadas.map((x,i) => (
+                            <div key={i} style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ background: "rgba(255,213,79,0.15)", color: "#FFD54F", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{x.code}</span>
+                              <span style={{ fontSize: 12, color: "#8B949E" }}>
+                                {!x.order ? "No existe esa orden en el sistema (revisa el número)" : `Ya está marcada como Entregada el ${x.order.delivered_at||"—"} por ${x.order.delivered_by||"—"}`}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                    }
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
