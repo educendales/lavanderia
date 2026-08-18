@@ -381,11 +381,16 @@ export default function LavanderiaApp() {
     const clave = await getClave();
     const pwd = prompt("Ingresa la clave:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
-    if (order.status === "entregado") {
-      if (!window.confirm(`¿Reversar la orden ${order.order_number} a "Listo"?`)) return;
+    if (order.status === "entregado" || order.status === "parcial") {
+      if (!window.confirm(`¿Reversar la orden ${order.order_number} a "Listo"? Todas sus prendas volverán a quedar como pendientes por recoger.`)) return;
       await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null, reversada: true });
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null, reversada: true } : o));
       setReversarResults(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", reversada: true } : o));
+      const its = orderItems[order.id] || [];
+      if (its.length) {
+        for (const it of its) await db.patch("order_items", it.id, { delivered_qty: 0 });
+        setOrderItems(prev => ({ ...prev, [order.id]: its.map(it => ({ ...it, delivered_qty: 0 })) }));
+      }
     } else {
       if (!window.confirm(`¿Eliminar la orden ${order.order_number}? El cliente no dejó las prendas.`)) return;
       await db.delete("orders", order.id);
@@ -3068,8 +3073,8 @@ export default function LavanderiaApp() {
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
                         <div style={{ fontWeight: 800, fontSize: 22, color: "#66BB6A", marginBottom: 8 }}>${Math.round(Number(o.price))}</div>
-                        <button onClick={() => confirmarReversar(o)} style={{ ...btn, background: o.status==="entregado"?"linear-gradient(135deg,#FFD54F,#F57F17)":"linear-gradient(135deg,#EF5350,#B71C1C)", color: o.status==="entregado"?"#000":"#fff", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
-                          {o.status==="entregado"?"↩️ Reversar":"🗑 Eliminar orden"}
+                        <button onClick={() => confirmarReversar(o)} style={{ ...btn, background: (o.status==="entregado"||o.status==="parcial")?"linear-gradient(135deg,#FFD54F,#F57F17)":"linear-gradient(135deg,#EF5350,#B71C1C)", color: (o.status==="entregado"||o.status==="parcial")?"#000":"#fff", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
+                          {(o.status==="entregado"||o.status==="parcial")?"↩️ Reversar":"🗑 Eliminar orden"}
                         </button>
                       </div>
                     </div>
