@@ -53,8 +53,45 @@ const STATUS_LABELS = {
   entregado: { label: "Entregado", color: "#9E9E9E" },
 };
 
+// ---- Festivos de Colombia ----
+const getEasterSunday = (year) => {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19*a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2*e + 2*i - h - k) % 7;
+  const m = Math.floor((a + 11*h + 22*l) / 451);
+  const month = Math.floor((h + l - 7*m + 114) / 31);
+  const day = ((h + l - 7*m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+};
+const addDays = (date, n) => { const d = new Date(date); d.setDate(d.getDate() + n); return d; };
+const nextMonday = (date) => { const d = new Date(date); const day = d.getDay(); const diff = day === 1 ? 0 : ((8 - day) % 7 || 7); return addDays(d, diff); };
+const toYMD = (date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+const getColombianHolidays = (year) => {
+  const list = [];
+  list.push(new Date(year,0,1), new Date(year,4,1), new Date(year,6,20), new Date(year,7,7), new Date(year,11,8), new Date(year,11,25));
+  [[0,6],[2,19],[5,29],[6,9],[7,15],[9,12],[10,1],[10,11]].forEach(([m,d]) => list.push(nextMonday(new Date(year,m,d))));
+  const easter = getEasterSunday(year);
+  list.push(addDays(easter,-3), addDays(easter,-2), addDays(easter,43), addDays(easter,64), addDays(easter,71));
+  return list.map(toYMD);
+};
+const isColombianHoliday = (ymd) => {
+  const year = Number(ymd.slice(0,4));
+  const holidays = new Set([...getColombianHolidays(year-1), ...getColombianHolidays(year), ...getColombianHolidays(year+1)]);
+  return holidays.has(ymd);
+};
+const addBusinessDaysSkippingHolidays = (startDate, days) => {
+  let d = new Date(startDate);
+  d.setDate(d.getDate() + days);
+  while (d.getDay() === 0 || isColombianHoliday(toYMD(d))) {
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
+};
+// ---- Fin festivos ----
+
 const getToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
-const getDeliveryDefault = () => { const d = new Date(); d.setDate(d.getDate()+2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+const getDeliveryDefault = () => { const d = addBusinessDaysSkippingHolidays(new Date(), 2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const today = getToday();
 const emptyOrder = { client_name: "", phone: "", status: "recibido", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "", paid_at_intake: false, payment_method: null };
 const emptyItem = { garment_type: "", quantity: 1, price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
