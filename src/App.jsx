@@ -224,7 +224,23 @@ export default function LavanderiaApp() {
 
   const calcInput = (val) => { if (calcNew) { setCalcDisplay(String(val)); setCalcNew(false); } else { setCalcDisplay(prev => prev === "0" ? String(val) : prev + val); } };
   const calcDot = () => { if (calcNew) { setCalcDisplay("0."); setCalcNew(false); return; } if (!calcDisplay.includes(".")) setCalcDisplay(prev => prev + "."); };
-  const calcOperation = (op) => { setCalcPrev(parseFloat(calcDisplay)); setCalcOp(op); setCalcNew(true); };
+  const calcOperation = (op) => {
+    if (calcOp !== null && !calcNew) {
+      const cur = parseFloat(calcDisplay);
+      let result = calcPrev;
+      if (calcOp === "+") result = calcPrev + cur;
+      if (calcOp === "-") result = calcPrev - cur;
+      if (calcOp === "×") result = calcPrev * cur;
+      if (calcOp === "÷") result = cur !== 0 ? calcPrev / cur : 0;
+      result = parseFloat(result.toFixed(6));
+      setCalcDisplay(result.toString());
+      setCalcPrev(result);
+    } else {
+      setCalcPrev(parseFloat(calcDisplay));
+    }
+    setCalcOp(op);
+    setCalcNew(true);
+  };
   const calcEquals = () => {
     if (calcOp === null || calcPrev === null) return;
     const cur = parseFloat(calcDisplay);
