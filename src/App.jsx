@@ -189,7 +189,7 @@ export default function LavanderiaApp() {
   const [abonoModal, setAbonoModal] = useState(null);
   const [markPaidModal, setMarkPaidModal] = useState(null);
   const [markPaidMethod, setMarkPaidMethod] = useState("efectivo");
-  const [newAbono, setNewAbono] = useState({ amount: "", payment_method: "efectivo" });
+  const [newAbono, setNewAbono] = useState({ amount: "", payment_method: "efectivo", date: today });
   const [advances, setAdvances] = useState([]);
   const [cajaBaseList, setCajaBaseList] = useState([]);
   const [donationsLosses, setDonationsLosses] = useState([]);
@@ -1550,7 +1550,7 @@ export default function LavanderiaApp() {
                         </td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo" }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "5px 10px", fontSize: 12 }}>💰</button>
+                            <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "5px 10px", fontSize: 12 }}>💰</button>
                             {!o.paid_at_intake && <button title="Marcar como pagada al recibir" onClick={() => { setMarkPaidModal(o); setMarkPaidMethod("efectivo"); }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "5px 10px", fontSize: 12 }}>✅💰</button>}
                             <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
                             <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
@@ -4054,6 +4054,11 @@ export default function LavanderiaApp() {
                 {newAbono.amount && Number(newAbono.amount) > 0 && <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>Saldo restante: <strong style={{ color:"#FFD54F" }}>${Math.max(0,Math.round(getSaldo(abonoModal)-Number(newAbono.amount))).toLocaleString()}</strong></div>}
               </div>
               <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:6 }}>FECHA DEL ABONO</label>
+                <input type="date" value={newAbono.date||today} onChange={e=>setNewAbono(p=>({...p,date:e.target.value}))} style={{ ...inp,colorScheme:"dark",width:"100%" }} />
+                <div style={{ fontSize:11,color:"#484F58",marginTop:4 }}>Si este pago ya se hizo antes de hoy (ej: recibo antiguo que ya traía un abono), pon la fecha real — así no infla el cuadre de caja de hoy.</div>
+              </div>
+              <div>
                 <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:6 }}>MÉTODO DE PAGO</label>
                 <div style={{ display:"flex",gap:8 }}>
                   {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=>(
@@ -4065,11 +4070,11 @@ export default function LavanderiaApp() {
                 <button onClick={()=>setAbonoModal(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
                 <button onClick={async () => {
                   if (!newAbono.amount || Number(newAbono.amount) <= 0) { alert("Ingresa un monto válido"); return; }
-                  const abono = { order_id: abonoModal.id, amount: Number(newAbono.amount), payment_method: newAbono.payment_method, date: today, employee: user.name };
+                  const abono = { order_id: abonoModal.id, amount: Number(newAbono.amount), payment_method: newAbono.payment_method, date: newAbono.date||today, employee: user.name };
                   const res = await db.post("abonos", abono);
                   if (Array.isArray(res) && res[0]) {
                     setAbonos(prev => [...prev, res[0]]);
-                    setNewAbono({ amount:"", payment_method:"efectivo" });
+                    setNewAbono({ amount:"", payment_method:"efectivo", date: today });
                     alert("✅ Abono registrado correctamente");
                   }
                 }} disabled={!newAbono.amount||Number(newAbono.amount)<=0} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:13,opacity:!newAbono.amount||Number(newAbono.amount)<=0?0.5:1 }}>
