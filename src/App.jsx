@@ -167,6 +167,7 @@ export default function LavanderiaApp() {
   const [savingParcial, setSavingParcial] = useState(false);
   const [garmentTypes, setGarmentTypes] = useState(() => { try { const s = localStorage.getItem("garmentTypes"); return s ? JSON.parse(s) : DEFAULT_GARMENT_TYPES; } catch { return DEFAULT_GARMENT_TYPES; } });
   const [garmentPieces, setGarmentPieces] = useState(() => { try { const s = localStorage.getItem("garmentPieces"); return s ? JSON.parse(s) : {}; } catch { return {}; } });
+  const [garmentExtraDays, setGarmentExtraDays] = useState(() => { try { const s = localStorage.getItem("garmentExtraDays"); return s ? JSON.parse(s) : {}; } catch { return {}; } });
   const [services, setServices] = useState(() => { try { const s = localStorage.getItem("services"); return s ? JSON.parse(s) : DEFAULT_SERVICES; } catch { return DEFAULT_SERVICES; } });
   const [colors, setColors] = useState(() => { try { const s = localStorage.getItem("colors"); return s ? JSON.parse(s) : DEFAULT_COLORS; } catch { return DEFAULT_COLORS; } });
   const [newGarment, setNewGarment] = useState("");
@@ -386,6 +387,8 @@ export default function LavanderiaApp() {
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
   const saveGarmentPieces = (map) => { setGarmentPieces(map); try { localStorage.setItem("garmentPieces", JSON.stringify(map)); } catch {} };
   const getPiecesPerUnit = (garmentType) => Number(garmentPieces[garmentType]) || 1;
+  const saveGarmentExtraDays = (map) => { setGarmentExtraDays(map); try { localStorage.setItem("garmentExtraDays", JSON.stringify(map)); } catch {} };
+  const getExtraDays = (garmentType) => Number(garmentExtraDays[garmentType]) || 0;
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
 
   const confirmarMultiEntrega = async () => {
@@ -631,6 +634,11 @@ export default function LavanderiaApp() {
       }
       const conditionKeys = conditions.map(c => c.toLowerCase().replace(/\s+/g,"_"));
       if (conditionKeys.includes(field)) setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
+      if (field === "garment_type") {
+        const maxExtra = Math.max(0, ...updated.map(it => getExtraDays(it.garment_type)));
+        const newDate = addBusinessDaysSkippingHolidays(new Date(), 2 + maxExtra);
+        setNewOrder(p => ({ ...p, delivery_date: `${newDate.getFullYear()}-${String(newDate.getMonth()+1).padStart(2,"0")}-${String(newDate.getDate()).padStart(2,"0")}` }));
+      }
       return updated;
     });
   };
@@ -3423,10 +3431,14 @@ export default function LavanderiaApp() {
                         <span style={{ fontSize:10,color:"#8B949E" }}>piezas:</span>
                         <input type="number" min={1} value={garmentPieces[g]||1} onChange={e => { const v = Math.max(1, Number(e.target.value)||1); saveGarmentPieces({ ...garmentPieces, [g]: v }); }} style={{ width:42,padding:"4px 6px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#FFD54F",fontSize:12,fontWeight:700,textAlign:"center" }} />
                       </div>
+                      <div style={{ display:"flex",alignItems:"center",gap:4 }}>
+                        <span style={{ fontSize:10,color:"#8B949E" }}>días extra:</span>
+                        <input type="number" min={0} value={garmentExtraDays[g]||0} onChange={e => { const v = Math.max(0, Number(e.target.value)||0); saveGarmentExtraDays({ ...garmentExtraDays, [g]: v }); }} style={{ width:42,padding:"4px 6px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#FF8A65",fontSize:12,fontWeight:700,textAlign:"center" }} />
+                      </div>
                       <button onClick={() => { if(window.confirm(`¿Eliminar "${g}"?`))saveGarmentTypes(garmentTypes.filter((_,idx)=>idx!==i)); }} style={{ background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer" }}>✕</button>
                     </div>)}
                   </div>
-                  <div style={{ fontSize:11,color:"#484F58",marginTop:8 }}>"Piezas" = cuántas prendas físicas cuenta cada unidad (ej: Vestido de hombre = 2, uno normal = 1). Afecta el conteo del recibo, no el precio.</div>
+                  <div style={{ fontSize:11,color:"#484F58",marginTop:8 }}>"Piezas" = cuántas prendas físicas cuenta cada unidad (ej: Vestido de hombre = 2, uno normal = 1). Afecta el conteo del recibo, no el precio.<br/>"Días extra" = si esa prenda necesita más tiempo (ej: Tenis, Maletas, Cubrelechos), la fecha de entrega de la orden se ajusta sola al agregarla.</div>
                   <button onClick={() => { if(window.confirm("¿Restaurar lista por defecto?"))saveGarmentTypes(DEFAULT_GARMENT_TYPES); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid #30363D",background:"transparent",color:"#8B949E",cursor:"pointer",fontSize:12 }}>🔄 Restaurar por defecto</button>
                 </div>
                 <div style={card}>
