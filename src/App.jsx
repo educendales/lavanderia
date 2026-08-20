@@ -2899,9 +2899,10 @@ export default function LavanderiaApp() {
                     { key: "breb", label: "🔵 Bre-b", color: "#4FC3F7" },
                     { key: "tarjeta", label: "💳 Tarjeta", color: "#FFA726" },
                   ];
+                  const montoCobradoEnEntrega = (o) => o.paid_at_intake ? Number(o.price) : Math.max(0, Number(o.price) - getAbonado(o.id) - getParcialPagado(o.id));
                   const totalesPorMetodo = metodos.map(m => ({
                     ...m,
-                    total: entregadas.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+Number(o.price), 0),
+                    total: entregadas.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+montoCobradoEnEntrega(o), 0),
                     count: entregadas.filter(o => (o.payment_method||"efectivo") === m.key).length,
                   }));
                   const totalGeneral = totalesPorMetodo.reduce((s,m) => s+m.total, 0);
@@ -2912,8 +2913,9 @@ export default function LavanderiaApp() {
                     const d = o.paid_at_intake ? o.date : o.delivered_at;
                     if (!byDay[d]) byDay[d] = { efectivo:0, nequi:0, daviplata:0, breb:0, tarjeta:0, total:0 };
                     const m = o.payment_method||"efectivo";
-                    byDay[d][m] = (byDay[d][m]||0) + Number(o.price);
-                    byDay[d].total += Number(o.price);
+                    const monto = montoCobradoEnEntrega(o);
+                    byDay[d][m] = (byDay[d][m]||0) + monto;
+                    byDay[d].total += monto;
                   });
                   const sortedDays = Object.keys(byDay).sort();
 
@@ -4198,7 +4200,8 @@ export default function LavanderiaApp() {
                 { key:"breb", label:"🔵 Bre-b", color:"#4FC3F7" },
                 { key:"tarjeta", label:"💳 Tarjeta", color:"#FFA726" },
               ];
-              const totalGeneral = entregadasHoy.reduce((s,o) => s+Number(o.price), 0);
+              const montoCobradoEnEntrega = (o) => o.paid_at_intake ? Number(o.price) : Math.max(0, Number(o.price) - getAbonado(o.id) - getParcialPagado(o.id));
+              const totalGeneral = entregadasHoy.reduce((s,o) => s+montoCobradoEnEntrega(o), 0);
               const totalAbonos = abonos.filter(a => a.date === filterDate).reduce((s,a) => s+Number(a.amount), 0);
               const advancesHoy = advances.filter(a => a.date === filterDate);
               const totalAdvancesHoy = advancesHoy.reduce((s,a) => s+Number(a.amount), 0);
@@ -4206,7 +4209,7 @@ export default function LavanderiaApp() {
               const netoCaja = totalGeneral + totalAbonos + totalParcialesHoy - totalAdvancesHoy;
 
               const baseHoy = getCajaBase(filterDate)?.amount || 0;
-              const efectivoEntregas = entregadasHoy.filter(o => (o.payment_method||"efectivo")==="efectivo").reduce((s,o)=>s+Number(o.price),0);
+              const efectivoEntregas = entregadasHoy.filter(o => (o.payment_method||"efectivo")==="efectivo").reduce((s,o)=>s+montoCobradoEnEntrega(o),0);
               const efectivoAbonos = abonos.filter(a => a.date===filterDate && (a.payment_method||"efectivo")==="efectivo").reduce((s,a)=>s+Number(a.amount),0);
               const parcialesHoy = partialDeliveries.filter(p => p.date === filterDate);
               const efectivoParciales = parcialesHoy.filter(p => (p.payment_method||"efectivo")==="efectivo").reduce((s,p)=>s+Number(p.amount),0);
@@ -4248,7 +4251,7 @@ export default function LavanderiaApp() {
                 {/* Totales por método */}
                 <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:16 }}>
                   {metodos.map(m => {
-                    const total = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+Number(o.price), 0);
+                    const total = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+montoCobradoEnEntrega(o), 0);
                     const count = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).length;
                     const abonosMetodo = abonos.filter(a => a.date === filterDate && (a.payment_method||"efectivo") === m.key).reduce((s,a) => s+Number(a.amount), 0);
                     const parcialesMetodo = parcialesHoy.filter(p => (p.payment_method||"efectivo") === m.key).reduce((s,p) => s+Number(p.amount), 0);
