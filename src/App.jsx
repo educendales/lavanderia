@@ -675,6 +675,12 @@ export default function LavanderiaApp() {
     await db.delete("donations_losses", id);
     setDonationsLosses(prev => prev.filter(d => d.id !== id));
   };
+  const deleteAbono = async (abono) => {
+    const ok = await checkClave("eliminar el abono"); if (!ok) return;
+    if (!window.confirm(`¿Eliminar el abono de $${Math.round(Number(abono.amount)).toLocaleString()} del ${abono.date}? El saldo de la orden volverá a subir.`)) return;
+    await db.delete("abonos", abono.id);
+    setAbonos(prev => prev.filter(a => a.id !== abono.id));
+  };
   const saveCajaBase = async (date, amount) => {
     setSavingBase(true);
     const existing = getCajaBase(date);
@@ -4042,7 +4048,10 @@ export default function LavanderiaApp() {
                 {abonos.filter(a=>a.order_id===abonoModal.id).map(a=>(
                   <div key={a.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"#0D1117",borderRadius:8,marginBottom:4,fontSize:12 }}>
                     <span style={{ color:"#8B949E" }}>{a.date} · {a.employee}</span>
-                    <span style={{ fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(a.amount)).toLocaleString()}</span>
+                    <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                      <span style={{ fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(a.amount)).toLocaleString()}</span>
+                      <button onClick={()=>deleteAbono(a)} title="Eliminar abono" style={{ background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"none",borderRadius:6,padding:"3px 7px",fontSize:11,cursor:"pointer" }}>🗑</button>
+                    </div>
                   </div>
                 ))}
               </div>
