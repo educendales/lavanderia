@@ -188,6 +188,9 @@ export default function LavanderiaApp() {
   const [abonos, setAbonos] = useState([]);
   const [abonoModal, setAbonoModal] = useState(null);
   const [markPaidModal, setMarkPaidModal] = useState(null);
+  const [showManualOrder, setShowManualOrder] = useState(false);
+  const [newManualOrder, setNewManualOrder] = useState({ order_number: "", client_name: "", phone: "", garment_desc: "", price: "", date: today, already_delivered: false, delivered_at: today, payment_method: "efectivo" });
+  const [savingManualOrder, setSavingManualOrder] = useState(false);
   const [markPaidMethod, setMarkPaidMethod] = useState("efectivo");
   const [newAbono, setNewAbono] = useState({ amount: "", payment_method: "efectivo", date: today });
   const [advances, setAdvances] = useState([]);
@@ -1253,6 +1256,42 @@ export default function LavanderiaApp() {
     setOrders(prev => prev.map(o => o.id === markPaidModal.id ? { ...o, paid_at_intake: true, payment_method: markPaidMethod } : o));
     setMarkPaidModal(null);
     setMarkPaidMethod("efectivo");
+  };
+
+  const addManualOrder = async () => {
+    const num = newManualOrder.order_number.trim().toUpperCase();
+    if (!num || !newManualOrder.client_name || !newManualOrder.price) { alert("⚠️ Completa al menos el número de recibo, cliente y precio."); return; }
+    if (orders.some(o => (o.order_number||"").toUpperCase() === num)) { alert(`❌ Ya existe una orden con el número ${num}. Revisa el número.`); return; }
+    setSavingManualOrder(true);
+    const price = Number(newManualOrder.price) || 0;
+    const o = {
+      order_number: num,
+      client_name: newManualOrder.client_name,
+      phone: newManualOrder.phone || "",
+      status: newManualOrder.already_delivered ? "entregado" : "listo",
+      notes: "Orden manual/histórica agregada — no estaba en la migración original.",
+      delivery_date: newManualOrder.date,
+      service: "lavado_normal",
+      employee: user.name,
+      date: newManualOrder.date,
+      garments: 1,
+      price,
+      a_domicilio: false,
+      ...(newManualOrder.already_delivered ? { delivered_at: newManualOrder.delivered_at, delivered_by: user.name, payment_method: newManualOrder.payment_method } : {}),
+    };
+    const res = await db.post("orders", o);
+    if (Array.isArray(res) && res[0]) {
+      const orderId = res[0].id;
+      await db.post("order_items", { order_id: orderId, garment_type: newManualOrder.garment_desc || "Prenda manual", quantity: 1, price, color: "", service: "lavado_normal", delivered_qty: newManualOrder.already_delivered ? 1 : 0 });
+      setOrders(prev => [...prev, res[0]]);
+      await loadData();
+      alert(`✅ Orden ${num} creada correctamente.`);
+      setNewManualOrder({ order_number: "", client_name: "", phone: "", garment_desc: "", price: "", date: today, already_delivered: false, delivered_at: today, payment_method: "efectivo" });
+      setShowManualOrder(false);
+    } else {
+      alert("❌ Hubo un error creando la orden. Revisa que el número de recibo no esté repetido.");
+    }
+    setSavingManualOrder(false);
   };
 
   const exportClients = () => {
@@ -3638,6 +3677,13 @@ export default function LavanderiaApp() {
                   </div>
                 )}
               </div>
+              {isAdmin && (
+                <div style={{ marginTop: 20, ...card, border: "1px solid rgba(79,195,247,0.4)" }}>
+                  <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#4FC3F7" }}>🗂 Orden Manual / Histórica</h3>
+                  <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Para casos especiales: un recibo viejo que se escapó de la migración, un cliente que llega con un ticket del sistema anterior, etc. Escribes tú el número de recibo y la fecha real — no se genera automático.</p>
+                  <button onClick={() => setShowManualOrder(true)} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", border: "1px solid rgba(79,195,247,0.4)", padding: "10px 18px", fontWeight: 700 }}>+ Crear orden manual</button>
+                </div>
+              )}
               <div style={{ marginTop: 20, ...card, border: "1px solid rgba(239,83,80,0.4)" }}>
                 <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#EF5350" }}>⚠️ Zona de Peligro</h3>
                 <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8B949E" }}>Acciones irreversibles. Se requiere clave para ejecutar.</p>
@@ -4121,6 +4167,64 @@ export default function LavanderiaApp() {
               <div style={{ display:"flex",gap:10,marginTop:4 }}>
                 <button onClick={()=>setMarkPaidModal(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
                 <button onClick={confirmarMarcarPagada} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:13 }}>✅ Confirmar Pago</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MANUAL / HISTORIC ORDER MODAL */}
+      {showManualOrder && (
+        <div onClick={() => setShowManualOrder(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:440,maxWidth:"92vw",maxHeight:"88vh",overflowY:"auto",border:"1px solid #4FC3F7",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 4px",fontSize:18,color:"#E6EDF3" }}>🗂 Crear Orden Manual / Histórica</h3>
+            <p style={{ fontSize:12,color:"#8B949E",margin:"0 0 16px" }}>Para recibos viejos que no quedaron en la migración. Escribe el número y la fecha exacta del recibo físico.</p>
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}># DE RECIBO (ej: S054210)</label>
+                <input style={inp} placeholder="S000000" value={newManualOrder.order_number} onChange={e=>setNewManualOrder(p=>({...p,order_number:e.target.value}))} />
+              </div>
+              <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>CLIENTE</label>
+                <input style={inp} placeholder="Nombre del cliente" value={newManualOrder.client_name} onChange={e=>setNewManualOrder(p=>({...p,client_name:e.target.value}))} />
+              </div>
+              <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO (opcional)</label>
+                <input style={inp} placeholder="3001234567" value={newManualOrder.phone} onChange={e=>setNewManualOrder(p=>({...p,phone:e.target.value}))} />
+              </div>
+              <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>DESCRIPCIÓN DE LA PRENDA (opcional)</label>
+                <input style={inp} placeholder="Ej: 2 camisas, 1 pantalón" value={newManualOrder.garment_desc} onChange={e=>setNewManualOrder(p=>({...p,garment_desc:e.target.value}))} />
+              </div>
+              <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>PRECIO TOTAL</label>
+                <input style={inp} type="number" min={0} placeholder="0" value={newManualOrder.price} onChange={e=>setNewManualOrder(p=>({...p,price:e.target.value}))} />
+              </div>
+              <div>
+                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA DE INGRESO (la del recibo)</label>
+                <input type="date" style={{ ...inp,colorScheme:"dark" }} value={newManualOrder.date} onChange={e=>setNewManualOrder(p=>({...p,date:e.target.value}))} />
+              </div>
+              <label onClick={()=>setNewManualOrder(p=>({...p,already_delivered:!p.already_delivered}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newManualOrder.already_delivered?"rgba(102,187,106,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newManualOrder.already_delivered?"#66BB6A":"#30363D"}`,borderRadius:10,padding:"10px 14px" }}>
+                <input type="checkbox" checked={newManualOrder.already_delivered} onChange={e=>setNewManualOrder(p=>({...p,already_delivered:e.target.checked}))} style={{ width:18,height:18,accentColor:"#66BB6A" }} />
+                <div><div style={{ fontWeight:600,color:newManualOrder.already_delivered?"#66BB6A":"#8B949E" }}>✅ Ya fue entregada / el cliente ya se la llevó</div><div style={{ fontSize:11,color:"#484F58" }}>Como tu caso: la ropa ya salió y ya te pagaron.</div></div>
+              </label>
+              {newManualOrder.already_delivered && <>
+                <div>
+                  <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA DE ENTREGA</label>
+                  <input type="date" style={{ ...inp,colorScheme:"dark" }} value={newManualOrder.delivered_at} onChange={e=>setNewManualOrder(p=>({...p,delivered_at:e.target.value}))} />
+                </div>
+                <div>
+                  <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label>
+                  <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                    {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=>(
+                      <label key={opt.value} onClick={()=>setNewManualOrder(p=>({...p,payment_method:opt.value}))} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,fontWeight:600,background:newManualOrder.payment_method===opt.value?"rgba(102,187,106,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newManualOrder.payment_method===opt.value?"#66BB6A":"#30363D"}`,borderRadius:8,padding:"8px 4px",color:newManualOrder.payment_method===opt.value?"#66BB6A":"#8B949E" }}>{opt.label}</label>
+                    ))}
+                  </div>
+                </div>
+              </>}
+              <div style={{ display:"flex",gap:10,marginTop:4 }}>
+                <button onClick={()=>setShowManualOrder(false)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
+                <button onClick={addManualOrder} disabled={savingManualOrder} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:13,opacity:savingManualOrder?0.7:1 }}>{savingManualOrder?"Creando...":"🗂 Crear Orden"}</button>
               </div>
             </div>
           </div>
