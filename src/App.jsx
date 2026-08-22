@@ -1442,6 +1442,7 @@ export default function LavanderiaApp() {
           .lv-sidebar-overlay.open { display:block; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:90; }
           .lv-sidebar-close { display:block !important; }
           .lv-main { padding:14px !important; }
+          .lv-shortcuts-bar { display:none !important; }
         }
         .lv-item-grid { display:grid; grid-template-columns:2fr 55px 75px 1fr 30px; gap:6px; align-items:center; }
         @media (max-width: 600px) {
@@ -1499,6 +1500,22 @@ export default function LavanderiaApp() {
 
         {/* MAIN CONTENT */}
         <div className="lv-main" ref={mainContentRef} style={{ flex: 1, padding: 28, overflowY: "auto", minWidth: 0 }}>
+
+          <div className="lv-shortcuts-bar" style={{ position: "sticky", top: -28, marginTop: -28, marginLeft: -28, marginRight: -28, zIndex: 60, background: "rgba(22,27,34,0.97)", backdropFilter: "blur(6px)", borderBottom: "1px solid #30363D", padding: "10px 28px", marginBottom: 20, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            {[
+              { key: "F1", icon: "👕", label: "Órdenes" },
+              { key: "F2", icon: "📦", label: "Entregas" },
+              { key: "F3", icon: "💰", label: "Gastos" },
+              { key: "F4", icon: "🗂", label: "Orden Manual" },
+              { key: "F5", icon: "📋", label: "Inventario" },
+              { key: "F6", icon: "🔍", label: "Comparativo" },
+            ].map(s => (
+              <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.03)", border: "1px solid #21262D", borderRadius: 8, padding: "4px 10px 4px 6px" }}>
+                <span style={{ background: "#0D1117", border: "1px solid #30363D", borderRadius: 5, padding: "2px 6px", fontSize: 10, fontWeight: 800, color: "#4FC3F7", fontFamily: "monospace", boxShadow: "0 1px 0 #30363D" }}>{s.key}</span>
+                <span style={{ fontSize: 12, color: "#8B949E" }}>{s.icon} {s.label}</span>
+              </div>
+            ))}
+          </div>
 
           {/* DASHBOARD */}
           {tab === "dashboard" && (
