@@ -240,6 +240,11 @@ export default function LavanderiaApp() {
   const [negocioLogo, setNegocioLogo] = useState(() => { try { return localStorage.getItem("negocioLogo") || ""; } catch { return ""; } });
   const [logoEnRecibo, setLogoEnRecibo] = useState(() => { try { return localStorage.getItem("logoEnRecibo") !== "false"; } catch { return true; } });
   const [negocioNombre, setNegocioNombre] = useState(() => { try { return localStorage.getItem("negocioNombre") || "Lavanderías Shaddai"; } catch { return "Lavanderías Shaddai"; } });
+  const [whatsappWebMode, setWhatsappWebModeState] = useState(() => { try { return localStorage.getItem("whatsappWebMode") === "true"; } catch { return false; } });
+  const setWhatsappWebMode = (val) => { setWhatsappWebModeState(val); try { localStorage.setItem("whatsappWebMode", String(val)); } catch {} };
+  const getWhatsAppUrl = (phone, text) => whatsappWebMode
+    ? `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`
+    : `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   const [negocioDireccion, setNegocioDireccion] = useState(() => { try { return localStorage.getItem("negocioDireccion") || "CARRERA 113 # 75-56"; } catch { return "CARRERA 113 # 75-56"; } });
   const [negocioTelefono, setNegocioTelefono] = useState(() => { try { return localStorage.getItem("negocioTelefono") || ""; } catch { return ""; } });
   const [reciboSubtitulo, setReciboSubtitulo] = useState(() => { try { return localStorage.getItem("reciboSubtitulo") || "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } catch { return "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } });
@@ -1850,7 +1855,7 @@ export default function LavanderiaApp() {
                         <div style={{ display:"flex",gap:10 }}>
                           {entregaResult.phone && <button onClick={() => {
                             const msg = `Hola ${entregaResult.client_name}, resumen de tu retiro en ${negocioNombre} (Orden ${entregaResult.order_number}):\n\nSe entregó: ${parcialConfirmedInfo.itemsSummary}\nPagado ahora: $${Math.round(parcialConfirmedInfo.amount).toLocaleString()}\n${!parcialConfirmedInfo.fullyDelivered?`\nPendiente por recoger: ${parcialConfirmedInfo.pendientesSummary}\nSaldo: $${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}`:"\n¡Ya recogiste todo! Gracias por preferirnos."}`;
-                            window.open("https://wa.me/" + negocioPais + entregaResult.phone.replace(/[^0-9]/g,"") + "?text=" + encodeURIComponent(msg), "_blank");
+                            window.open(getWhatsAppUrl(negocioPais + entregaResult.phone.replace(/[^0-9]/g,""), msg), "_blank");
                           }} style={{ ...btn, background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#fff", flex: 1, padding: 12 }}>📱 Enviar resumen por WhatsApp</button>}
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setParcialConfirmedInfo(null); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
@@ -3129,7 +3134,7 @@ export default function LavanderiaApp() {
                               const selected = pendingOrders.filter(o => selectedInventory.includes(o.id) && o.phone);
                               selected.forEach(o => {
                                 const msg = waMensaje.replace("{nombre}", o.client_name).replace("{orden}", o.order_number||"");
-                                window.open("https://wa.me/" + negocioPais + (o.phone||"").replace(/[^0-9]/g,"") + "?text=" + encodeURIComponent(msg), "_blank");
+                                window.open(getWhatsAppUrl(negocioPais + (o.phone||"").replace(/[^0-9]/g,""), msg), "_blank");
                               });
                             }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:"6px 14px",fontSize:12,fontWeight:700 }}>
                               📱 Enviar WA a {selectedInventory.length} seleccionado{selectedInventory.length!==1?"s":""}
@@ -3156,7 +3161,7 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.date}</td>
                               <td style={{ padding:"10px 12px",fontSize:12 }}><span style={{ color:isLate?"#EF5350":"#FFD54F",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
                               <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"#FFD54F":"#8B949E",fontSize:13 }}>{daysIn}d</span></td>
-                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={`https://wa.me/${negocioPais}${o.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))}`} target="_blank" rel="noreferrer" title="Enviar WhatsApp" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:11,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
+                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))} target="_blank" rel="noreferrer" title="Enviar WhatsApp" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:11,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
                             </tr>;
                           })}</tbody>
                         </table>
@@ -3426,6 +3431,23 @@ export default function LavanderiaApp() {
           {tab === "config" && (
             <div>
               <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 800 }}>⚙️ Configuración</h2>
+
+              {/* WHATSAPP MODE */}
+              <div style={{ ...card, marginBottom: 20, border: "1px solid rgba(37,211,102,0.3)" }}>
+                <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#25D366" }}>📱 Envío de WhatsApp en este computador</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Este ajuste se guarda solo en este equipo (cada computador puede tener el suyo, no se comparte con los demás).</p>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <label onClick={() => setWhatsappWebMode(false)} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", background: !whatsappWebMode ? "rgba(37,211,102,0.12)" : "rgba(255,255,255,0.04)", border: `2px solid ${!whatsappWebMode ? "#25D366" : "#30363D"}`, borderRadius: 10, padding: "12px 14px" }}>
+                    <span style={{ fontWeight: 700, color: !whatsappWebMode ? "#25D366" : "#8B949E" }}>🖥️ App de Escritorio</span>
+                    <span style={{ fontSize: 12, color: "#8B949E" }}>Para computadores donde SÍ está instalada la app de WhatsApp.</span>
+                  </label>
+                  <label onClick={() => setWhatsappWebMode(true)} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", background: whatsappWebMode ? "rgba(37,211,102,0.12)" : "rgba(255,255,255,0.04)", border: `2px solid ${whatsappWebMode ? "#25D366" : "#30363D"}`, borderRadius: 10, padding: "12px 14px" }}>
+                    <span style={{ fontWeight: 700, color: whatsappWebMode ? "#25D366" : "#8B949E" }}>🌐 WhatsApp Web</span>
+                    <span style={{ fontSize: 12, color: "#8B949E" }}>Para computadores donde NO se puede instalar la app (como este de la lavandería).</span>
+                  </label>
+                </div>
+              </div>
+
               {/* INFO DEL NEGOCIO */}
               <div style={{ ...card, marginBottom: 20, border: "1px solid rgba(79,195,247,0.3)" }}>
                 <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#4FC3F7" }}>🏪 Información del Negocio</h3>
@@ -4054,7 +4076,7 @@ export default function LavanderiaApp() {
                     const phone = (o.phone||"").replace(/[^0-9]/g,"");
                     const partes = ["Hola " + o.client_name + ", adjunto su recibo de Lavanderias Shaddai.","Orden: " + (o.order_number||""),"Total: $" + Math.round(Number(o.price)),"Entrega: " + (o.delivery_date||""),"Gracias por preferirnos!"];
                     const msg = partes.join(String.fromCharCode(10));
-                    window.open("https://wa.me/" + negocioPais + phone + "?text=" + encodeURIComponent(msg), "_blank");
+                    window.open(getWhatsAppUrl(negocioPais + phone, msg), "_blank");
                     await db.patch("orders", o.id, { recibo_enviado: "whatsapp" });
                     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, recibo_enviado: "whatsapp" } : ord));
                   }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
