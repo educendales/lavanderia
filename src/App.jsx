@@ -551,6 +551,19 @@ export default function LavanderiaApp() {
     const handleGlobalKeydown = (e) => {
       const active = document.activeElement;
       const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT" || active.isContentEditable);
+
+      const fKeyTabs = { F1: "orders", F2: "entregas", F3: "expenses", F5: "report", F6: "inventario_comparativo" };
+      if (fKeyTabs[e.key]) {
+        e.preventDefault();
+        if (!isTyping) setTab(fKeyTabs[e.key]);
+        return;
+      }
+      if (e.key === "F4") {
+        e.preventDefault();
+        if (!isTyping) setShowManualOrder(true);
+        return;
+      }
+
       if (isTyping) { barcodeBufferRef.current = ""; return; }
 
       const now = Date.now();
