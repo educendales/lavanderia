@@ -537,6 +537,7 @@ export default function LavanderiaApp() {
   };
   const mainContentRef = useRef(null);
   const firstGarmentInputRef = useRef(null);
+  const inventarioSectionRef = useRef(null);
   const [barcodeTrigger, setBarcodeTrigger] = useState(0);
   const [scannedCodes, setScannedCodes] = useState([]);
   const [comparisonResult, setComparisonResult] = useState(null);
@@ -555,7 +556,10 @@ export default function LavanderiaApp() {
       const fKeyTabs = { F1: "orders", F2: "entregas", F3: "expenses", F5: "report", F6: "inventario_comparativo" };
       if (fKeyTabs[e.key]) {
         e.preventDefault();
-        if (!isTyping) setTab(fKeyTabs[e.key]);
+        if (!isTyping) {
+          setTab(fKeyTabs[e.key]);
+          if (e.key === "F5") setTimeout(() => inventarioSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+        }
         return;
       }
       if (e.key === "F4") {
@@ -3064,7 +3068,7 @@ export default function LavanderiaApp() {
               </div>
 
               {/* INVENTARIO */}
-              <div style={{ ...card, marginTop: 20 }}>
+              <div ref={inventarioSectionRef} style={{ ...card, marginTop: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div>
                     <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FF8A65" }}>📦 Inventario — Prendas sin retirar</h3>
