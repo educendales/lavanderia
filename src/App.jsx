@@ -1448,6 +1448,8 @@ export default function LavanderiaApp() {
     <div style={s}>
       <style>{`
         img.emoji { height:1em; width:1em; margin:0 .05em 0 .1em; vertical-align:-0.15em; display:inline-block; }
+        input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+        input[type=number] { -moz-appearance:textfield; }
         .lv-fixed-actionbar { position:fixed; left:0; right:0; bottom:0; z-index:200; padding:12px 16px; max-height:70vh; overflow-y:auto; }
         @media (min-width: 861px) { .lv-fixed-actionbar { left:200px; } }
         .lv-mobile-topbar { display:none; }
@@ -3884,8 +3886,8 @@ export default function LavanderiaApp() {
                               </div> : null;
                             })()}
                           </div>
-                          <input type="number" min={1} placeholder="Cant." value={item.quantity} onChange={e=>updateItem(i,"quantity",e.target.value)} style={{ ...inp,padding:"8px 6px",textAlign:"center" }} />
-                          <input type="number" min={0} placeholder="0" value={item.price} onChange={e=>updateItem(i,"price",e.target.value)} style={{ ...inp,padding:"8px 6px" }} />
+                          <input type="number" min={1} placeholder="Cant." value={item.quantity} onChange={e=>updateItem(i,"quantity",e.target.value)} onWheel={e=>e.target.blur()} style={{ ...inp,padding:"8px 6px",textAlign:"center" }} />
+                          <input type="number" min={0} placeholder="0" value={item.price} onChange={e=>updateItem(i,"price",e.target.value)} onWheel={e=>e.target.blur()} style={{ ...inp,padding:"8px 6px" }} />
                           <div style={{ position:"relative" }}>
                             {(item.colors||[]).length>0&&<div style={{ display:"flex",flexWrap:"wrap",gap:3,marginBottom:3 }}>{(item.colors||[]).map((c,ci)=><span key={ci} style={{ fontSize:10,background:"rgba(199,146,234,0.2)",color:"#C792EA",border:"1px solid rgba(199,146,234,0.4)",borderRadius:10,padding:"1px 6px",display:"flex",alignItems:"center",gap:2 }}>{c}<span onMouseDown={()=>updateItem(i,"colors",(item.colors||[]).filter((_,idx)=>idx!==ci))} style={{ cursor:"pointer",color:"#EF5350",fontWeight:700 }}>×</span></span>)}</div>}
                             {(item.colors||[]).length>0&&(item.colors||[]).length<Number(item.quantity)&&<div style={{ fontSize:10,color:"#FFD54F",marginBottom:2 }}>⚠️ Faltan {Number(item.quantity)-(item.colors||[]).length} color{Number(item.quantity)-(item.colors||[]).length>1?"es":""}</div>}
