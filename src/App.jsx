@@ -558,7 +558,21 @@ export default function LavanderiaApp() {
       const active = document.activeElement;
       const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT" || active.isContentEditable);
 
-      const fKeyTabs = { F1: "orders", F2: "entregas", F3: "expenses", F5: "report", F6: "inventario_comparativo" };
+      const fKeyTabs = { F2: "entregas", F3: "expenses", F5: "report", F6: "inventario_comparativo" };
+      if (e.key === "F1") {
+        e.preventDefault();
+        if (!isTyping) {
+          setTab("orders");
+          const defaultSvc = emptyItem.service;
+          const defaultType = emptyItem.garment_type;
+          const priceByService = precioByService[defaultSvc]?.[defaultType];
+          const priceDefault = precioDefaults[defaultType];
+          const defaultPrice = priceByService || priceDefault || "";
+          setItems([{ ...emptyItem, price: defaultPrice }]);
+          setModal("newOrder");
+        }
+        return;
+      }
       if (fKeyTabs[e.key]) {
         e.preventDefault();
         if (!isTyping) {
