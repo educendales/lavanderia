@@ -3993,7 +3993,8 @@ export default function LavanderiaApp() {
                       }
                       setNewOrder({...emptyOrder,delivery_date:getDeliveryDefault()});
                       setItems([{...emptyItem,price:precioDefaults[emptyItem.garment_type]||""}]);
-                      setModal(null);setSaving(false);loadData();
+                      setSaving(false);loadData();
+                      setTimeout(()=>{firstGarmentInputRef.current?.focus();firstGarmentInputRef.current?.select();},50);
                     }} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,fontSize:13,fontWeight:800,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"🖨️ Guardar e Imprimir"}
                     </button>
