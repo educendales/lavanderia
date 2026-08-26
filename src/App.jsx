@@ -188,6 +188,8 @@ export default function LavanderiaApp() {
   const [abonos, setAbonos] = useState([]);
   const [abonoModal, setAbonoModal] = useState(null);
   const [markPaidModal, setMarkPaidModal] = useState(null);
+  const [passwordPrompt, setPasswordPrompt] = useState(null);
+  const [passwordPromptValue, setPasswordPromptValue] = useState("");
   const [showManualOrder, setShowManualOrder] = useState(false);
   const [newManualOrder, setNewManualOrder] = useState({ order_number: "", client_name: "", phone: "", garment_desc: "", price: "", date: today, already_delivered: false, delivered_at: today, payment_method: "efectivo" });
   const [savingManualOrder, setSavingManualOrder] = useState(false);
@@ -264,9 +266,14 @@ export default function LavanderiaApp() {
     } catch { return "9621"; }
   };
 
+  const askClave = (message) => {
+    setPasswordPromptValue("");
+    return new Promise((resolve) => { setPasswordPrompt({ message, resolve }); });
+  };
+
   const checkClave = async (accion) => {
     const clave = await getClave();
-    const pwd = prompt(`Clave para ${accion}:`);
+    const pwd = await askClave(`Clave para ${accion}:`);
     if (pwd === null) return false;
     if (pwd !== clave) { alert("❌ Clave incorrecta"); return false; }
     return true;
@@ -328,7 +335,7 @@ export default function LavanderiaApp() {
 
   const resetOrderCounter = async () => {
     const clave = await getClave();
-    const pwd = prompt("Clave para reiniciar contador:");
+    const pwd = await askClave("Clave para reiniciar contador:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (!window.confirm("¿Reiniciar el contador de recibos a S0001? Esto no afecta las órdenes existentes.")) return;
     await fetch(`${SUPABASE_URL}/rest/v1/rpc/reset_order_seq`, {
@@ -341,7 +348,7 @@ export default function LavanderiaApp() {
 
   const deleteAllClients = async () => {
     const clave = await getClave();
-    const pwd = prompt("Clave para eliminar clientes:");
+    const pwd = await askClave("Clave para eliminar clientes:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (!window.confirm("⚠️ ¿Eliminar TODOS los clientes? Esta acción no se puede deshacer.")) return;
     if (!window.confirm("¿Estás seguro? Se borrarán todos los clientes registrados.")) return;
@@ -355,7 +362,7 @@ export default function LavanderiaApp() {
 
   const resetAppToZero = async () => {
     const clave = await getClave();
-    const pwd = prompt("Clave de administrador para REINICIAR TODA LA APP:");
+    const pwd = await askClave("Clave de administrador para REINICIAR TODA LA APP:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (!window.confirm("⚠️⚠️ Esto va a borrar TODAS las órdenes, prendas, abonos, entregas parciales, gastos, adelantos de nómina, clientes, agencias, domiciliarios y la base de caja.\n\nLos empleados/usuarios, servicios, tipos de prenda, colores e información del negocio NO se tocan.\n\nEsta acción NO se puede deshacer. ¿Continuar?")) return;
     const confirmText = prompt('Para confirmar, escribe exactamente: BORRAR TODO');
@@ -452,7 +459,7 @@ export default function LavanderiaApp() {
 
   const confirmarReversar = async (order) => {
     const clave = await getClave();
-    const pwd = prompt("Ingresa la clave:");
+    const pwd = await askClave("Ingresa la clave:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (order.status === "entregado" || order.status === "parcial") {
       if (!window.confirm(`¿Reversar la orden ${order.order_number} a "Listo"? Todas sus prendas volverán a quedar como pendientes por recoger.`)) return;
@@ -3944,7 +3951,7 @@ export default function LavanderiaApp() {
                     <button onClick={async () => {
                       if (!nuevoConsecutivo || Number(nuevoConsecutivo) < 1) { alert("Ingresa un número válido"); return; }
                       const clave = await getClave();
-                      const pwd = prompt("Clave para cambiar consecutivo:");
+                      const pwd = await askClave("Clave para cambiar consecutivo:");
                       if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
                       if (!window.confirm(`¿Iniciar el consecutivo en S${String(Number(nuevoConsecutivo)).padStart(6,"0")}?`)) return;
                       await fetch(`${SUPABASE_URL}/rest/v1/rpc/reset_order_seq`, {
@@ -4385,6 +4392,30 @@ export default function LavanderiaApp() {
                   💰 Guardar Abono
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PASSWORD PROMPT MODAL (masked) */}
+      {passwordPrompt && (
+        <div onClick={() => { passwordPrompt.resolve(null); setPasswordPrompt(null); }} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,padding:16 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:340,maxWidth:"90vw",border:"1px solid #EF5350" }}>
+            <h3 style={{ margin:"0 0 16px",fontSize:16,color:"#E6EDF3" }}>🔒 {passwordPrompt.message}</h3>
+            <input
+              type="password"
+              autoFocus
+              value={passwordPromptValue}
+              onChange={e=>setPasswordPromptValue(e.target.value)}
+              onKeyDown={e=>{
+                if(e.key==="Enter"){ passwordPrompt.resolve(passwordPromptValue); setPasswordPrompt(null); }
+                if(e.key==="Escape"){ passwordPrompt.resolve(null); setPasswordPrompt(null); }
+              }}
+              style={{ width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:16,boxSizing:"border-box",marginBottom:16 }}
+            />
+            <div style={{ display:"flex",gap:10 }}>
+              <button onClick={()=>{ passwordPrompt.resolve(null); setPasswordPrompt(null); }} style={{ flex:1,padding:10,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
+              <button onClick={()=>{ passwordPrompt.resolve(passwordPromptValue); setPasswordPrompt(null); }} style={{ flex:2,padding:10,borderRadius:8,border:"none",background:"linear-gradient(135deg,#EF5350,#B71C1C)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:13 }}>Confirmar</button>
             </div>
           </div>
         </div>
