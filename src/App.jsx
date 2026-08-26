@@ -244,6 +244,7 @@ export default function LavanderiaApp() {
   const [offlineQueue, setOfflineQueue] = useState(() => { try { const s = localStorage.getItem("offlineQueue"); return s ? JSON.parse(s) : []; } catch { return []; } });
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncing, setSyncing] = useState(false);
+  const [offlineActionQueue, setOfflineActionQueue] = useState(() => { try { const s = localStorage.getItem("offlineActionQueue"); return s ? JSON.parse(s) : []; } catch { return []; } });
   const setWhatsappWebMode = (val) => { setWhatsappWebModeState(val); try { localStorage.setItem("whatsappWebMode", String(val)); } catch {} };
   const getWhatsAppUrl = (phone, text) => whatsappWebMode
     ? `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`
@@ -403,17 +404,38 @@ export default function LavanderiaApp() {
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
 
   const confirmarMultiEntrega = async () => {
+    let workingQueue = [...offlineQueue];
+    let queueChanged = false;
+    const newQueuedActions = [];
     for (const order of selectedEntregas) {
-      await db.patch("orders", order.id, { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: entregaMultiDate, delivered_by: user.name });
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: entregaMultiDate, delivered_by: user.name } : o));
-      if (entregaMultiSinRecibo) await printConstanciaSinRecibo(order, null);
+      const patchBody = { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: entregaMultiDate, delivered_by: user.name };
       const its = orderItems[order.id] || [];
       const pendientes = its.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
+      const isOfflineOrder = String(order.id).startsWith("offline-");
+
+      if (isOfflineOrder) {
+        workingQueue = workingQueue.map(q => q.order_number === order.order_number
+          ? { ...q, ...patchBody, _items: (q._items||[]).map((it,idx) => ({ ...it, delivered_qty: Number(its[idx]?.quantity)||it.delivered_qty })) }
+          : q
+        );
+        queueChanged = true;
+      } else {
+        try {
+          await db.patch("orders", order.id, patchBody);
+          for (const it of pendientes) await db.patch("order_items", it.id, { delivered_qty: Number(it.quantity) });
+        } catch (err) {
+          newQueuedActions.push({ type: "entrega_completa", orderId: order.id, orderPatch: patchBody, itemPatches: pendientes.map(it => ({ id: it.id, delivered_qty: Number(it.quantity) })) });
+        }
+      }
+
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...patchBody } : o));
+      if (entregaMultiSinRecibo) await printConstanciaSinRecibo(order, null);
       if (pendientes.length) {
-        for (const it of pendientes) await db.patch("order_items", it.id, { delivered_qty: Number(it.quantity) });
         setOrderItems(prev => ({ ...prev, [order.id]: its.map(it => ({ ...it, delivered_qty: Number(it.quantity) })) }));
       }
     }
+    if (queueChanged) saveOfflineQueue(workingQueue);
+    if (newQueuedActions.length) saveOfflineActionQueue([...offlineActionQueue, ...newQueuedActions]);
     setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: entregaMultiDate, delivered_by: user.name } : o));
     setSelectedEntregas([]);
     setConfirmingMulti(false);
@@ -662,6 +684,7 @@ export default function LavanderiaApp() {
       return { ok: true, offline: true, order: localOrder, itemsMap: { [localId]: localItems } };
     }
   };
+  const saveOfflineActionQueue = (q) => { setOfflineActionQueue(q); try { localStorage.setItem("offlineActionQueue", JSON.stringify(q)); } catch {} };
   const syncOfflineQueue = async () => {
     if (offlineQueue.length === 0 || syncing) return;
     setSyncing(true);
@@ -670,12 +693,16 @@ export default function LavanderiaApp() {
     let syncedAny = false;
     for (const q of queue) {
       try {
-        const { _items, _tempId, ...orderPayload } = q;
+        const { _items, _tempId, _partials, ...orderPayload } = q;
         const res = await db.post("orders", orderPayload);
         if (Array.isArray(res) && res[0]) {
           const orderId = res[0].id;
           for (const item of _items) await db.post("order_items", { order_id: orderId, ...item });
+          if (_partials && _partials.length) {
+            for (const p of _partials) await db.post("partial_deliveries", { ...p, order_id: orderId });
+          }
           setOrders(prev => prev.filter(o => o.id !== `offline-${_tempId}`));
+          setPartialDeliveries(prev => prev.filter(p => !(typeof p.id === "string" && p.id.startsWith("offline-partial-") && p.order_id === `offline-${_tempId}`)));
           syncedAny = true;
         } else {
           remaining.push(q);
@@ -688,6 +715,33 @@ export default function LavanderiaApp() {
     if (syncedAny) await loadData();
     setSyncing(false);
   };
+  const syncOfflineActionQueue = async () => {
+    if (offlineActionQueue.length === 0 || syncing) return;
+    setSyncing(true);
+    const queue = [...offlineActionQueue];
+    const remaining = [];
+    let syncedAny = false;
+    for (const a of queue) {
+      try {
+        if (a.type === "entrega_completa") {
+          await db.patch("orders", a.orderId, a.orderPatch);
+          for (const ip of a.itemPatches) await db.patch("order_items", ip.id, { delivered_qty: ip.delivered_qty });
+          syncedAny = true;
+        } else if (a.type === "entrega_parcial") {
+          for (const ip of a.itemPatches) await db.patch("order_items", ip.id, { delivered_qty: ip.delivered_qty });
+          const res = await db.post("partial_deliveries", a.partialRecord);
+          if (Array.isArray(res) && res[0]) setPartialDeliveries(prev => prev.map(p => p.id === a.localPartialId ? res[0] : p));
+          await db.patch("orders", a.orderId, a.orderPatch);
+          syncedAny = true;
+        }
+      } catch {
+        remaining.push(a);
+      }
+    }
+    saveOfflineActionQueue(remaining);
+    if (syncedAny) await loadData();
+    setSyncing(false);
+  };
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
     const goOffline = () => setIsOnline(false);
@@ -695,12 +749,12 @@ export default function LavanderiaApp() {
     window.addEventListener("offline", goOffline);
     return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
   }, []);
-  useEffect(() => { if (isOnline) syncOfflineQueue(); }, [isOnline]);
+  useEffect(() => { if (isOnline) { syncOfflineQueue(); syncOfflineActionQueue(); } }, [isOnline]);
   useEffect(() => {
-    if (offlineQueue.length === 0) return;
-    const interval = setInterval(() => { if (navigator.onLine) syncOfflineQueue(); }, 30000);
+    if (offlineQueue.length === 0 && offlineActionQueue.length === 0) return;
+    const interval = setInterval(() => { if (navigator.onLine) { syncOfflineQueue(); syncOfflineActionQueue(); } }, 30000);
     return () => clearInterval(interval);
-  }, [offlineQueue.length]);
+  }, [offlineQueue.length, offlineActionQueue.length]);
 
   const addOrder = async () => {
     if (!newOrder.client_name || items.length === 0) return;
@@ -832,15 +886,31 @@ export default function LavanderiaApp() {
 
   const confirmarEntrega = async () => {
     if (!entregaResult) return;
-    await db.patch("orders", entregaResult.id, { status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: entregaDate, delivered_by: user.name });
-    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, status: "entregado", payment_method: entregaPayment, delivered_at: entregaDate, delivered_by: user.name } : o));
-    setEntregaResult(prev => ({ ...prev, status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: entregaDate, delivered_by: user.name }));
-    setEntregaConfirmed(true);
-    if (entregaSinRecibo) printConstanciaSinRecibo(entregaResult, null);
+    const patchBody = { status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: entregaDate, delivered_by: user.name };
     const its = orderItems[entregaResult.id] || [];
     const pendientes = its.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
+    const isOfflineOrder = String(entregaResult.id).startsWith("offline-");
+
+    if (isOfflineOrder) {
+      const newQueue = offlineQueue.map(q => q.order_number === entregaResult.order_number
+        ? { ...q, ...patchBody, _items: (q._items||[]).map((it,idx) => ({ ...it, delivered_qty: Number(its[idx]?.quantity)||it.delivered_qty })) }
+        : q
+      );
+      saveOfflineQueue(newQueue);
+    } else {
+      try {
+        await db.patch("orders", entregaResult.id, patchBody);
+        for (const it of pendientes) await db.patch("order_items", it.id, { delivered_qty: Number(it.quantity) });
+      } catch (err) {
+        saveOfflineActionQueue([...offlineActionQueue, { type: "entrega_completa", orderId: entregaResult.id, orderPatch: patchBody, itemPatches: pendientes.map(it => ({ id: it.id, delivered_qty: Number(it.quantity) })) }]);
+      }
+    }
+
+    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, ...patchBody } : o));
+    setEntregaResult(prev => ({ ...prev, ...patchBody }));
+    setEntregaConfirmed(true);
+    if (entregaSinRecibo) printConstanciaSinRecibo(entregaResult, null);
     if (pendientes.length) {
-      for (const it of pendientes) await db.patch("order_items", it.id, { delivered_qty: Number(it.quantity) });
       setOrderItems(prev => ({ ...prev, [entregaResult.id]: its.map(it => ({ ...it, delivered_qty: Number(it.quantity) })) }));
     }
   };
@@ -859,22 +929,44 @@ export default function LavanderiaApp() {
       if (!sel) return it;
       return { ...it, delivered_qty: (Number(it.delivered_qty)||0) + sel.qty };
     });
-    for (const x of seleccionados) {
-      await db.patch("order_items", x.it.id, { delivered_qty: (Number(x.it.delivered_qty)||0) + x.qty });
-    }
-    setOrderItems(prev => ({ ...prev, [entregaResult.id]: updatedItems }));
-
-    const res = await db.post("partial_deliveries", { order_id: entregaResult.id, date: parcialDate, items_summary: itemsSummary, amount, payment_method: parcialPayment, employee: user.name });
-    if (Array.isArray(res) && res[0]) setPartialDeliveries(prev => [...prev, res[0]]);
 
     const fullyDelivered = updatedItems.every(it => (Number(it.delivered_qty)||0) >= Number(it.quantity));
-    const newStatus = fullyDelivered ? "entregado" : "parcial";
-    const patchBody = fullyDelivered
+    const orderPatch = fullyDelivered
       ? { status: "entregado", payment_method: parcialPayment, delivered_at: parcialDate, delivered_by: user.name }
       : { status: "parcial" };
-    await db.patch("orders", entregaResult.id, patchBody);
-    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, ...patchBody } : o));
-    setEntregaResult(prev => ({ ...prev, ...patchBody }));
+    const partialRecord = { order_id: entregaResult.id, date: parcialDate, items_summary: itemsSummary, amount, payment_method: parcialPayment, employee: user.name };
+    const isOfflineOrder = String(entregaResult.id).startsWith("offline-");
+
+    if (isOfflineOrder) {
+      const newQueue = offlineQueue.map(q => q.order_number === entregaResult.order_number
+        ? { ...q, ...orderPatch, _items: (q._items||[]).map((it,idx) => ({ ...it, delivered_qty: Number(updatedItems[idx]?.delivered_qty)||it.delivered_qty })), _partials: [...(q._partials||[]), partialRecord] }
+        : q
+      );
+      saveOfflineQueue(newQueue);
+      setPartialDeliveries(prev => [...prev, { ...partialRecord, id: `offline-partial-${Date.now()}` }]);
+    } else {
+      try {
+        for (const x of seleccionados) await db.patch("order_items", x.it.id, { delivered_qty: (Number(x.it.delivered_qty)||0) + x.qty });
+        const res = await db.post("partial_deliveries", partialRecord);
+        if (Array.isArray(res) && res[0]) setPartialDeliveries(prev => [...prev, res[0]]);
+        await db.patch("orders", entregaResult.id, orderPatch);
+      } catch (err) {
+        const localPartialId = `offline-partial-${Date.now()}`;
+        saveOfflineActionQueue([...offlineActionQueue, {
+          type: "entrega_parcial",
+          orderId: entregaResult.id,
+          itemPatches: seleccionados.map(x => ({ id: x.it.id, delivered_qty: (Number(x.it.delivered_qty)||0)+x.qty })),
+          partialRecord,
+          orderPatch,
+          localPartialId,
+        }]);
+        setPartialDeliveries(prev => [...prev, { ...partialRecord, id: localPartialId }]);
+      }
+    }
+
+    setOrderItems(prev => ({ ...prev, [entregaResult.id]: updatedItems }));
+    setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, ...orderPatch } : o));
+    setEntregaResult(prev => ({ ...prev, ...orderPatch }));
 
     const pendientes = updatedItems.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
     setParcialConfirmedInfo({
@@ -1605,13 +1697,13 @@ export default function LavanderiaApp() {
                 <span style={{ fontSize: 12, color: "#8B949E" }}>{s.icon} {s.label}</span>
               </div>
             ))}
-            {(!isOnline || offlineQueue.length > 0) && (
+            {(!isOnline || offlineQueue.length > 0 || offlineActionQueue.length > 0) && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", background: !isOnline ? "rgba(239,83,80,0.15)" : "rgba(255,213,79,0.15)", border: `1px solid ${!isOnline ? "rgba(239,83,80,0.4)" : "rgba(255,213,79,0.4)"}`, borderRadius: 8, padding: "5px 12px" }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: !isOnline ? "#EF5350" : "#FFD54F" }}>
-                  {!isOnline ? "📡 Sin conexión" : syncing ? "🔄 Sincronizando..." : `⏳ ${offlineQueue.length} recibo${offlineQueue.length!==1?"s":""} por subir`}
+                  {!isOnline ? "📡 Sin conexión" : syncing ? "🔄 Sincronizando..." : `⏳ ${offlineQueue.length + offlineActionQueue.length} pendiente${(offlineQueue.length+offlineActionQueue.length)!==1?"s":""} por subir`}
                 </span>
-                {isOnline && offlineQueue.length > 0 && !syncing && (
-                  <button onClick={syncOfflineQueue} style={{ ...btn, background: "rgba(255,213,79,0.25)", color: "#FFD54F", padding: "3px 10px", fontSize: 11 }}>Sincronizar ahora</button>
+                {isOnline && (offlineQueue.length > 0 || offlineActionQueue.length > 0) && !syncing && (
+                  <button onClick={() => { syncOfflineQueue(); syncOfflineActionQueue(); }} style={{ ...btn, background: "rgba(255,213,79,0.25)", color: "#FFD54F", padding: "3px 10px", fontSize: 11 }}>Sincronizar ahora</button>
                 )}
               </div>
             )}
