@@ -241,6 +241,9 @@ export default function LavanderiaApp() {
   const [logoEnRecibo, setLogoEnRecibo] = useState(() => { try { return localStorage.getItem("logoEnRecibo") !== "false"; } catch { return true; } });
   const [negocioNombre, setNegocioNombre] = useState(() => { try { return localStorage.getItem("negocioNombre") || "Lavanderías Shaddai"; } catch { return "Lavanderías Shaddai"; } });
   const [whatsappWebMode, setWhatsappWebModeState] = useState(() => { try { return localStorage.getItem("whatsappWebMode") === "true"; } catch { return false; } });
+  const [offlineQueue, setOfflineQueue] = useState(() => { try { const s = localStorage.getItem("offlineQueue"); return s ? JSON.parse(s) : []; } catch { return []; } });
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [syncing, setSyncing] = useState(false);
   const setWhatsappWebMode = (val) => { setWhatsappWebModeState(val); try { localStorage.setItem("whatsappWebMode", String(val)); } catch {} };
   const getWhatsAppUrl = (phone, text) => whatsappWebMode
     ? `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`
@@ -631,30 +634,94 @@ export default function LavanderiaApp() {
   const totalPrice = (its) => its.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0);
   const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length) return null; const qty = Number(it.quantity)||1; return `${qty>1?qty+" ":""}${it.garment_type}: ${found.join(", ")}`; }).filter(Boolean); return lines.join(" | "); };
 
+  const saveOfflineQueue = (q) => { setOfflineQueue(q); try { localStorage.setItem("offlineQueue", JSON.stringify(q)); } catch {} };
+  const getNextOfflineNumber = () => {
+    let counter = 1;
+    try { counter = Number(localStorage.getItem("offlineCounter") || "0") + 1; } catch {}
+    try { localStorage.setItem("offlineCounter", String(counter)); } catch {}
+    const d = new Date();
+    return `OFF${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${String(counter).padStart(3,"0")}`;
+  };
+  const trySaveOrderOrQueue = async (orderPayload, itemsList) => {
+    try {
+      const res = await db.post("orders", orderPayload);
+      if (!Array.isArray(res) || !res[0]) throw new Error("Respuesta inesperada del servidor");
+      const orderId = res[0].id;
+      for (const item of itemsList) await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors||[]).join(", "), service: item.service });
+      return { ok: true, offline: false, order: res[0] };
+    } catch (err) {
+      const tempNumber = getNextOfflineNumber();
+      const cleanItems = itemsList.map(it => ({ garment_type: it.garment_type, quantity: Number(it.quantity), price: Number(it.price), color: (it.colors||[]).join(", "), service: it.service }));
+      const queuedOrder = { ...orderPayload, order_number: tempNumber, _tempId: tempNumber, _items: cleanItems };
+      saveOfflineQueue([...offlineQueue, queuedOrder]);
+      const localId = `offline-${tempNumber}`;
+      const localOrder = { ...orderPayload, id: localId, order_number: tempNumber, _offline: true };
+      setOrders(prev => [localOrder, ...prev]);
+      const localItems = cleanItems.map((it,i) => ({ ...it, id: `${localId}-${i}`, order_id: localId }));
+      setOrderItems(prev => ({ ...prev, [localId]: localItems }));
+      return { ok: true, offline: true, order: localOrder, itemsMap: { [localId]: localItems } };
+    }
+  };
+  const syncOfflineQueue = async () => {
+    if (offlineQueue.length === 0 || syncing) return;
+    setSyncing(true);
+    const queue = [...offlineQueue];
+    const remaining = [];
+    let syncedAny = false;
+    for (const q of queue) {
+      try {
+        const { _items, _tempId, ...orderPayload } = q;
+        const res = await db.post("orders", orderPayload);
+        if (Array.isArray(res) && res[0]) {
+          const orderId = res[0].id;
+          for (const item of _items) await db.post("order_items", { order_id: orderId, ...item });
+          setOrders(prev => prev.filter(o => o.id !== `offline-${_tempId}`));
+          syncedAny = true;
+        } else {
+          remaining.push(q);
+        }
+      } catch {
+        remaining.push(q);
+      }
+    }
+    saveOfflineQueue(remaining);
+    if (syncedAny) await loadData();
+    setSyncing(false);
+  };
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); };
+  }, []);
+  useEffect(() => { if (isOnline) syncOfflineQueue(); }, [isOnline]);
+  useEffect(() => {
+    if (offlineQueue.length === 0) return;
+    const interval = setInterval(() => { if (navigator.onLine) syncOfflineQueue(); }, 30000);
+    return () => clearInterval(interval);
+  }, [offlineQueue.length]);
+
   const addOrder = async () => {
     if (!newOrder.client_name || items.length === 0) return;
     setSaving(true);
     const garments = totalGarments(items), price = totalPrice(items);
     const uniqueServices = [...new Set(items.map(it => it.service))];
     const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null, domiciliario_id: newOrder.domiciliario_id || null, a_domicilio: !!newOrder.a_domicilio, address: newOrder.address || "", paid_at_intake: !!newOrder.paid_at_intake, payment_method: newOrder.paid_at_intake ? newOrder.payment_method : null };
-    const res = await db.post("orders", o);
-    if (Array.isArray(res) && res[0]) {
-      const orderId = res[0].id;
-      for (const item of items) await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors||[]).join(", "), service: item.service });
-      if (!newOrder.agencia_id && !newOrder.domiciliario_id) {
-        const existing = clients.find(c => c.phone === newOrder.phone);
-        if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
-        else if (newOrder.client_name) { const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 }); if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]); }
-      }
-    }
     const savedItems = [...items];
+    const result = await trySaveOrderOrQueue(o, items);
+    if (result.ok && !result.offline && !newOrder.agencia_id && !newOrder.domiciliario_id) {
+      const existing = clients.find(c => c.phone === newOrder.phone);
+      if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
+      else if (newOrder.client_name) { const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 }); if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]); }
+    }
     setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
     setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
     setSaving(false);
-    loadData();
-    if (Array.isArray(res) && res[0]) {
-      const imap = { [res[0].id]: savedItems.map((it,i) => ({ ...it, color: (it.colors||[]).join(", "), id: i, order_id: res[0].id })) };
-      setSavedOrder({ order: res[0], itemsMap: imap });
+    if (!result.offline) loadData();
+    if (result.ok) {
+      const imap = result.offline ? result.itemsMap : { [result.order.id]: savedItems.map((it,i) => ({ ...it, color: (it.colors||[]).join(", "), id: i, order_id: result.order.id })) };
+      setSavedOrder({ order: result.order, itemsMap: imap });
       setModal("reciboOpciones");
     }
   };
@@ -1538,6 +1605,16 @@ export default function LavanderiaApp() {
                 <span style={{ fontSize: 12, color: "#8B949E" }}>{s.icon} {s.label}</span>
               </div>
             ))}
+            {(!isOnline || offlineQueue.length > 0) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", background: !isOnline ? "rgba(239,83,80,0.15)" : "rgba(255,213,79,0.15)", border: `1px solid ${!isOnline ? "rgba(239,83,80,0.4)" : "rgba(255,213,79,0.4)"}`, borderRadius: 8, padding: "5px 12px" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: !isOnline ? "#EF5350" : "#FFD54F" }}>
+                  {!isOnline ? "📡 Sin conexión" : syncing ? "🔄 Sincronizando..." : `⏳ ${offlineQueue.length} recibo${offlineQueue.length!==1?"s":""} por subir`}
+                </span>
+                {isOnline && offlineQueue.length > 0 && !syncing && (
+                  <button onClick={syncOfflineQueue} style={{ ...btn, background: "rgba(255,213,79,0.25)", color: "#FFD54F", padding: "3px 10px", fontSize: 11 }}>Sincronizar ahora</button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* DASHBOARD */}
@@ -1631,7 +1708,7 @@ export default function LavanderiaApp() {
                     {filteredOrders.map(o => (
                       <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
                         <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number||"—"}</span></td>
-                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 11, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}{o.paid_at_intake && <span title="Pagado al recibir" style={{ fontSize: 11, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "1px 6px", borderRadius: 10 }}>💰</span>}</div><div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div></td>
+                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 11, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}{o.paid_at_intake && <span title="Pagado al recibir" style={{ fontSize: 11, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "1px 6px", borderRadius: 10 }}>💰</span>}{o._offline && <span title="Pendiente de sincronizar (guardado sin conexión)" style={{ fontSize: 11, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "1px 6px", borderRadius: 10 }}>⏳</span>}</div><div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div></td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ fontWeight: 600 }}>{o.garments} prendas</div>
                           {orderItems[o.id] && <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 10, background: "#21262D", borderRadius: 8, padding: "3px 7px" }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color&&<span style={{ color: "#C792EA" }}> · {it.color}</span>}<span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price)*Number(it.quantity))}</span></span>)}</div>}
@@ -3977,10 +4054,10 @@ export default function LavanderiaApp() {
                       const garments=totalGarments(items), price=totalPrice(items);
                       const uniqueServices=[...new Set(items.map(it=>it.service))];
                       const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null,domiciliario_id:newOrder.domiciliario_id||null,a_domicilio:!!newOrder.a_domicilio,address:newOrder.address||"",paid_at_intake:!!newOrder.paid_at_intake,payment_method:newOrder.paid_at_intake?newOrder.payment_method:null};
-                      const res=await db.post("orders",o);
-                      if(Array.isArray(res)&&res[0]){
-                        const savedOrder=res[0], orderId=savedOrder.id;
-                        for(const item of items)await db.post("order_items",{order_id:orderId,garment_type:item.garment_type,quantity:Number(item.quantity),price:Number(item.price),color:(item.colors||[]).join(", "),service:item.service});
+                      const itemsSnapshot=[...items];
+                      const result=await trySaveOrderOrQueue(o, itemsSnapshot);
+                      if(result.ok && !result.offline){
+                        const orderId=result.order.id;
                         if(!newOrder.agencia_id&&!newOrder.domiciliario_id){
                           const existing=clients.find(c=>c.phone===newOrder.phone);
                           if(existing){await db.patch("clients",existing.id,{total_orders:(existing.total_orders||0)+1});setClients(prev=>prev.map(c=>c.id===existing.id?{...c,total_orders:(c.total_orders||0)+1}:c));}
@@ -3993,10 +4070,12 @@ export default function LavanderiaApp() {
                         const itemsMap={[orderId]:Array.isArray(freshItems)?freshItems:[]};
                         setOrderItems(prev=>({...prev,...itemsMap}));
                         if(freshOrder)printOrderQZ({...freshOrder},itemsMap);
+                      } else if (result.ok && result.offline) {
+                        printOrderQZ(result.order, result.itemsMap);
                       }
                       setNewOrder({...emptyOrder,delivery_date:getDeliveryDefault()});
                       setItems([{...emptyItem,price:precioDefaults[emptyItem.garment_type]||""}]);
-                      setSaving(false);loadData();
+                      setSaving(false);
                       setTimeout(()=>{phoneInputRef.current?.focus();},50);
                     }} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,fontSize:13,fontWeight:800,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"🖨️ Guardar e Imprimir"}
