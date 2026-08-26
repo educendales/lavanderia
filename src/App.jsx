@@ -542,6 +542,7 @@ export default function LavanderiaApp() {
   };
   const mainContentRef = useRef(null);
   const firstGarmentInputRef = useRef(null);
+  const phoneInputRef = useRef(null);
   const inventarioSectionRef = useRef(null);
   const [barcodeTrigger, setBarcodeTrigger] = useState(0);
   const [scannedCodes, setScannedCodes] = useState([]);
@@ -570,6 +571,7 @@ export default function LavanderiaApp() {
           const defaultPrice = priceByService || priceDefault || "";
           setItems([{ ...emptyItem, price: defaultPrice }]);
           setModal("newOrder");
+          setTimeout(()=>{phoneInputRef.current?.focus();},50);
         }
         return;
       }
@@ -1617,6 +1619,7 @@ export default function LavanderiaApp() {
                     const defaultPrice = priceByService || priceDefault || "";
                     setItems([{ ...emptyItem, price: defaultPrice }]);
                     setModal("newOrder");
+                    setTimeout(()=>{phoneInputRef.current?.focus();},50);
                   }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
                 </div>
               </div>
@@ -3834,7 +3837,7 @@ export default function LavanderiaApp() {
                     {(() => {
                       const phoneMatches = newOrder.phone.length>=3 ? clients.filter(c=>c.phone.includes(newOrder.phone)&&c.phone!==newOrder.phone).slice(0,4) : [];
                       return <>
-                        <input style={{ ...inp,borderColor:clients.find(c=>c.phone===newOrder.phone)?"#66BB6A":"#30363D" }} placeholder="Escribe el teléfono..." value={newOrder.phone} onChange={e=>{setNewOrder(p=>({...p,phone:e.target.value,client_name:""}));setPhoneSuggestIdx(-1);}} onKeyDown={e=>{
+                        <input ref={phoneInputRef} style={{ ...inp,borderColor:clients.find(c=>c.phone===newOrder.phone)?"#66BB6A":"#30363D" }} placeholder="Escribe el teléfono..." value={newOrder.phone} onChange={e=>{setNewOrder(p=>({...p,phone:e.target.value,client_name:""}));setPhoneSuggestIdx(-1);}} onKeyDown={e=>{
                           if(e.key==="ArrowDown"&&phoneMatches.length>0){ e.preventDefault(); setPhoneSuggestIdx(i=>Math.min(i+1,phoneMatches.length-1)); }
                           else if(e.key==="ArrowUp"&&phoneMatches.length>0){ e.preventDefault(); setPhoneSuggestIdx(i=>Math.max(i-1,0)); }
                           else if(e.key==="Enter"){
@@ -3994,7 +3997,7 @@ export default function LavanderiaApp() {
                       setNewOrder({...emptyOrder,delivery_date:getDeliveryDefault()});
                       setItems([{...emptyItem,price:precioDefaults[emptyItem.garment_type]||""}]);
                       setSaving(false);loadData();
-                      setTimeout(()=>{firstGarmentInputRef.current?.focus();firstGarmentInputRef.current?.select();},50);
+                      setTimeout(()=>{phoneInputRef.current?.focus();},50);
                     }} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,fontSize:13,fontWeight:800,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"🖨️ Guardar e Imprimir"}
                     </button>
