@@ -654,6 +654,7 @@ export default function LavanderiaApp() {
   useEffect(() => { if (barcodeTrigger > 0) searchEntrega(); }, [barcodeTrigger]);
   useEffect(() => { window.scrollTo(0, 0); mainContentRef.current?.scrollTo(0, 0); }, [tab]);
   useEffect(() => { if (user) loadData(); }, [user]);
+  useEffect(() => { if (!user) setPin(""); }, [user]);
   useEffect(() => {
     const checkAutoLogout = () => {
       if (!user || user.role !== "admin") return;
@@ -3668,7 +3669,7 @@ export default function LavanderiaApp() {
                   <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#EF5350" }}>🔒 Cierre automático de sesión (Admin)</h3>
                   <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Si tu sesión de Administrador queda abierta después de esta hora, se cierra sola una vez al día. No afecta a los empleados.</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <input type="time" value={adminAutoLogoutTime} onChange={e => setAdminAutoLogoutTime(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 15, fontWeight: 700 }} />
+                    <input type="time" value={adminAutoLogoutTime} onChange={async e => { const newVal = e.target.value; const ok = await checkClave("cambiar la hora de cierre automático"); if (ok) setAdminAutoLogoutTime(newVal); }} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 15, fontWeight: 700 }} />
                     <span style={{ fontSize: 12, color: "#8B949E" }}>Se revisa cada minuto mientras tengas la app abierta.</span>
                   </div>
                 </div>
