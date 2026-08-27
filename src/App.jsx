@@ -653,6 +653,22 @@ export default function LavanderiaApp() {
   useEffect(() => { window.scrollTo(0, 0); mainContentRef.current?.scrollTo(0, 0); }, [tab]);
   useEffect(() => { if (user) loadData(); }, [user]);
   useEffect(() => {
+    const checkAutoLogout = () => {
+      if (!user || user.role !== "admin") return;
+      const now = new Date();
+      const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 30, 0);
+      if (now < cutoff) return;
+      let lastAutoLogout = "";
+      try { lastAutoLogout = localStorage.getItem("adminAutoLogoutDate") || ""; } catch {}
+      if (lastAutoLogout === today) return;
+      try { localStorage.setItem("adminAutoLogoutDate", today); } catch {}
+      setUser(null);
+    };
+    checkAutoLogout();
+    const interval = setInterval(checkAutoLogout, 60000);
+    return () => clearInterval(interval);
+  }, [user]);
+  useEffect(() => {
     if (!showInformeDiario) return;
     const existing = cajaBaseList.find(cb => cb.date === filterDate);
     setCajaBaseInput(existing ? String(existing.amount) : "");
