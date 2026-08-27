@@ -244,7 +244,7 @@ export default function LavanderiaApp() {
   const [negocioNombre, setNegocioNombre] = useState(() => { try { return localStorage.getItem("negocioNombre") || "Lavanderías Shaddai"; } catch { return "Lavanderías Shaddai"; } });
   const [whatsappWebMode, setWhatsappWebModeState] = useState(() => { try { return localStorage.getItem("whatsappWebMode") === "true"; } catch { return false; } });
   const [adminAutoLogoutTime, setAdminAutoLogoutTimeState] = useState(() => { try { return localStorage.getItem("adminAutoLogoutTime") || "14:30"; } catch { return "14:30"; } });
-  const setAdminAutoLogoutTime = (val) => { setAdminAutoLogoutTimeState(val); try { localStorage.setItem("adminAutoLogoutTime", val); } catch {} };
+  const setAdminAutoLogoutTime = (val) => { setAdminAutoLogoutTimeState(val); try { localStorage.setItem("adminAutoLogoutTime", val); localStorage.removeItem("adminAutoLogoutDate"); } catch {} };
   const [offlineQueue, setOfflineQueue] = useState(() => { try { const s = localStorage.getItem("offlineQueue"); return s ? JSON.parse(s) : []; } catch { return []; } });
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncing, setSyncing] = useState(false);
