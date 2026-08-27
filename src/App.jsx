@@ -243,6 +243,8 @@ export default function LavanderiaApp() {
   const [logoEnRecibo, setLogoEnRecibo] = useState(() => { try { return localStorage.getItem("logoEnRecibo") !== "false"; } catch { return true; } });
   const [negocioNombre, setNegocioNombre] = useState(() => { try { return localStorage.getItem("negocioNombre") || "Lavanderías Shaddai"; } catch { return "Lavanderías Shaddai"; } });
   const [whatsappWebMode, setWhatsappWebModeState] = useState(() => { try { return localStorage.getItem("whatsappWebMode") === "true"; } catch { return false; } });
+  const [adminAutoLogoutTime, setAdminAutoLogoutTimeState] = useState(() => { try { return localStorage.getItem("adminAutoLogoutTime") || "14:30"; } catch { return "14:30"; } });
+  const setAdminAutoLogoutTime = (val) => { setAdminAutoLogoutTimeState(val); try { localStorage.setItem("adminAutoLogoutTime", val); } catch {} };
   const [offlineQueue, setOfflineQueue] = useState(() => { try { const s = localStorage.getItem("offlineQueue"); return s ? JSON.parse(s) : []; } catch { return []; } });
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncing, setSyncing] = useState(false);
@@ -655,8 +657,9 @@ export default function LavanderiaApp() {
   useEffect(() => {
     const checkAutoLogout = () => {
       if (!user || user.role !== "admin") return;
+      const [h, m] = adminAutoLogoutTime.split(":").map(Number);
       const now = new Date();
-      const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 30, 0);
+      const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h||0, m||0, 0);
       if (now < cutoff) return;
       let lastAutoLogout = "";
       try { lastAutoLogout = localStorage.getItem("adminAutoLogoutDate") || ""; } catch {}
@@ -667,7 +670,7 @@ export default function LavanderiaApp() {
     checkAutoLogout();
     const interval = setInterval(checkAutoLogout, 60000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, adminAutoLogoutTime]);
   useEffect(() => {
     if (!showInformeDiario) return;
     const existing = cajaBaseList.find(cb => cb.date === filterDate);
@@ -3658,6 +3661,18 @@ export default function LavanderiaApp() {
                   </label>
                 </div>
               </div>
+
+              {/* AUTO LOGOUT ADMIN */}
+              {isAdmin && (
+                <div style={{ ...card, marginBottom: 20, border: "1px solid rgba(239,83,80,0.3)" }}>
+                  <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#EF5350" }}>🔒 Cierre automático de sesión (Admin)</h3>
+                  <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Si tu sesión de Administrador queda abierta después de esta hora, se cierra sola una vez al día. No afecta a los empleados.</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input type="time" value={adminAutoLogoutTime} onChange={e => setAdminAutoLogoutTime(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 15, fontWeight: 700 }} />
+                    <span style={{ fontSize: 12, color: "#8B949E" }}>Se revisa cada minuto mientras tengas la app abierta.</span>
+                  </div>
+                </div>
+              )}
 
               {/* INFO DEL NEGOCIO */}
               <div style={{ ...card, marginBottom: 20, border: "1px solid rgba(79,195,247,0.3)" }}>
