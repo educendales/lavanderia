@@ -578,6 +578,7 @@ export default function LavanderiaApp() {
   const mainContentRef = useRef(null);
   const firstGarmentInputRef = useRef(null);
   const phoneInputRef = useRef(null);
+  const manualOrderNumberRef = useRef(null);
   const inventarioSectionRef = useRef(null);
   const [barcodeTrigger, setBarcodeTrigger] = useState(0);
   const [scannedCodes, setScannedCodes] = useState([]);
@@ -635,7 +636,10 @@ export default function LavanderiaApp() {
       }
       if (e.key === "F4") {
         e.preventDefault();
-        if (!isTyping) setShowManualOrder(true);
+        if (!isTyping) {
+          setShowManualOrder(true);
+          setTimeout(() => { manualOrderNumberRef.current?.focus(); }, 50);
+        }
         return;
       }
       if (e.key === "Escape" && showCalcRef.current) {
@@ -4006,7 +4010,7 @@ export default function LavanderiaApp() {
                 <div style={{ marginTop: 20, ...card, border: "1px solid rgba(79,195,247,0.4)" }}>
                   <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#4FC3F7" }}>🗂 Orden Manual / Histórica</h3>
                   <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Para casos especiales: un recibo viejo que se escapó de la migración, un cliente que llega con un ticket del sistema anterior, etc. Escribes tú el número de recibo y la fecha real — no se genera automático.</p>
-                  <button onClick={() => setShowManualOrder(true)} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", border: "1px solid rgba(79,195,247,0.4)", padding: "10px 18px", fontWeight: 700 }}>+ Crear orden manual</button>
+                  <button onClick={() => { setShowManualOrder(true); setTimeout(() => { manualOrderNumberRef.current?.focus(); }, 50); }} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", border: "1px solid rgba(79,195,247,0.4)", padding: "10px 18px", fontWeight: 700 }}>+ Crear orden manual</button>
                 </div>
               )}
               <div style={{ marginTop: 20, ...card, border: "1px solid rgba(239,83,80,0.4)" }}>
@@ -4534,7 +4538,7 @@ export default function LavanderiaApp() {
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               <div>
                 <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}># DE RECIBO (ej: S054210)</label>
-                <input style={inp} placeholder="S000000" value={newManualOrder.order_number} onChange={e=>setNewManualOrder(p=>({...p,order_number:e.target.value}))} />
+                <input ref={manualOrderNumberRef} style={inp} placeholder="S000000" value={newManualOrder.order_number} onChange={e=>setNewManualOrder(p=>({...p,order_number:e.target.value}))} />
               </div>
               <div>
                 <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>CLIENTE</label>
