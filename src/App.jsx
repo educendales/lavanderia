@@ -211,6 +211,7 @@ export default function LavanderiaApp() {
   const [showEliminados, setShowEliminados] = useState(false);
   const [reversadasSearch, setReversadasSearch] = useState("");
   const [showCalc, setShowCalc] = useState(false);
+  const [calcInputMode, setCalcInputMode] = useState("manual");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAyuda, setShowAyuda] = useState(false);
   const [showInformeDiario, setShowInformeDiario] = useState(false);
@@ -317,7 +318,7 @@ export default function LavanderiaApp() {
   const calcPercent = () => setCalcDisplay(prev => String(parseFloat(prev) / 100));
 
   useEffect(() => {
-    if (!showCalc) return;
+    if (!showCalc || calcInputMode !== "manual") return;
     const handleKey = (e) => {
       if (e.key >= "0" && e.key <= "9") calcInput(e.key);
       else if (e.key === ".") calcDot();
@@ -333,7 +334,7 @@ export default function LavanderiaApp() {
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [showCalc, calcDisplay, calcPrev, calcOp, calcNew]);
+  }, [showCalc, calcInputMode, calcDisplay, calcPrev, calcOp, calcNew]);
 
   const resetOrderCounter = async () => {
     const clave = await getClave();
@@ -592,6 +593,8 @@ export default function LavanderiaApp() {
   useEffect(() => { ordersRef.current = orders; }, [orders]);
   const showCalcRef = useRef(showCalc);
   useEffect(() => { showCalcRef.current = showCalc; }, [showCalc]);
+  const calcInputModeRef = useRef(calcInputMode);
+  useEffect(() => { calcInputModeRef.current = calcInputMode; }, [calcInputMode]);
   const calcDisplayRef = useRef(calcDisplay);
   useEffect(() => { calcDisplayRef.current = calcDisplay; }, [calcDisplay]);
   const calcOpRef = useRef(calcOp);
@@ -635,8 +638,13 @@ export default function LavanderiaApp() {
         if (!isTyping) setShowManualOrder(true);
         return;
       }
+      if (e.key === "Escape" && showCalcRef.current) {
+        setShowCalc(false);
+        return;
+      }
 
       if (isTyping) { barcodeBufferRef.current = ""; return; }
+      if (showCalcRef.current && calcInputModeRef.current === "manual") { return; }
 
       const now = Date.now();
       const gap = now - barcodeLastTimeRef.current;
@@ -4985,10 +4993,14 @@ export default function LavanderiaApp() {
       {showCalc && (
         <div style={{ position:"fixed",bottom:96,right:28,zIndex:300,background:"#1C2128",borderRadius:20,padding:16,border:"1px solid #30363D",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",width:260,fontFamily:"'Segoe UI',sans-serif" }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
-            <span style={{ color:"#8B949E",fontSize:13,fontWeight:600 }}>Calculadora <span style={{ fontSize:10,color:"#484F58" }}>(teclado activado)</span></span>
+            <span style={{ color:"#8B949E",fontSize:13,fontWeight:600 }}>Calculadora</span>
             <button onClick={() => setShowCalc(false)} style={{ background:"none",border:"none",color:"#8B949E",fontSize:18,cursor:"pointer" }}>✕</button>
           </div>
-          <div style={{ fontSize:11,color:"#66BB6A",marginBottom:8,textAlign:"center" }}>📷 Escanea un recibo para sumar su saldo</div>
+          <div style={{ display:"flex",gap:6,marginBottom:10 }}>
+            <button onClick={() => setCalcInputMode("manual")} style={{ flex:1,padding:"6px 0",borderRadius:8,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:calcInputMode==="manual"?"#4FC3F7":"#21262D",color:calcInputMode==="manual"?"#000":"#8B949E" }}>⌨️ Manual</button>
+            <button onClick={() => setCalcInputMode("scan")} style={{ flex:1,padding:"6px 0",borderRadius:8,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:calcInputMode==="scan"?"#66BB6A":"#21262D",color:calcInputMode==="scan"?"#000":"#8B949E" }}>📷 Escaneo</button>
+          </div>
+          <div style={{ fontSize:11,color:calcInputMode==="scan"?"#66BB6A":"#4FC3F7",marginBottom:8,textAlign:"center" }}>{calcInputMode==="scan" ? "📷 Escanea un recibo para sumar su saldo" : "⌨️ Teclado y botones activados"}</div>
           {calcLastScan && (
             <div style={{ background:calcLastScan.amount!==null?"rgba(102,187,106,0.15)":"rgba(239,83,80,0.15)",border:`1px solid ${calcLastScan.amount!==null?"rgba(102,187,106,0.4)":"rgba(239,83,80,0.4)"}`,borderRadius:8,padding:"6px 10px",marginBottom:8,fontSize:11,textAlign:"center",color:calcLastScan.amount!==null?"#66BB6A":"#EF5350" }}>
               {calcLastScan.amount!==null ? `✅ +$${Math.round(calcLastScan.amount).toLocaleString()} — ${calcLastScan.code} (${calcLastScan.client})` : `❌ No existe la orden ${calcLastScan.code}`}
