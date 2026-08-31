@@ -1104,7 +1104,7 @@ export default function LavanderiaApp() {
       <\/script>
       <div class="line"></div>
       <table>
-        <tr><td class="bold">Atendido Por:</td><td>${order.employee||"—"}</td></tr>
+        <tr><td class="bold">Atendido Por:</td><td>${(order.employee||"—").toUpperCase()}</td></tr>
         <tr><td class="bold">Fecha Entrada:</td><td>${order.date||"—"}</td></tr>
         <tr><td class="bold">Hora:</td><td>${hora}</td></tr>
       </table>
@@ -1112,9 +1112,9 @@ export default function LavanderiaApp() {
       <div class="center" style="font-size:15px;font-weight:bold;background:#000;color:#fff;padding:4px 0;margin:4px 0">FECHA DE ENTREGA: ${order.delivery_date||"—"}</div>
       <div class="line"></div>
       <table>
-        <tr><td class="bold">Cliente</td><td>${order.client_name||"—"}</td></tr>
+        <tr><td class="bold">Cliente</td><td>${(order.client_name||"—").toUpperCase()}</td></tr>
         <tr><td class="bold">Telefono</td><td>${order.phone||"—"}</td></tr>
-        ${order.a_domicilio && order.address ? `<tr><td class="bold">Direccion</td><td>${order.address}</td></tr>` : ''}
+        ${order.a_domicilio && order.address ? `<tr><td class="bold">Direccion</td><td>${order.address.toUpperCase()}</td></tr>` : ''}
       </table>
       <div class="line"></div>
       <table>
@@ -1142,7 +1142,7 @@ export default function LavanderiaApp() {
         <tr><td class="bold big">Total a Pagar</td><td class="right bold big">$${Math.round(Number(order.price)).toLocaleString('es-CO')}</td></tr>
         <tr><td class="bold">No. Piezas</td><td class="right bold">${order.garments}</td></tr>
       </table>
-      ${order.notes ? `<div class="line"></div><div class="obs"><b>Obs:</b> ${order.notes}</div>` : ''}
+      ${order.notes ? `<div class="line"></div><div class="obs"><b>Obs:</b> ${order.notes.toUpperCase()}</div>` : ''}
       <div class="line"></div>
       <div class="small center">RESPONDEMOS POR SUS PRENDAS SOLO POR 30 DIAS</div>
       <div class="legal">${reciboLegal}</div>
@@ -1169,29 +1169,29 @@ export default function LavanderiaApp() {
         </div>
         <hr style="border:1px dashed #000;margin:6px 0"/>
         <table style="width:100%;font-size:10px">
-          <tr><td><b>Atendido Por:</b></td><td>${order.employee||""}</td></tr>
+          <tr><td><b>Atendido Por:</b></td><td>${(order.employee||"").toUpperCase()}</td></tr>
           <tr><td><b>Fecha Entrada:</b></td><td>${order.date||""}</td></tr>
           <tr><td><b>Hora:</b></td><td>${new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'})}</td></tr>
         </table>
         <div style="text-align:center;font-size:14px;font-weight:bold;background:#000;color:#fff;padding:5px 0;margin:6px 0;border-radius:4px">FECHA DE ENTREGA: ${order.delivery_date||""}</div>
         <table style="width:100%;font-size:10px">
-          <tr><td><b>Cliente:</b></td><td>${order.client_name||""}</td></tr>
+          <tr><td><b>Cliente:</b></td><td>${(order.client_name||"").toUpperCase()}</td></tr>
           <tr><td><b>Teléfono:</b></td><td>${order.phone||""}</td></tr>
-          ${order.a_domicilio && order.address ? `<tr><td><b>📍 Dirección:</b></td><td>${order.address}</td></tr>` : ''}
+          ${order.a_domicilio && order.address ? `<tr><td><b>📍 Dirección:</b></td><td>${order.address.toUpperCase()}</td></tr>` : ''}
         </table>
         <hr style="border:1px dashed #000;margin:6px 0"/>
         <table style="width:100%;font-size:10px;border-collapse:collapse">
           <tr style="border-bottom:1px solid #000"><th style="text-align:left">Prenda</th><th style="text-align:left">Serv.</th><th style="text-align:right">Cant</th><th style="text-align:right">Total</th></tr>
           ${its.map(it => {
             const svc = it.service==="lavado_normal"?"LAV.NOR":it.service==="planchado"?"PLANCH":it.service==="lavado_express"?"EXPRESS":it.service==="secado"?"SECADO":"";
-            const color = it.color || '';
-            return `<tr><td>${(it.garment_type||"").substring(0,10)}</td><td>${svc}</td><td style="text-align:right">${it.quantity}</td><td style="text-align:right">$${Math.round(Number(it.price)*Number(it.quantity)).toLocaleString("es-CO")}</td></tr>${color ? `<tr><td colspan="4" style="font-size:9px;color:#555;padding-top:0">${color}</td></tr>` : ''}`;
+            const color = it.color ? it.color.toUpperCase() : '';
+            return `<tr><td>${(it.garment_type||"").toUpperCase().substring(0,10)}</td><td>${svc}</td><td style="text-align:right">${it.quantity}</td><td style="text-align:right">$${Math.round(Number(it.price)*Number(it.quantity)).toLocaleString("es-CO")}</td></tr>${color ? `<tr><td colspan="4" style="font-size:9px;color:#555;padding-top:0">${color}</td></tr>` : ''}`;
           }).join("")}
         </table>
         <hr style="border:1px dashed #000;margin:6px 0"/>
         <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px"><span>Total a Pagar</span><span>$${Math.round(Number(order.price)).toLocaleString("es-CO")}</span></div>
         <div style="display:flex;justify-content:space-between"><span>No. Piezas</span><span>${order.garments}</span></div>
-        ${order.notes ? `<hr style="border:1px dashed #000;margin:6px 0"/><div style="font-size:9px"><b>Obs:</b> ${order.notes}</div>` : ''}
+        ${order.notes ? `<hr style="border:1px dashed #000;margin:6px 0"/><div style="font-size:9px"><b>Obs:</b> ${order.notes.toUpperCase()}</div>` : ''}
         <hr style="border:1px dashed #000;margin:6px 0"/>
         <div style="font-size:8px;text-align:center;margin-top:4px">${reciboLegal}</div>
       `;
@@ -1214,7 +1214,7 @@ export default function LavanderiaApp() {
   const printOrderQZ = async (order, itemsMap, copies = 2) => {
     const its = (itemsMap || orderItems)[order.id] || [];
     const hora = new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
-    const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"");
+    const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"").toUpperCase();
 
     // ESC/POS commands
     const ESC = "\x1B";
@@ -1418,7 +1418,7 @@ export default function LavanderiaApp() {
 
   const printConstanciaSinRecibo = async (order, itemsMap) => {
     const its = (itemsMap || orderItems)[order.id] || [];
-    const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"");
+    const normalize = (txt) => String(txt).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x00-\x7F]/g,"").toUpperCase();
     const detalle = its.length
       ? its.map(it => `${it.quantity} ${it.garment_type}${it.color ? " " + it.color : ""}`).join(", ")
       : `${order.garments} prenda(s)`;
