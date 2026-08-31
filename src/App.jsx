@@ -588,6 +588,19 @@ export default function LavanderiaApp() {
   useEffect(() => { document.title = "LavaGest"; }, []);
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
+  const ordersRef = useRef(orders);
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
+  const showCalcRef = useRef(showCalc);
+  useEffect(() => { showCalcRef.current = showCalc; }, [showCalc]);
+  const calcDisplayRef = useRef(calcDisplay);
+  useEffect(() => { calcDisplayRef.current = calcDisplay; }, [calcDisplay]);
+  const calcOpRef = useRef(calcOp);
+  useEffect(() => { calcOpRef.current = calcOp; }, [calcOp]);
+  const calcPrevRef = useRef(calcPrev);
+  useEffect(() => { calcPrevRef.current = calcPrev; }, [calcPrev]);
+  const calcNewRef = useRef(calcNew);
+  useEffect(() => { calcNewRef.current = calcNew; }, [calcNew]);
+  const [calcLastScan, setCalcLastScan] = useState(null);
   useEffect(() => {
     const handleGlobalKeydown = (e) => {
       const active = document.activeElement;
@@ -634,7 +647,28 @@ export default function LavanderiaApp() {
         const code = barcodeBufferRef.current.trim();
         barcodeBufferRef.current = "";
         if (code.length >= 3) {
-          if (tabRef.current === "inventario_comparativo") {
+          if (showCalcRef.current) {
+            const order = ordersRef.current.find(o => (o.order_number||"").toUpperCase() === code.toUpperCase());
+            if (order) {
+              const saldo = getSaldo(order);
+              if (calcOpRef.current !== null && !calcNewRef.current) {
+                const prevCur = parseFloat(calcDisplayRef.current) || 0;
+                let result = calcOpRef.current === "+" ? calcPrevRef.current + prevCur : calcOpRef.current === "-" ? calcPrevRef.current - prevCur : calcOpRef.current === "×" ? calcPrevRef.current * prevCur : (prevCur !== 0 ? calcPrevRef.current / prevCur : 0);
+                result = parseFloat(result.toFixed(6));
+                setCalcPrev(result);
+              } else if (calcOpRef.current === null) {
+                setCalcPrev(parseFloat(calcDisplayRef.current) || 0);
+              }
+              setCalcOp("+");
+              setCalcDisplay(String(saldo));
+              setCalcNew(false);
+              setCalcLastScan({ code: order.order_number, amount: saldo, client: order.client_name });
+              setTimeout(() => setCalcLastScan(null), 2500);
+            } else {
+              setCalcLastScan({ code, amount: null });
+              setTimeout(() => setCalcLastScan(null), 2500);
+            }
+          } else if (tabRef.current === "inventario_comparativo") {
             setScannedCodes(prev => prev.some(c => c.toUpperCase() === code.toUpperCase()) ? prev : [...prev, code.toUpperCase()]);
             setLastScanFlash(code.toUpperCase());
             setTimeout(() => setLastScanFlash(""), 1200);
@@ -4954,6 +4988,12 @@ export default function LavanderiaApp() {
             <span style={{ color:"#8B949E",fontSize:13,fontWeight:600 }}>Calculadora <span style={{ fontSize:10,color:"#484F58" }}>(teclado activado)</span></span>
             <button onClick={() => setShowCalc(false)} style={{ background:"none",border:"none",color:"#8B949E",fontSize:18,cursor:"pointer" }}>✕</button>
           </div>
+          <div style={{ fontSize:11,color:"#66BB6A",marginBottom:8,textAlign:"center" }}>📷 Escanea un recibo para sumar su saldo</div>
+          {calcLastScan && (
+            <div style={{ background:calcLastScan.amount!==null?"rgba(102,187,106,0.15)":"rgba(239,83,80,0.15)",border:`1px solid ${calcLastScan.amount!==null?"rgba(102,187,106,0.4)":"rgba(239,83,80,0.4)"}`,borderRadius:8,padding:"6px 10px",marginBottom:8,fontSize:11,textAlign:"center",color:calcLastScan.amount!==null?"#66BB6A":"#EF5350" }}>
+              {calcLastScan.amount!==null ? `✅ +$${Math.round(calcLastScan.amount).toLocaleString()} — ${calcLastScan.code} (${calcLastScan.client})` : `❌ No existe la orden ${calcLastScan.code}`}
+            </div>
+          )}
           <div style={{ background:"#0D1117",borderRadius:12,padding:"12px 16px",marginBottom:12,textAlign:"right" }}>
             {calcOp && <div style={{ fontSize:12,color:"#8B949E",marginBottom:2 }}>{calcPrev} {calcOp}</div>}
             <div style={{ fontSize:32,fontWeight:700,color:"#E6EDF3",overflowX:"auto",whiteSpace:"nowrap" }}>{calcDisplay}</div>
