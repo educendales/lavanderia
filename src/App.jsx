@@ -148,20 +148,20 @@ export default function LavanderiaApp() {
   const [domicilioReportTo, setDomicilioReportTo] = useState(today);
   const [entregaSearch, setEntregaSearch] = useState("");
   const [selectedEntregas, setSelectedEntregas] = useState([]);
-  const [entregaMultiPayment, setEntregaMultiPayment] = useState("efectivo");
+  const [entregaMultiPayment, setEntregaMultiPayment] = useState("");
   const [entregaMultiSinRecibo, setEntregaMultiSinRecibo] = useState(false);
   const [entregaMultiDate, setEntregaMultiDate] = useState(today);
   const [confirmingMulti, setConfirmingMulti] = useState(false);
   const [entregaResults, setEntregaResults] = useState(null);
   const [entregaResult, setEntregaResult] = useState(null);
-  const [entregaPayment, setEntregaPayment] = useState("efectivo");
+  const [entregaPayment, setEntregaPayment] = useState("");
   const [entregaSinRecibo, setEntregaSinRecibo] = useState(false);
   const [entregaDate, setEntregaDate] = useState(today);
   const [entregaConfirmed, setEntregaConfirmed] = useState(false);
   const [partialDeliveries, setPartialDeliveries] = useState([]);
   const [showParcialForm, setShowParcialForm] = useState(false);
   const [parcialQtys, setParcialQtys] = useState({});
-  const [parcialPayment, setParcialPayment] = useState("efectivo");
+  const [parcialPayment, setParcialPayment] = useState("");
   const [parcialDate, setParcialDate] = useState(today);
   const [parcialConfirmedInfo, setParcialConfirmedInfo] = useState(null);
   const [savingParcial, setSavingParcial] = useState(false);
@@ -414,6 +414,7 @@ export default function LavanderiaApp() {
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
 
   const confirmarMultiEntrega = async () => {
+    if (!entregaMultiPayment) { alert("⚠️ Selecciona un método de pago antes de confirmar la entrega."); return; }
     let workingQueue = [...offlineQueue];
     let queueChanged = false;
     const newQueuedActions = [];
@@ -944,9 +945,9 @@ export default function LavanderiaApp() {
     const byOrder = orders.find(o => o.order_number?.toLowerCase() === q);
     const results = byOrder ? [byOrder] : orders.filter(o => o.phone?.toLowerCase().includes(q));
     setEntregaResults(results);
-    setEntregaResult(null); setEntregaConfirmed(false); setEntregaSinRecibo(false); setEntregaPayment("efectivo");
-    setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null);
-    setEntregaDate(today); setParcialDate(today); setEntregaMultiDate(today);
+    setEntregaResult(null); setEntregaConfirmed(false); setEntregaSinRecibo(false); setEntregaPayment("");
+    setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null); setParcialPayment("");
+    setEntregaDate(today); setParcialDate(today); setEntregaMultiDate(today); setEntregaMultiPayment("");
     const yaSinRecibo = results.filter(o => o.status === "entregado" && o.sin_recibo);
     if (yaSinRecibo.length > 0) {
       const msg = yaSinRecibo.map(o => {
@@ -959,6 +960,7 @@ export default function LavanderiaApp() {
 
   const confirmarEntrega = async () => {
     if (!entregaResult) return;
+    if (!entregaPayment) { alert("⚠️ Selecciona un método de pago antes de confirmar la entrega."); return; }
     const patchBody = { status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: entregaDate, delivered_by: user.name };
     const its = orderItems[entregaResult.id] || [];
     const pendientes = its.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
@@ -993,6 +995,7 @@ export default function LavanderiaApp() {
     const its = orderItems[entregaResult.id] || [];
     const seleccionados = its.map(it => ({ it, qty: Math.min(Number(parcialQtys[it.id])||0, Number(it.quantity)-(Number(it.delivered_qty)||0)) })).filter(x => x.qty > 0);
     if (seleccionados.length === 0) { alert("⚠️ No ingresaste ninguna cantidad. Escribe cuántas prendas se lleva el cliente antes de confirmar."); return; }
+    if (!parcialPayment) { alert("⚠️ Selecciona un método de pago antes de confirmar la entrega parcial."); return; }
     setSavingParcial(true);
     const amount = seleccionados.reduce((s,x) => s + x.qty*Number(x.it.price), 0);
     const itemsSummary = seleccionados.map(x => `${x.qty} ${x.it.garment_type}${x.it.color?" "+x.it.color:""}`).join(", ");
@@ -1961,8 +1964,8 @@ export default function LavanderiaApp() {
                           <span style={{ fontSize:13,color:entregaMultiSinRecibo?"#FFD54F":"#8B949E" }}>📋 Entregado sin recibo</span>
                         </label>
                       </div>
-                      <button onClick={confirmarMultiEntrega} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:15,fontWeight:800,borderRadius:10 }}>
-                        ✅ Confirmar {selectedEntregas.length} entrega{selectedEntregas.length>1?"s":""} · ${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}
+                      <button onClick={confirmarMultiEntrega} disabled={!entregaMultiPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:15,fontWeight:800,borderRadius:10,opacity:!entregaMultiPayment?0.5:1,cursor:!entregaMultiPayment?"not-allowed":"pointer" }}>
+                        {!entregaMultiPayment ? "⚠️ Selecciona un método de pago" : `✅ Confirmar ${selectedEntregas.length} entrega${selectedEntregas.length>1?"s":""} · $${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}`}
                       </button>
                     </div>
                   )}
@@ -2047,9 +2050,9 @@ export default function LavanderiaApp() {
                             <div><div style={{ fontWeight:600,color:entregaSinRecibo?"#FFD54F":"#8B949E" }}>📋 Entregado sin recibo</div><div style={{ fontSize:12,color:"#484F58" }}>El cliente no presentó recibo físico</div></div>
                           </label>
                         </div>
-                        <button onClick={confirmarEntrega} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:16,fontWeight:800,borderRadius:10,marginBottom:10 }}>✅ Confirmar Entrega Completa · ${Math.round(getSaldo(entregaResult))}</button>
+                        <button onClick={confirmarEntrega} disabled={!entregaPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:16,fontWeight:800,borderRadius:10,marginBottom:10,opacity:!entregaPayment?0.5:1,cursor:!entregaPayment?"not-allowed":"pointer" }}>{!entregaPayment?"⚠️ Selecciona un método de pago":`✅ Confirmar Entrega Completa · $${Math.round(getSaldo(entregaResult))}`}</button>
                         {getItemsPendientes(entregaResult.id).length > 1 && (
-                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:14,fontWeight:700,borderRadius:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
+                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:14,fontWeight:700,borderRadius:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
                         )}
                       </>
                     )}
@@ -2090,7 +2093,7 @@ export default function LavanderiaApp() {
                             </div>
                             <div style={{ display:"flex",gap:10 }}>
                               <button onClick={() => { setShowParcialForm(false); setParcialQtys({}); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",flex:1,padding:12 }}>‹ Cancelar</button>
-                              <button onClick={confirmarEntregaParcial} disabled={savingParcial||subtotal<=0} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",flex:2,padding:14,fontSize:14,fontWeight:800,opacity:(savingParcial||subtotal<=0)?0.5:1,cursor:(savingParcial||subtotal<=0)?"not-allowed":"pointer" }}>{savingParcial?"Guardando...":subtotal<=0?"Ingresa una cantidad primero":"📦 Confirmar Entrega Parcial"}</button>
+                              <button onClick={confirmarEntregaParcial} disabled={savingParcial||subtotal<=0||!parcialPayment} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",flex:2,padding:14,fontSize:14,fontWeight:800,opacity:(savingParcial||subtotal<=0||!parcialPayment)?0.5:1,cursor:(savingParcial||subtotal<=0||!parcialPayment)?"not-allowed":"pointer" }}>{savingParcial?"Guardando...":subtotal<=0?"Ingresa una cantidad primero":!parcialPayment?"Selecciona un método de pago":"📦 Confirmar Entrega Parcial"}</button>
                             </div>
                           </>;
                         })()}
