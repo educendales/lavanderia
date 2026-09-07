@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from "react";
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
 const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_KEY;
 
+const QZ_CERTIFICATE = "-----BEGIN CERTIFICATE-----\nMIIDxzCCAq+gAwIBAgIUW4qFv2DjwDtoy1YZ0gjJRthPsQ8wDQYJKoZIhvcNAQEL\nBQAwczELMAkGA1UEBhMCQ08xDzANBgNVBAgMBkJvZ290YTEPMA0GA1UEBwwGQm9n\nb3RhMREwDwYDVQQKDAhMYXZhR2VzdDEcMBoGA1UECwwTTGF2YW5kZXJpYXMgU2hh\nZGRhaTERMA8GA1UEAwwITGF2YUdlc3QwHhcNMjYwOTA3MTcyNTEzWhcNMzYwOTA0\nMTcyNTEzWjBzMQswCQYDVQQGEwJDTzEPMA0GA1UECAwGQm9nb3RhMQ8wDQYDVQQH\nDAZCb2dvdGExETAPBgNVBAoMCExhdmFHZXN0MRwwGgYDVQQLDBNMYXZhbmRlcmlh\ncyBTaGFkZGFpMREwDwYDVQQDDAhMYXZhR2VzdDCCASIwDQYJKoZIhvcNAQEBBQAD\nggEPADCCAQoCggEBAL6dr0Pymcx5sfYQEEu+By6NZB+IGx1N5fvqdLhIotN9YL3D\nVYXkEao1vAy2jV5SQKHYzz5E83CkMTvogMetsaCdUOwC9YMmo0cHLUgyCr7EnNBy\nEbOn914T5bC3NCR4rQ348s8V7h+QanKpUs241TaYVw301W9JpXkeU2jPMVrJqqM+\nJ8o7DgIpDWZLuYqTgBN7H7RQxhqLaEZmO9/PUpd4oRMzNpzq4+ESoOQiCp95BmOo\nJe5svK1WXflLvA1q8BPOMoyTBlMWo3A5SamB8UAX/QybAd9pQCT0sUTUISdX7B8t\ntEqsGCeTbjuZUFqlO2gnRPUBiMEOo9wKY+hZ2ysCAwEAAaNTMFEwHQYDVR0OBBYE\nFEo96NpZV63Y1EInwvh2AqofpOJxMB8GA1UdIwQYMBaAFEo96NpZV63Y1EInwvh2\nAqofpOJxMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBADRprd0v\nv1DT6g9f9CuhTiAPTRHsY+NHkEt0uAuAFuwNbqu+SQF+up86YeMPDPWc/jprrgVs\nPDiG9LuuUdr1ZQJoeYyx77BaflGAbvYSoMufpGaasZZcHLVe2CH5AovSHpq2uKIs\nOFpVgGNbmVV4Ib++qmD1XvK33myLU8IobCMgHVg8Cs8xVyDEZB4/3dqdK4ZDo7QA\n6ya0RdzwTucn7XcgJ/kPeOl9Fpkvhxb8GD7VA8bNRL4x1nLXFdqehk31tNSztZkv\nlv4+sfYXeRQhiwluNv2F8jBcAsXCwFB48Sg+58D1PwDifXN4dSXeFWlNNoKGxU+g\nNY+75B00ilCQ8Ts=\n-----END CERTIFICATE-----\n";
+
 const db = {
   async get(table, params = "") {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?order=created_at.desc${params}`, {
@@ -514,6 +516,17 @@ export default function LavanderiaApp() {
       setQzReady(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!qzReady || !window.qz) return;
+    window.qz.security.setCertificatePromise((resolve) => resolve(QZ_CERTIFICATE));
+    window.qz.security.setSignatureAlgorithm("SHA512");
+    window.qz.security.setSignaturePromise((toSign) => (resolve, reject) => {
+      fetch("/api/sign-message?request=" + encodeURIComponent(toSign), { cache: "no-store" })
+        .then((r) => r.ok ? r.text().then(resolve) : r.text().then(reject))
+        .catch(reject);
+    });
+  }, [qzReady]);
 
   useEffect(() => {
     // Load Twemoji so icons (📦🛵🏢💸 etc.) look identical on every computer,
