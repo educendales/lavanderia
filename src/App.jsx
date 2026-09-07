@@ -250,6 +250,7 @@ export default function LavanderiaApp() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncing, setSyncing] = useState(false);
   const [offlineActionQueue, setOfflineActionQueue] = useState(() => { try { const s = localStorage.getItem("offlineActionQueue"); return s ? JSON.parse(s) : []; } catch { return []; } });
+  const [cashDrawerLog, setCashDrawerLog] = useState([]);
   const setWhatsappWebMode = (val) => { setWhatsappWebModeState(val); try { localStorage.setItem("whatsappWebMode", String(val)); } catch {} };
   const getWhatsAppUrl = (phone, text) => whatsappWebMode
     ? `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`
@@ -447,6 +448,7 @@ export default function LavanderiaApp() {
     }
     if (queueChanged) saveOfflineQueue(workingQueue);
     if (newQueuedActions.length) saveOfflineActionQueue([...offlineActionQueue, ...newQueuedActions]);
+    if (entregaMultiPayment === "efectivo") openCashDrawer("entrega_multiple", `${selectedEntregas.length} órdenes`);
     setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: entregaMultiDate, delivered_by: user.name } : o));
     setSelectedEntregas([]);
     setConfirmingMulti(false);
@@ -563,7 +565,7 @@ export default function LavanderiaApp() {
   }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi, ab, adv, ag, dom, cb, pd, dl] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base"), db.get("partial_deliveries"), db.get("donations_losses")]);
+    const [o, e, c, oi, ab, adv, ag, dom, cb, pd, dl, cdl] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base"), db.get("partial_deliveries"), db.get("donations_losses"), db.get("cash_drawer_log")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
@@ -575,6 +577,7 @@ export default function LavanderiaApp() {
     if (Array.isArray(cb)) setCajaBaseList(cb);
     if (Array.isArray(pd)) setPartialDeliveries(pd);
     if (Array.isArray(dl)) setDonationsLosses(dl);
+    if (Array.isArray(cdl)) setCashDrawerLog(cdl);
   };
   const mainContentRef = useRef(null);
   const firstGarmentInputRef = useRef(null);
@@ -879,7 +882,7 @@ export default function LavanderiaApp() {
     });
   };
 
-  const addExpense = async () => { setSaving(true); const res = await db.post("expenses", { ...newExpense, amount: Number(newExpense.amount) }); if (Array.isArray(res)) setExpenses(prev => [res[0], ...prev]); setNewExpense({ concept: "", amount: "", date: today, category: "insumos", payment_method: "efectivo" }); setModal(null); setSaving(false); };
+  const addExpense = async () => { setSaving(true); const res = await db.post("expenses", { ...newExpense, amount: Number(newExpense.amount) }); if (Array.isArray(res)) setExpenses(prev => [res[0], ...prev]); if (newExpense.payment_method === "efectivo") openCashDrawer("gasto", newExpense.concept); setNewExpense({ concept: "", amount: "", date: today, category: "insumos", payment_method: "efectivo" }); setModal(null); setSaving(false); };
   const deleteExpense = async (id) => { await db.patch("expenses", id, { eliminado: true }); setExpenses(prev => prev.map(e => e.id === id ? { ...e, eliminado: true } : e)); };
   const addAdvance = async () => {
     if (!newAdvance.employee_id || !newAdvance.amount) return;
@@ -984,6 +987,7 @@ export default function LavanderiaApp() {
     setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, ...patchBody } : o));
     setEntregaResult(prev => ({ ...prev, ...patchBody }));
     setEntregaConfirmed(true);
+    if (entregaPayment === "efectivo") openCashDrawer("entrega", entregaResult.order_number || "");
     if (entregaSinRecibo) printConstanciaSinRecibo(entregaResult, null);
     if (pendientes.length) {
       setOrderItems(prev => ({ ...prev, [entregaResult.id]: its.map(it => ({ ...it, delivered_qty: Number(it.quantity) })) }));
@@ -1043,6 +1047,7 @@ export default function LavanderiaApp() {
     setOrderItems(prev => ({ ...prev, [entregaResult.id]: updatedItems }));
     setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, ...orderPatch } : o));
     setEntregaResult(prev => ({ ...prev, ...orderPatch }));
+    if (parcialPayment === "efectivo") openCashDrawer("entrega_parcial", entregaResult.order_number || "");
 
     const pendientes = updatedItems.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
     setParcialConfirmedInfo({
@@ -1212,6 +1217,21 @@ export default function LavanderiaApp() {
         }, "image/png");
       });
     });
+  };
+
+  const openCashDrawer = async (reason = "otro", detail = "") => {
+    const hora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    try {
+      if (!window.qz) throw new Error("QZ Tray no disponible");
+      if (!window.qz.websocket.isActive()) await window.qz.websocket.connect();
+      const config = window.qz.configs.create(nombreImpresora);
+      const kick = "\x1B\x70\x00\x19\xFA";
+      await window.qz.print(config, [{ type: 'raw', format: 'plain', data: kick }]);
+      const res = await db.post("cash_drawer_log", { date: today, time: hora, reason, detail, employee: user?.name || "" });
+      if (Array.isArray(res) && res[0]) setCashDrawerLog(prev => [res[0], ...prev]);
+    } catch (e) {
+      console.error("No se pudo abrir el cajón monedero:", e);
+    }
   };
 
   const printOrderQZ = async (order, itemsMap, copies = 2) => {
@@ -4710,6 +4730,27 @@ export default function LavanderiaApp() {
                     <span style={{ fontWeight:800,fontSize:22,color:"#FFD54F" }}>${Math.round(totalEnCaja).toLocaleString()}</span>
                   </div>
                 </div>
+
+                {/* Cajón monedero */}
+                {(() => {
+                  const aperturasHoy = cashDrawerLog.filter(l => l.date === filterDate);
+                  return aperturasHoy.length > 0 && (
+                    <div style={{ background:"rgba(79,195,247,0.06)",border:"1px solid rgba(79,195,247,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:16 }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:aperturasHoy.length?8:0 }}>
+                        <span style={{ fontSize:12,color:"#8B949E",fontWeight:600 }}>🗄️ CAJÓN MONEDERO</span>
+                        <span style={{ fontWeight:800,fontSize:16,color:"#4FC3F7" }}>{aperturasHoy.length} apertura{aperturasHoy.length!==1?"s":""} hoy</span>
+                      </div>
+                      <div style={{ display:"flex",flexDirection:"column",gap:3,maxHeight:120,overflowY:"auto" }}>
+                        {aperturasHoy.map((l,i) => (
+                          <div key={l.id||i} style={{ fontSize:11,color:"#8B949E",display:"flex",justifyContent:"space-between" }}>
+                            <span>{l.time} · {l.reason==="entrega"?"Entrega":l.reason==="entrega_multiple"?"Entregas varias":l.reason==="entrega_parcial"?"Entrega parcial":l.reason==="gasto"?"Gasto":"Otro"} {l.detail?`(${l.detail})`:""}</span>
+                            <span>{l.employee}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Totales por método */}
                 <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:16 }}>
