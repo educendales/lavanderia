@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
-const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
-const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_KEY;
+const SUPABASE_URL = process.env.REACT_APP_BASE_URL;
+const SUPABASE_KEY = process.env.REACT_APP_BASE_KEY;
 
 const QZ_CERTIFICATE = "-----BEGIN CERTIFICATE-----\nMIIDxzCCAq+gAwIBAgIUW4qFv2DjwDtoy1YZ0gjJRthPsQ8wDQYJKoZIhvcNAQEL\nBQAwczELMAkGA1UEBhMCQ08xDzANBgNVBAgMBkJvZ290YTEPMA0GA1UEBwwGQm9n\nb3RhMREwDwYDVQQKDAhMYXZhR2VzdDEcMBoGA1UECwwTTGF2YW5kZXJpYXMgU2hh\nZGRhaTERMA8GA1UEAwwITGF2YUdlc3QwHhcNMjYwOTA3MTcyNTEzWhcNMzYwOTA0\nMTcyNTEzWjBzMQswCQYDVQQGEwJDTzEPMA0GA1UECAwGQm9nb3RhMQ8wDQYDVQQH\nDAZCb2dvdGExETAPBgNVBAoMCExhdmFHZXN0MRwwGgYDVQQLDBNMYXZhbmRlcmlh\ncyBTaGFkZGFpMREwDwYDVQQDDAhMYXZhR2VzdDCCASIwDQYJKoZIhvcNAQEBBQAD\nggEPADCCAQoCggEBAL6dr0Pymcx5sfYQEEu+By6NZB+IGx1N5fvqdLhIotN9YL3D\nVYXkEao1vAy2jV5SQKHYzz5E83CkMTvogMetsaCdUOwC9YMmo0cHLUgyCr7EnNBy\nEbOn914T5bC3NCR4rQ348s8V7h+QanKpUs241TaYVw301W9JpXkeU2jPMVrJqqM+\nJ8o7DgIpDWZLuYqTgBN7H7RQxhqLaEZmO9/PUpd4oRMzNpzq4+ESoOQiCp95BmOo\nJe5svK1WXflLvA1q8BPOMoyTBlMWo3A5SamB8UAX/QybAd9pQCT0sUTUISdX7B8t\ntEqsGCeTbjuZUFqlO2gnRPUBiMEOo9wKY+hZ2ysCAwEAAaNTMFEwHQYDVR0OBBYE\nFEo96NpZV63Y1EInwvh2AqofpOJxMB8GA1UdIwQYMBaAFEo96NpZV63Y1EInwvh2\nAqofpOJxMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBADRprd0v\nv1DT6g9f9CuhTiAPTRHsY+NHkEt0uAuAFuwNbqu+SQF+up86YeMPDPWc/jprrgVs\nPDiG9LuuUdr1ZQJoeYyx77BaflGAbvYSoMufpGaasZZcHLVe2CH5AovSHpq2uKIs\nOFpVgGNbmVV4Ib++qmD1XvK33myLU8IobCMgHVg8Cs8xVyDEZB4/3dqdK4ZDo7QA\n6ya0RdzwTucn7XcgJ/kPeOl9Fpkvhxb8GD7VA8bNRL4x1nLXFdqehk31tNSztZkv\nlv4+sfYXeRQhiwluNv2F8jBcAsXCwFB48Sg+58D1PwDifXN4dSXeFWlNNoKGxU+g\nNY+75B00ilCQ8Ts=\n-----END CERTIFICATE-----\n";
 
@@ -102,6 +102,7 @@ const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; retu
 export default function LavanderiaApp() {
   const [user, setUser] = useState(null);
   const [licenciaOk, setLicenciaOk] = useState(null);
+  const [trialExpiresAt, setTrialExpiresAt] = useState(null);
   const [qzReady, setQzReady] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(null);
@@ -575,6 +576,20 @@ export default function LavanderiaApp() {
       } catch { setLicenciaOk(false); }
     };
     checkLicencia();
+  }, []);
+
+  useEffect(() => {
+    const checkTrial = async () => {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.trial_expires_at&select=value`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+        });
+        const data = await res.json();
+        const val = data[0]?.value || "";
+        setTrialExpiresAt(val || null);
+      } catch { setTrialExpiresAt(null); }
+    };
+    checkTrial();
   }, []);
 
   const loadData = async () => {
@@ -1669,6 +1684,17 @@ export default function LavanderiaApp() {
     </div>
   );
 
+  if (trialExpiresAt && today > trialExpiresAt) return (
+    <div style={{ minHeight: "100vh", background: "#0D1117", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
+      <div style={{ background: "#161B22", borderRadius: 20, padding: "48px 40px", width: 380, maxWidth: "90vw", border: "1px solid rgba(255,213,79,0.4)", textAlign: "center" }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>⏰</div>
+        <h2 style={{ color: "#FFD54F", fontSize: 22, fontWeight: 800, margin: "0 0 12px" }}>Período de Prueba Finalizado</h2>
+        <p style={{ color: "#8B949E", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>El período de prueba de LavaGest para este negocio ya terminó.</p>
+        <p style={{ color: "#484F58", fontSize: 12 }}>Contacta a tu proveedor para continuar usando el sistema.</p>
+      </div>
+    </div>
+  );
+
   if (!user) return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#0F2027,#203A43,#2C5364)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
       <div style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)", borderRadius: 24, padding: "48px 40px", width: 340, maxWidth: "90vw", border: "1px solid rgba(255,255,255,0.1)" }}>
@@ -1678,6 +1704,10 @@ export default function LavanderiaApp() {
             : <div style={{ fontSize: 48, marginBottom: 8 }}>🫧</div>}
           <h1 style={{ color: "#fff", fontSize: 26, fontWeight: 800, margin: 0 }}>{negocioNombre}</h1>
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, marginTop: 4 }}>Sistema de Gestión Lavanderías by LavaGest</p>
+          {trialExpiresAt && today <= trialExpiresAt && (() => {
+            const dias = Math.max(0, Math.round((new Date(trialExpiresAt+"T00:00:00") - new Date(today+"T00:00:00")) / 86400000));
+            return <div style={{ marginTop: 10, display: "inline-block", background: "rgba(255,213,79,0.15)", border: "1px solid rgba(255,213,79,0.4)", borderRadius: 20, padding: "4px 12px", fontSize: 11, color: "#FFD54F", fontWeight: 700 }}>⏰ Prueba: {dias === 0 ? "vence hoy" : `${dias} día${dias!==1?"s":""} restante${dias!==1?"s":""}`}</div>;
+          })()}
         </div>
         <div style={{ marginBottom: 16 }}>
           <label style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>USUARIO</label>
@@ -4766,10 +4796,11 @@ export default function LavanderiaApp() {
                 })()}
 
                 {/* Totales por método */}
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:16 }}>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:16 }}>
                   {metodos.map(m => {
-                    const total = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).reduce((s,o) => s+montoCobradoEnEntrega(o), 0);
-                    const count = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key).length;
+                    const ordenesMetodo = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key);
+                    const total = ordenesMetodo.reduce((s,o) => s+montoCobradoEnEntrega(o), 0);
+                    const count = ordenesMetodo.length;
                     const abonosMetodo = abonos.filter(a => a.date === filterDate && (a.payment_method||"efectivo") === m.key).reduce((s,a) => s+Number(a.amount), 0);
                     const parcialesMetodo = parcialesHoy.filter(p => (p.payment_method||"efectivo") === m.key).reduce((s,p) => s+Number(p.amount), 0);
                     const advancesMetodo = advancesHoy.filter(a => (a.payment_method||"efectivo") === m.key).reduce((s,a) => s+Number(a.amount), 0);
@@ -4778,6 +4809,13 @@ export default function LavanderiaApp() {
                         <div style={{ fontSize:13,color:"#8B949E",marginBottom:4 }}>{m.label}</div>
                         <div style={{ fontWeight:800,fontSize:18,color:m.color }}>${Math.round(total+abonosMetodo+parcialesMetodo-advancesMetodo).toLocaleString()}</div>
                         <div style={{ fontSize:11,color:"#484F58",marginTop:2 }}>{count} entrega{count!==1?"s":""}{abonosMetodo>0?` + $${Math.round(abonosMetodo).toLocaleString()} abono`:""}{parcialesMetodo>0?` + $${Math.round(parcialesMetodo).toLocaleString()} parcial`:""}{advancesMetodo>0?` − $${Math.round(advancesMetodo).toLocaleString()} adelanto`:""}</div>
+                        {ordenesMetodo.length > 0 && (
+                          <div style={{ display:"flex",flexWrap:"wrap",gap:4,marginTop:8 }}>
+                            {ordenesMetodo.map(o => (
+                              <span key={o.id} title={o.client_name} style={{ fontSize:10,fontWeight:700,color:m.color,background:`${m.color}22`,border:`1px solid ${m.color}55`,borderRadius:6,padding:"2px 6px" }}>{o.order_number}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
