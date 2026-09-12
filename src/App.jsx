@@ -675,7 +675,8 @@ export default function LavanderiaApp() {
         return;
       }
       if (e.key === "Escape" && showCalcRef.current) {
-        setShowCalc(false);
+        setCalcDisplay("0"); setCalcPrev(null); setCalcOp(null); setCalcNew(true);
+        setCalcLastScan(null);
         return;
       }
 
@@ -695,16 +696,11 @@ export default function LavanderiaApp() {
             const order = ordersRef.current.find(o => (o.order_number||"").toUpperCase() === code.toUpperCase());
             if (order) {
               const saldo = getSaldo(order);
-              if (calcOpRef.current !== null && !calcNewRef.current) {
-                const prevCur = parseFloat(calcDisplayRef.current) || 0;
-                let result = calcOpRef.current === "+" ? calcPrevRef.current + prevCur : calcOpRef.current === "-" ? calcPrevRef.current - prevCur : calcOpRef.current === "×" ? calcPrevRef.current * prevCur : (prevCur !== 0 ? calcPrevRef.current / prevCur : 0);
-                result = parseFloat(result.toFixed(6));
-                setCalcPrev(result);
-              } else if (calcOpRef.current === null) {
-                setCalcPrev(parseFloat(calcDisplayRef.current) || 0);
-              }
-              setCalcOp("+");
-              setCalcDisplay(String(saldo));
+              const prevTotal = calcNewRef.current ? 0 : (parseFloat(calcDisplayRef.current) || 0);
+              const nuevoTotal = parseFloat((prevTotal + saldo).toFixed(6));
+              setCalcDisplay(String(nuevoTotal));
+              setCalcPrev(null);
+              setCalcOp(null);
               setCalcNew(false);
               setCalcLastScan({ code: order.order_number, amount: saldo, client: order.client_name });
               setTimeout(() => setCalcLastScan(null), 2500);
