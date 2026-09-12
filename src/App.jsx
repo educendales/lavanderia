@@ -618,6 +618,7 @@ export default function LavanderiaApp() {
   const phoneInputRef = useRef(null);
   const manualOrderNumberRef = useRef(null);
   const inventarioSectionRef = useRef(null);
+  const buscarPrendaSectionRef = useRef(null);
   const [barcodeTrigger, setBarcodeTrigger] = useState(0);
   const [scannedCodes, setScannedCodes] = useState([]);
   const [comparisonResult, setComparisonResult] = useState(null);
@@ -648,7 +649,7 @@ export default function LavanderiaApp() {
       const active = document.activeElement;
       const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT" || active.isContentEditable);
 
-      const fKeyTabs = { F2: "entregas", F3: "expenses", F5: "report", F6: "inventario_comparativo" };
+      const fKeyTabs = { F2: "entregas", F3: "expenses", F5: "report", F6: "inventario_comparativo", F7: "report" };
       if (e.key === "F1") {
         e.preventDefault();
         if (!isTyping) {
@@ -669,6 +670,7 @@ export default function LavanderiaApp() {
         if (!isTyping) {
           setTab(fKeyTabs[e.key]);
           if (e.key === "F5") setTimeout(() => inventarioSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+          if (e.key === "F7") setTimeout(() => buscarPrendaSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
         }
         return;
       }
@@ -1832,6 +1834,7 @@ export default function LavanderiaApp() {
               { key: "F4", icon: "🗂", label: "Orden Manual" },
               { key: "F5", icon: "📋", label: "Inventario" },
               { key: "F6", icon: "🔍", label: "Comparativo" },
+              { key: "F7", icon: "🔎", label: "Buscar Prendas" },
             ].map(s => (
               <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.03)", border: "1px solid #21262D", borderRadius: 8, padding: "4px 10px 4px 6px" }}>
                 <span style={{ background: "#0D1117", border: "1px solid #30363D", borderRadius: 5, padding: "2px 6px", fontSize: 10, fontWeight: 800, color: "#4FC3F7", fontFamily: "monospace", boxShadow: "0 1px 0 #30363D" }}>{s.key}</span>
@@ -3466,7 +3469,7 @@ export default function LavanderiaApp() {
               </div>
 
               {/* BUSCAR PRENDAS POR TIPO */}
-              <div style={{ ...card, marginTop: 20 }}>
+              <div ref={buscarPrendaSectionRef} style={{ ...card, marginTop: 20 }}>
                 <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#4FC3F7" }}>🔎 Buscar Prendas por Tipo</h3>
                 <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>¿Cuántos pares de tenis, camisas, maletas, cubrelechos, etc. entraron en un rango de fechas?</p>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
