@@ -116,6 +116,9 @@ export default function LavanderiaApp() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [filterDate, setFilterDate] = useState(today);
+  const [buscarPrendaTipo, setBuscarPrendaTipo] = useState("");
+  const [buscarPrendaDesde, setBuscarPrendaDesde] = useState(today);
+  const [buscarPrendaHasta, setBuscarPrendaHasta] = useState(today);
   const [orderFilterDate, setOrderFilterDate] = useState(today);
   const [orderStatusFilter, setOrderStatusFilter] = useState("");
   const [newOrder, setNewOrder] = useState(emptyOrder);
@@ -3409,6 +3412,81 @@ export default function LavanderiaApp() {
                           <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"#FFD54F",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:12 }}>👤 {o.delivered_by}</span>:<span style={{ color:"#484F58",fontSize:12 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:11,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
                         </table>
                       </div>;
+                })()}
+              </div>
+
+              {/* BUSCAR PRENDAS POR TIPO */}
+              <div style={{ ...card, marginTop: 20 }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#4FC3F7" }}>🔎 Buscar Prendas por Tipo</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>¿Cuántos pares de tenis, camisas, maletas, cubrelechos, etc. entraron en un rango de fechas?</p>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>TIPO DE PRENDA</label>
+                    <select value={buscarPrendaTipo} onChange={e => setBuscarPrendaTipo(e.target.value)} style={{ ...inp, width: 200 }}>
+                      <option value="">Todas las prendas</option>
+                      {garmentTypes.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={buscarPrendaDesde} onChange={e => setBuscarPrendaDesde(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={buscarPrendaHasta} onChange={e => setBuscarPrendaHasta(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150 }} />
+                  </div>
+                  <button onClick={() => { setBuscarPrendaDesde(today); setBuscarPrendaHasta(today); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "10px 14px", fontSize: 12 }}>Hoy</button>
+                </div>
+                {(() => {
+                  const ordenesEnRango = orders.filter(o => o.date >= buscarPrendaDesde && o.date <= buscarPrendaHasta);
+                  const resultados = [];
+                  let totalPiezas = 0;
+                  ordenesEnRango.forEach(o => {
+                    const its = orderItems[o.id] || [];
+                    its.forEach(it => {
+                      if (!buscarPrendaTipo || it.garment_type === buscarPrendaTipo) {
+                        totalPiezas += Number(it.quantity) || 0;
+                        resultados.push({ order: o, item: it });
+                      }
+                    });
+                  });
+                  return (
+                    <>
+                      <div style={{ background: "rgba(79,195,247,0.1)", border: "1px solid rgba(79,195,247,0.3)", borderRadius: 10, padding: "12px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 13, color: "#8B949E" }}>{buscarPrendaTipo || "Todas las prendas"} · {buscarPrendaDesde === buscarPrendaHasta ? buscarPrendaDesde : `${buscarPrendaDesde} a ${buscarPrendaHasta}`}</span>
+                        <span style={{ fontWeight: 800, fontSize: 20, color: "#4FC3F7" }}>{totalPiezas} pieza{totalPiezas !== 1 ? "s" : ""}</span>
+                      </div>
+                      {resultados.length > 0 && (
+                        <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid #30363D", color: "#8B949E", textAlign: "left" }}>
+                                <th style={{ padding: "6px 10px" }}>Orden</th>
+                                <th style={{ padding: "6px 10px" }}>Cliente</th>
+                                <th style={{ padding: "6px 10px" }}>Prenda</th>
+                                <th style={{ padding: "6px 10px" }}>Color</th>
+                                <th style={{ padding: "6px 10px", textAlign: "right" }}>Cant.</th>
+                                <th style={{ padding: "6px 10px" }}>Fecha</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {resultados.map((r, i) => (
+                                <tr key={i} style={{ borderBottom: "1px solid #21262D" }}>
+                                  <td style={{ padding: "6px 10px", fontWeight: 700, color: "#4FC3F7" }}>{r.order.order_number}</td>
+                                  <td style={{ padding: "6px 10px" }}>{r.order.client_name}</td>
+                                  <td style={{ padding: "6px 10px" }}>{r.item.garment_type}</td>
+                                  <td style={{ padding: "6px 10px", color: "#8B949E" }}>{r.item.color || "—"}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>{r.item.quantity}</td>
+                                  <td style={{ padding: "6px 10px", color: "#8B949E" }}>{r.order.date}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {resultados.length === 0 && <p style={{ color: "#484F58", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No se encontraron prendas con esos filtros.</p>}
+                    </>
+                  );
                 })()}
               </div>
 
