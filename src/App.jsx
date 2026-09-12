@@ -187,6 +187,9 @@ export default function LavanderiaApp() {
   const [tempPrecio, setTempPrecio] = useState("");
   const [inventoryFilter, setInventoryFilter] = useState("");
   const [reportFrom, setReportFrom] = useState(() => { const d = new Date(); d.setDate(1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; });
+  const [desgloseServDesde, setDesgloseServDesde] = useState(today);
+  const [desgloseServHasta, setDesgloseServHasta] = useState(today);
+  const [desgloseServExpandido, setDesgloseServExpandido] = useState(null);
   const [reportTo, setReportTo] = useState(today);
   const [reportView, setReportView] = useState("dia");
   const [inventoryDaysFilter, setInventoryDaysFilter] = useState("");
@@ -2646,15 +2649,62 @@ export default function LavanderiaApp() {
                 </div>
               </div>
               <div style={card}>
-                <h3 style={{ margin: "0 0 16px", color: "#8B949E" }}>📊 Desglose por Servicio</h3>
-                {services.map(sv => {
-                  const ords=todayOrders.filter(o=>(o.service||"").split(",").map(s=>s.trim()).includes(sv.id));
-                  return <div key={sv.id} style={{ display:"flex",alignItems:"center",gap:16,padding:"12px 0",borderBottom:"1px solid #21262D" }}>
-                    <div style={{ fontSize:24 }}>{sv.icon}</div>
-                    <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{sv.label}</div><div style={{ fontSize:12,color:"#8B949E" }}>{ords.length} órdenes · {ords.reduce((s,o)=>s+Number(o.garments),0)} prendas</div></div>
-                    <div style={{ fontWeight:800,color:sv.color,fontSize:16 }}>${Math.round(ords.reduce((s,o)=>s+Number(o.price),0))}</div>
-                  </div>;
-                })}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+                  <h3 style={{ margin: 0, color: "#8B949E" }}>📊 Desglose por Servicio</h3>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input type="date" value={desgloseServDesde} onChange={e => setDesgloseServDesde(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 12, padding: "6px 10px" }} />
+                    <span style={{ color: "#484F58", fontSize: 12 }}>a</span>
+                    <input type="date" value={desgloseServHasta} onChange={e => setDesgloseServHasta(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 12, padding: "6px 10px" }} />
+                    <button onClick={() => { setDesgloseServDesde(today); setDesgloseServHasta(today); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Hoy</button>
+                  </div>
+                </div>
+                {(() => {
+                  const ordenesRango = orders.filter(o => o.date >= desgloseServDesde && o.date <= desgloseServHasta);
+                  return services.map(sv => {
+                    const ords = ordenesRango.filter(o=>(o.service||"").split(",").map(s=>s.trim()).includes(sv.id));
+                    const expandido = desgloseServExpandido === sv.id;
+                    return <div key={sv.id}>
+                      <div onClick={() => setDesgloseServExpandido(expandido ? null : sv.id)} style={{ display:"flex",alignItems:"center",gap:16,padding:"12px 0",borderBottom: expandido ? "none" : "1px solid #21262D",cursor:"pointer" }}>
+                        <div style={{ fontSize:24 }}>{sv.icon}</div>
+                        <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{sv.label}</div><div style={{ fontSize:12,color:"#8B949E" }}>{ords.length} órdenes · {ords.reduce((s,o)=>s+Number(o.garments),0)} prendas</div></div>
+                        <div style={{ fontWeight:800,color:sv.color,fontSize:16 }}>${Math.round(ords.reduce((s,o)=>s+Number(o.price),0))}</div>
+                        <div style={{ color:"#484F58",fontSize:12 }}>{expandido?"▲":"▼"}</div>
+                      </div>
+                      {expandido && (
+                        <div style={{ padding:"4px 0 14px",borderBottom:"1px solid #21262D" }}>
+                          {ords.length === 0 ? (
+                            <p style={{ color:"#484F58",fontSize:13,padding:"8px 0 0" }}>No hay órdenes de este servicio en el rango seleccionado.</p>
+                          ) : (
+                            <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                              <thead>
+                                <tr style={{ borderBottom:"1px solid #30363D",color:"#8B949E",textAlign:"left" }}>
+                                  <th style={{ padding:"6px 10px" }}>Orden</th>
+                                  <th style={{ padding:"6px 10px" }}>Cliente</th>
+                                  <th style={{ padding:"6px 10px",textAlign:"right" }}>Prendas</th>
+                                  <th style={{ padding:"6px 10px",textAlign:"right" }}>Total</th>
+                                  <th style={{ padding:"6px 10px" }}>Fecha</th>
+                                  <th style={{ padding:"6px 10px" }}>Estado</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ords.map(o => (
+                                  <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                    <td style={{ padding:"6px 10px",fontWeight:700,color:sv.color }}>{o.order_number}</td>
+                                    <td style={{ padding:"6px 10px" }}>{o.client_name}</td>
+                                    <td style={{ padding:"6px 10px",textAlign:"right" }}>{o.garments}</td>
+                                    <td style={{ padding:"6px 10px",textAlign:"right",fontWeight:700 }}>${Math.round(Number(o.price)).toLocaleString()}</td>
+                                    <td style={{ padding:"6px 10px",color:"#8B949E" }}>{o.date}</td>
+                                    <td style={{ padding:"6px 10px",color:"#8B949E" }}>{STATUS_LABELS[o.status]?.label || o.status}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      )}
+                    </div>;
+                  });
+                })()}
               </div>
               <div style={{ ...card, marginTop: 16 }}>
                 <h3 style={{ margin: "0 0 16px", color: "#8B949E" }}>📋 Estado de órdenes</h3>
