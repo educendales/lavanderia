@@ -2120,8 +2120,9 @@ export default function LavanderiaApp() {
                         </div>
                         <button onClick={confirmarEntrega} disabled={!entregaPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:16,fontWeight:800,borderRadius:10,marginBottom:10,opacity:!entregaPayment?0.5:1,cursor:!entregaPayment?"not-allowed":"pointer" }}>{!entregaPayment?"⚠️ Selecciona un método de pago":`✅ Confirmar Entrega Completa · $${Math.round(getSaldo(entregaResult))}`}</button>
                         {getItemsPendientes(entregaResult.id).length > 1 && (
-                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:14,fontWeight:700,borderRadius:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
+                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:14,fontWeight:700,borderRadius:10,marginBottom:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
                         )}
+                        <button onClick={() => { setAbonoModal(entregaResult); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, width:"100%",background:"rgba(255,213,79,0.1)",color:"#FFD54F",border:"1px solid rgba(255,213,79,0.3)",padding:14,fontSize:14,fontWeight:700,borderRadius:10 }}>💰 Registrar Abono (el cliente no se lleva la ropa hoy)</button>
                       </>
                     )}
 
