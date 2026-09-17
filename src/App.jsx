@@ -33,6 +33,12 @@ const db = {
       method: "DELETE",
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
     });
+  },
+  async deleteBy(table, column, value) {
+    await fetch(`${SUPABASE_URL}/rest/v1/${table}?${column}=eq.${value}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
   }
 };
 
@@ -487,10 +493,16 @@ export default function LavanderiaApp() {
         setOrderItems(prev => ({ ...prev, [order.id]: its.map(it => ({ ...it, delivered_qty: 0 })) }));
       }
     } else {
-      if (!window.confirm(`¿Eliminar la orden ${order.order_number}? El cliente no dejó las prendas.`)) return;
+      if (!window.confirm(`¿Eliminar la orden ${order.order_number}? El cliente no dejó las prendas.\n\nEsto también borrará sus abonos, entregas parciales y prendas registradas — no podrás deshacerlo.`)) return;
+      await db.deleteBy("order_items", "order_id", order.id);
+      await db.deleteBy("abonos", "order_id", order.id);
+      await db.deleteBy("partial_deliveries", "order_id", order.id);
       await db.delete("orders", order.id);
       setOrders(prev => prev.filter(o => o.id !== order.id));
       setReversarResults(prev => prev.filter(o => o.id !== order.id));
+      setOrderItems(prev => { const next = { ...prev }; delete next[order.id]; return next; });
+      setAbonos(prev => prev.filter(a => a.order_id !== order.id));
+      setPartialDeliveries(prev => prev.filter(p => p.order_id !== order.id));
     }
     setReversarDone(true);
   };
@@ -973,7 +985,16 @@ export default function LavanderiaApp() {
   const addDomiciliario = async () => { if (!newDomiciliario.name) return; setSaving(true); const res = await db.post("domiciliarios", newDomiciliario); if (Array.isArray(res) && res[0]) setDomiciliarios(prev => [res[0], ...prev]); setNewDomiciliario({ name: "", phone: "", contact_name: "", address: "" }); setModal(null); setSaving(false); };
   const deleteDomiciliario = async (id) => { const ok = await checkClave("eliminar"); if (!ok) return; if (!window.confirm("¿Eliminar este domiciliario? Sus órdenes históricas no se borran.")) return; await db.delete("domiciliarios", id); setDomiciliarios(prev => prev.filter(d => d.id !== id)); };
   const updateDomiciliario = async () => { if (!editingDomiciliario) return; await db.patch("domiciliarios", editingDomiciliario.id, { name: editingDomiciliario.name, phone: editingDomiciliario.phone, contact_name: editingDomiciliario.contact_name, address: editingDomiciliario.address }); setDomiciliarios(prev => prev.map(d => d.id === editingDomiciliario.id ? { ...d, ...editingDomiciliario } : d)); setEditingDomiciliario(null); };
-  const deleteOrder = async (id) => { setOrders(prev => prev.filter(o => o.id !== id)); await db.delete("orders", id); };
+  const deleteOrder = async (id) => {
+    setOrders(prev => prev.filter(o => o.id !== id));
+    setOrderItems(prev => { const next = { ...prev }; delete next[id]; return next; });
+    setAbonos(prev => prev.filter(a => a.order_id !== id));
+    setPartialDeliveries(prev => prev.filter(p => p.order_id !== id));
+    await db.deleteBy("order_items", "order_id", id);
+    await db.deleteBy("abonos", "order_id", id);
+    await db.deleteBy("partial_deliveries", "order_id", id);
+    await db.delete("orders", id);
+  };
 
   const searchEntrega = () => {
     const q = entregaSearch.trim().toLowerCase(); if (!q) return;
