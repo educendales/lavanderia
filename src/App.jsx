@@ -139,7 +139,7 @@ export default function LavanderiaApp() {
   const [garmentSuggestIdx, setGarmentSuggestIdx] = useState(-1);
   const [editingClient, setEditingClient] = useState(null);
   const [agencies, setAgencies] = useState([]);
-  const [newAgency, setNewAgency] = useState({ name: "", phone: "", contact_name: "", address: "" });
+  const [newAgency, setNewAgency] = useState({ name: "", phone: "", contact_name: "", address: "", discount_percent: "" });
   const [editingAgency, setEditingAgency] = useState(null);
   const [agencySearch, setAgencySearch] = useState("");
   const [selectedAgencyId, setSelectedAgencyId] = useState("");
@@ -880,11 +880,13 @@ export default function LavanderiaApp() {
   const addOrder = async () => {
     if (!newOrder.client_name || items.length === 0) return;
     setSaving(true);
-    const garments = totalGarments(items), price = totalPrice(items);
-    const uniqueServices = [...new Set(items.map(it => it.service))];
+    const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
+    const itemsFinal = pctDesc ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctDesc/100)) })) : items;
+    const garments = totalGarments(itemsFinal), price = totalPrice(itemsFinal);
+    const uniqueServices = [...new Set(itemsFinal.map(it => it.service))];
     const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null, domiciliario_id: newOrder.domiciliario_id || null, a_domicilio: !!newOrder.a_domicilio, address: newOrder.address || "", paid_at_intake: !!newOrder.paid_at_intake, payment_method: newOrder.paid_at_intake ? newOrder.payment_method : null };
-    const savedItems = [...items];
-    const result = await trySaveOrderOrQueue(o, items);
+    const savedItems = [...itemsFinal];
+    const result = await trySaveOrderOrQueue(o, itemsFinal);
     if (result.ok && !result.offline && !newOrder.agencia_id && !newOrder.domiciliario_id) {
       const existing = clients.find(c => c.phone === newOrder.phone);
       if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
@@ -903,6 +905,11 @@ export default function LavanderiaApp() {
 
   const addItem = () => { const defaultType = emptyItem.garment_type; const defaultSvc = emptyItem.service; const priceByService = precioByService[defaultSvc]?.[defaultType]; const priceDefault = precioDefaults[defaultType]; const defaultPrice = priceByService || priceDefault || ""; setItems(prev => [{ ...emptyItem, price: defaultPrice }, ...prev]); };
   const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
+  const getAgencyDiscountPctFor = (agenciaId) => {
+    if (!agenciaId) return 0;
+    const ag = agencies.find(a => a.id === agenciaId);
+    return Number(ag?.discount_percent) || 0;
+  };
   const updateItem = (i, field, val) => {
     setItems(prev => {
       let updated = prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item);
@@ -979,9 +986,9 @@ export default function LavanderiaApp() {
   const addClient = async () => { setSaving(true); const res = await db.post("clients", { ...newClient, total_orders: 0 }); if (Array.isArray(res)) setClients(prev => [res[0], ...prev]); setNewClient({ name: "", phone: "", email: "" }); setModal(null); setSaving(false); };
   const deleteClient = async (id) => { setClients(prev => prev.filter(c => c.id !== id)); await db.delete("clients", id); };
   const updateClient = async () => { if (!editingClient) return; await db.patch("clients", editingClient.id, { name: editingClient.name, phone: editingClient.phone, email: editingClient.email }); setClients(prev => prev.map(c => c.id === editingClient.id ? { ...c, ...editingClient } : c)); setEditingClient(null); };
-  const addAgency = async () => { if (!newAgency.name) return; setSaving(true); const res = await db.post("agencies", newAgency); if (Array.isArray(res) && res[0]) setAgencies(prev => [res[0], ...prev]); setNewAgency({ name: "", phone: "", contact_name: "", address: "" }); setModal(null); setSaving(false); };
+  const addAgency = async () => { if (!newAgency.name) return; setSaving(true); const res = await db.post("agencies", { ...newAgency, discount_percent: Number(newAgency.discount_percent)||0 }); if (Array.isArray(res) && res[0]) setAgencies(prev => [res[0], ...prev]); setNewAgency({ name: "", phone: "", contact_name: "", address: "", discount_percent: "" }); setModal(null); setSaving(false); };
   const deleteAgency = async (id) => { const ok = await checkClave("eliminar"); if (!ok) return; if (!window.confirm("¿Eliminar esta agencia? Sus órdenes históricas no se borran.")) return; await db.delete("agencies", id); setAgencies(prev => prev.filter(a => a.id !== id)); };
-  const updateAgency = async () => { if (!editingAgency) return; await db.patch("agencies", editingAgency.id, { name: editingAgency.name, phone: editingAgency.phone, contact_name: editingAgency.contact_name, address: editingAgency.address }); setAgencies(prev => prev.map(a => a.id === editingAgency.id ? { ...a, ...editingAgency } : a)); setEditingAgency(null); };
+  const updateAgency = async () => { if (!editingAgency) return; await db.patch("agencies", editingAgency.id, { name: editingAgency.name, phone: editingAgency.phone, contact_name: editingAgency.contact_name, address: editingAgency.address, discount_percent: Number(editingAgency.discount_percent)||0 }); setAgencies(prev => prev.map(a => a.id === editingAgency.id ? { ...a, ...editingAgency, discount_percent: Number(editingAgency.discount_percent)||0 } : a)); setEditingAgency(null); };
   const addDomiciliario = async () => { if (!newDomiciliario.name) return; setSaving(true); const res = await db.post("domiciliarios", newDomiciliario); if (Array.isArray(res) && res[0]) setDomiciliarios(prev => [res[0], ...prev]); setNewDomiciliario({ name: "", phone: "", contact_name: "", address: "" }); setModal(null); setSaving(false); };
   const deleteDomiciliario = async (id) => { const ok = await checkClave("eliminar"); if (!ok) return; if (!window.confirm("¿Eliminar este domiciliario? Sus órdenes históricas no se borran.")) return; await db.delete("domiciliarios", id); setDomiciliarios(prev => prev.filter(d => d.id !== id)); };
   const updateDomiciliario = async () => { if (!editingDomiciliario) return; await db.patch("domiciliarios", editingDomiciliario.id, { name: editingDomiciliario.name, phone: editingDomiciliario.phone, contact_name: editingDomiciliario.contact_name, address: editingDomiciliario.address }); setDomiciliarios(prev => prev.map(d => d.id === editingDomiciliario.id ? { ...d, ...editingDomiciliario } : d)); setEditingDomiciliario(null); };
@@ -2308,6 +2315,7 @@ export default function LavanderiaApp() {
                       {ag.contact_name && <div style={{ color: "#8B949E", fontSize: 13, marginTop: 2 }}>👤 {ag.contact_name}</div>}
                       {ag.phone && <div style={{ color: "#8B949E", fontSize: 13 }}>📞 {ag.phone}</div>}
                       {ag.address && <div style={{ color: "#8B949E", fontSize: 13 }}>📍 {ag.address}</div>}
+                      {Number(ag.discount_percent) > 0 && <div style={{ color: "#66BB6A", fontSize: 13, fontWeight: 600, marginTop: 2 }}>🏷️ {ag.discount_percent}% de descuento</div>}
                       <div style={{ marginTop: 12, background: "rgba(255,138,101,0.1)", borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
                         <span style={{ fontSize: 12, color: "#8B949E" }}>{agOrders.length} orden{agOrders.length!==1?"es":""}</span>
                         <span style={{ fontWeight: 800, color: "#FF8A65" }}>${Math.round(totalValor).toLocaleString()}</span>
@@ -4298,7 +4306,7 @@ export default function LavanderiaApp() {
             {modal === "newOrder" && (
               <>
                 <h3 style={{ margin:"0 0 20px",fontSize:18 }}>➕ Nueva Orden</h3>
-                {newOrder.agencia_id && <div style={{ background:"rgba(255,138,101,0.1)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#FF8A65",display:"flex",alignItems:"center",gap:6 }}>🏢 Orden para agencia: <b>{newOrder.client_name}</b></div>}
+                {newOrder.agencia_id && (() => { const ag = agencies.find(a=>a.id===newOrder.agencia_id); const pct = Number(ag?.discount_percent)||0; return <div style={{ background:"rgba(255,138,101,0.1)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#FF8A65",display:"flex",alignItems:"center",gap:6 }}>🏢 Orden para agencia: <b>{newOrder.client_name}</b>{pct > 0 && <span style={{ marginLeft:"auto",color:"#66BB6A",fontWeight:700 }}>🏷️ {pct}% descuento aplicado</span>}</div>; })()}
                 {newOrder.domiciliario_id && <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#66BB6A",display:"flex",alignItems:"center",gap:6 }}>🛵 Orden para domiciliario: <b>{newOrder.client_name}</b></div>}
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div style={{ position:"relative" }}>
@@ -4398,7 +4406,18 @@ export default function LavanderiaApp() {
                     ))}
                     <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",marginTop:8 }}>
                       <span style={{ fontSize:13,color:"#8B949E" }}>Total · {totalGarments(items)} prendas</span>
-                      <span style={{ fontWeight:800,color:"#66BB6A",fontSize:16 }}>${Math.round(totalPrice(items))}</span>
+                      {(() => {
+                        const pct = getAgencyDiscountPctFor(newOrder.agencia_id);
+                        const raw = totalPrice(items);
+                        const final = pct ? Math.round(raw*(1-pct/100)) : raw;
+                        return pct > 0 ? (
+                          <span style={{ textAlign:"right" }}>
+                            <span style={{ fontSize:12,color:"#8B949E",textDecoration:"line-through",marginRight:8 }}>${Math.round(raw)}</span>
+                            <span style={{ fontWeight:800,color:"#66BB6A",fontSize:16 }}>${final}</span>
+                            <div style={{ fontSize:10,color:"#66BB6A" }}>🏷️ {pct}% descuento agencia</div>
+                          </span>
+                        ) : <span style={{ fontWeight:800,color:"#66BB6A",fontSize:16 }}>${Math.round(raw)}</span>;
+                      })()}
                     </div>
                   </div>
                   <div>
@@ -4443,10 +4462,12 @@ export default function LavanderiaApp() {
                     <button onClick={async () => {
                       if (!newOrder.client_name || items.length === 0) return;
                       setSaving(true);
-                      const garments=totalGarments(items), price=totalPrice(items);
-                      const uniqueServices=[...new Set(items.map(it=>it.service))];
+                      const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
+                      const itemsFinal = pctDesc ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctDesc/100)) })) : items;
+                      const garments=totalGarments(itemsFinal), price=totalPrice(itemsFinal);
+                      const uniqueServices=[...new Set(itemsFinal.map(it=>it.service))];
                       const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null,domiciliario_id:newOrder.domiciliario_id||null,a_domicilio:!!newOrder.a_domicilio,address:newOrder.address||"",paid_at_intake:!!newOrder.paid_at_intake,payment_method:newOrder.paid_at_intake?newOrder.payment_method:null};
-                      const itemsSnapshot=[...items];
+                      const itemsSnapshot=[...itemsFinal];
                       const result=await trySaveOrderOrQueue(o, itemsSnapshot);
                       if(result.ok && !result.offline){
                         const orderId=result.order.id;
@@ -4600,6 +4621,7 @@ export default function LavanderiaApp() {
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={inp} placeholder="Nombre del contacto" value={newAgency.contact_name} onChange={e=>setNewAgency(p=>({...p,contact_name:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newAgency.phone} onChange={e=>setNewAgency(p=>({...p,phone:e.target.value}))} /></div>
                   <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={inp} placeholder="Dirección de la agencia" value={newAgency.address} onChange={e=>setNewAgency(p=>({...p,address:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>% DE DESCUENTO (opcional)</label><input style={inp} type="number" min={0} max={100} placeholder="Ej: 15" value={newAgency.discount_percent} onChange={e=>setNewAgency(p=>({...p,discount_percent:e.target.value}))} /><span style={{ fontSize:11,color:"#484F58" }}>El precio de sus órdenes se calcula automático con este descuento aplicado.</span></div>
                   <button onClick={addAgency} disabled={saving||!newAgency.name} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",padding:12,opacity:(saving||!newAgency.name)?0.6:1 }}>{saving?"Guardando...":"Guardar Agencia"}</button>
                 </div>
               </>
@@ -5293,6 +5315,7 @@ export default function LavanderiaApp() {
               <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.contact_name||""} onChange={e=>setEditingAgency(p=>({...p,contact_name:e.target.value}))} /></div>
               <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.phone||""} onChange={e=>setEditingAgency(p=>({...p,phone:e.target.value}))} /></div>
               <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.address||""} onChange={e=>setEditingAgency(p=>({...p,address:e.target.value}))} /></div>
+              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>% DE DESCUENTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} type="number" min={0} max={100} value={editingAgency.discount_percent||""} onChange={e=>setEditingAgency(p=>({...p,discount_percent:e.target.value}))} /></div>
               <div style={{ display:"flex",gap:10,marginTop:8 }}>
                 <button onClick={()=>setEditingAgency(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
                 <button onClick={updateAgency} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
