@@ -4301,10 +4301,11 @@ export default function LavanderiaApp() {
       {/* MODALS */}
       {modal && (
         <div onClick={() => setModal(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:460,maxWidth:"92vw",border:"1px solid #30363D",maxHeight:"90vh",overflowY:"auto" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,width:460,maxWidth:"92vw",border:"1px solid #30363D",maxHeight:"90vh", ...(modal==="newOrder" ? { padding:0, overflowY:"hidden", display:"flex", flexDirection:"column" } : { padding:28, overflowY:"auto" }) }}>
 
             {modal === "newOrder" && (
               <>
+                <div style={{ padding:"28px 28px 16px", overflowY:"auto", flex:1, minHeight:0 }}>
                 <h3 style={{ margin:"0 0 20px",fontSize:18 }}>➕ Nueva Orden</h3>
                 {newOrder.agencia_id && (() => { const ag = agencies.find(a=>a.id===newOrder.agencia_id); const pct = Number(ag?.discount_percent)||0; return <div style={{ background:"rgba(255,138,101,0.1)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#FF8A65",display:"flex",alignItems:"center",gap:6 }}>🏢 Orden para agencia: <b>{newOrder.client_name}</b>{pct > 0 && <span style={{ marginLeft:"auto",color:"#66BB6A",fontWeight:700 }}>🏷️ {pct}% descuento aplicado</span>}</div>; })()}
                 {newOrder.domiciliario_id && <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#66BB6A",display:"flex",alignItems:"center",gap:6 }}>🛵 Orden para domiciliario: <b>{newOrder.client_name}</b></div>}
@@ -4455,7 +4456,9 @@ export default function LavanderiaApp() {
                       </div>
                     </div>
                   )}
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                </div>
+                </div>
+                <div style={{ padding:"14px 28px 28px", borderTop:"1px solid #21262D", display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:12,fontSize:13,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"💾 Solo Guardar"}
                     </button>
@@ -4494,7 +4497,6 @@ export default function LavanderiaApp() {
                       {saving?"Guardando...":"🖨️ Guardar e Imprimir"}
                     </button>
                   </div>
-                </div>
               </>
             )}
 
