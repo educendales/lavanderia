@@ -106,6 +106,16 @@ const emptyItem = { garment_type: "", quantity: 1, price: "", colors: [], servic
 const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = (svcs||DEFAULT_SERVICES).find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
 
 export default function LavanderiaApp() {
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem("lavagest_theme") || "dark"; } catch { return "dark"; } });
+  useEffect(() => {
+    try { localStorage.setItem("lavagest_theme", theme); } catch {}
+    let styleTag = document.getElementById("lavagest-theme-vars");
+    if (!styleTag) { styleTag = document.createElement("style"); styleTag.id = "lavagest-theme-vars"; document.head.appendChild(styleTag); }
+    const vars = theme === "light"
+      ? { "--bg-app": "#CCE2F7", "--bg-card": "#E4F1FC", "--bg-surface": "#B9D9F2", "--border": "#7FB8E6", "--text-primary": "#1F2328", "--text-muted": "#57606A", "--text-dim": "#8C959F" }
+      : { "--bg-app": "#0D1117", "--bg-card": "#161B22", "--bg-surface": "#21262D", "--border": "#30363D", "--text-primary": "#E6EDF3", "--text-muted": "#8B949E", "--text-dim": "#484F58" };
+    styleTag.textContent = `:root { ${Object.entries(vars).map(([k, v]) => `${k}: ${v};`).join(" ")} } body { background: var(--bg-app); }`;
+  }, [theme]);
   const [user, setUser] = useState(null);
   const [licenciaOk, setLicenciaOk] = useState(null);
   const [trialExpiresAt, setTrialExpiresAt] = useState(null);
@@ -125,6 +135,9 @@ export default function LavanderiaApp() {
   const [buscarPrendaTipo, setBuscarPrendaTipo] = useState("");
   const [buscarPrendaDesde, setBuscarPrendaDesde] = useState(today);
   const [buscarPrendaHasta, setBuscarPrendaHasta] = useState(today);
+  const [desgloseServDesde, setDesgloseServDesde] = useState(today);
+  const [desgloseServHasta, setDesgloseServHasta] = useState(today);
+  const [desgloseServExpandido, setDesgloseServExpandido] = useState(null);
   const [orderFilterDate, setOrderFilterDate] = useState(today);
   const [orderStatusFilter, setOrderStatusFilter] = useState("");
   const [newOrder, setNewOrder] = useState(emptyOrder);
@@ -193,9 +206,6 @@ export default function LavanderiaApp() {
   const [tempPrecio, setTempPrecio] = useState("");
   const [inventoryFilter, setInventoryFilter] = useState("");
   const [reportFrom, setReportFrom] = useState(() => { const d = new Date(); d.setDate(1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; });
-  const [desgloseServDesde, setDesgloseServDesde] = useState(today);
-  const [desgloseServHasta, setDesgloseServHasta] = useState(today);
-  const [desgloseServExpandido, setDesgloseServExpandido] = useState(null);
   const [reportTo, setReportTo] = useState(today);
   const [reportView, setReportView] = useState("dia");
   const [inventoryDaysFilter, setInventoryDaysFilter] = useState("");
@@ -383,7 +393,7 @@ export default function LavanderiaApp() {
     const clave = await getClave();
     const pwd = await askClave("Clave de administrador para REINICIAR TODA LA APP:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
-    if (!window.confirm("⚠️⚠️ Esto va a borrar TODAS las órdenes, prendas, abonos, entregas parciales, gastos, adelantos de nómina, clientes, agencias, domiciliarios y la base de caja.\n\nLos empleados/usuarios, servicios, tipos de prenda, colores e información del negocio NO se tocan.\n\nEsta acción NO se puede deshacer. ¿Continuar?")) return;
+    if (!window.confirm("⚠️⚠️ Esto va a borrar TODAS las órdenes, prendas, abonos, entregas parciales, gastos, adelantos de nómina, clientes, agencias, domiciliarios, donaciones/pérdidas, el registro del cajón monedero y la base de caja.\n\nLos empleados/usuarios, servicios, tipos de prenda, colores e información del negocio NO se tocan.\n\nEsta acción NO se puede deshacer. ¿Continuar?")) return;
     const confirmText = prompt('Para confirmar, escribe exactamente: BORRAR TODO');
     if (confirmText !== "BORRAR TODO") { alert("❌ Texto de confirmación incorrecto. No se borró nada."); return; }
 
@@ -409,10 +419,12 @@ export default function LavanderiaApp() {
       await wipeTable("expenses");
       await wipeTable("employee_advances");
       await wipeTable("caja_base");
+      await wipeTable("donations_losses");
+      await wipeTable("cash_drawer_log");
 
       setOrders([]); setOrderItems({}); setAbonos([]); setPartialDeliveries([]);
       setAgencies([]); setDomiciliarios([]); setClients([]); setExpenses([]);
-      setAdvances([]); setCajaBaseList([]);
+      setAdvances([]); setCajaBaseList([]); setDonationsLosses([]); setCashDrawerLog([]);
 
       alert("✅ La app quedó en cero. Empleados, servicios, tipos de prenda, colores e información del negocio se mantuvieron.");
     } catch (e) {
@@ -903,13 +915,14 @@ export default function LavanderiaApp() {
     }
   };
 
-  const addItem = () => { const defaultType = emptyItem.garment_type; const defaultSvc = emptyItem.service; const priceByService = precioByService[defaultSvc]?.[defaultType]; const priceDefault = precioDefaults[defaultType]; const defaultPrice = priceByService || priceDefault || ""; setItems(prev => [{ ...emptyItem, price: defaultPrice }, ...prev]); };
-  const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
   const getAgencyDiscountPctFor = (agenciaId) => {
     if (!agenciaId) return 0;
     const ag = agencies.find(a => a.id === agenciaId);
     return Number(ag?.discount_percent) || 0;
   };
+
+  const addItem = () => { const defaultType = emptyItem.garment_type; const defaultSvc = emptyItem.service; const priceByService = precioByService[defaultSvc]?.[defaultType]; const priceDefault = precioDefaults[defaultType]; const defaultPrice = priceByService || priceDefault || ""; setItems(prev => [{ ...emptyItem, price: defaultPrice }, ...prev]); };
+  const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
   const updateItem = (i, field, val) => {
     setItems(prev => {
       let updated = prev.map((item, idx) => idx === i ? { ...item, [field]: val } : item);
@@ -1698,31 +1711,31 @@ export default function LavanderiaApp() {
     return its.every(it => (Number(it.delivered_qty)||0) >= Number(it.quantity));
   };
 
-  const s = { fontFamily: "'Segoe UI', sans-serif", minHeight: "100vh", background: "#0D1117", color: "#E6EDF3" };
-  const card = { background: "#161B22", borderRadius: 14, padding: 20, border: "1px solid #30363D" };
-  const btn = { padding: "10px 18px", borderRadius: 8, border: "none", fontWeight: 600, cursor: "pointer", fontSize: 13 };
-  const inp = { padding: "10px 12px", borderRadius: 8, border: "1px solid #30363D", background: "#0D1117", color: "#E6EDF3", fontSize: 14, width: "100%", boxSizing: "border-box" };
+  const s = { fontFamily: "'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg-app)", color: "var(--text-primary)" };
+  const card = { background: "var(--bg-card)", borderRadius: 14, padding: 20, border: "1px solid var(--border)" };
+  const btn = { padding: "10px 18px", borderRadius: 8, border: "none", fontWeight: 600, cursor: "pointer", fontSize: 15 };
+  const inp = { padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-app)", color: "var(--text-primary)", fontSize: 16, width: "100%", boxSizing: "border-box" };
 
-  if (loading) return <div style={{ minHeight: "100vh", background: "#0D1117", display: "flex", alignItems: "center", justifyContent: "center", color: "#4FC3F7", fontSize: 18 }}>🫧 Cargando...</div>;
+  if (loading) return <div style={{ minHeight: "100vh", background: "var(--bg-app)", display: "flex", alignItems: "center", justifyContent: "center", color: "#4FC3F7", fontSize: 21 }}>🫧 Cargando...</div>;
 
   if (licenciaOk === false) return (
-    <div style={{ minHeight: "100vh", background: "#0D1117", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
-      <div style={{ background: "#161B22", borderRadius: 20, padding: "48px 40px", width: 380, maxWidth: "90vw", border: "1px solid rgba(239,83,80,0.4)", textAlign: "center" }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>🔒</div>
-        <h2 style={{ color: "#EF5350", fontSize: 22, fontWeight: 800, margin: "0 0 12px" }}>Acceso No Autorizado</h2>
-        <p style={{ color: "#8B949E", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>Esta aplicación no está autorizada para funcionar en este dominio.</p>
-        <p style={{ color: "#484F58", fontSize: 12 }}>Si crees que es un error contacta al administrador del sistema.</p>
+    <div style={{ minHeight: "100vh", background: "var(--bg-app)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 20, padding: "48px 40px", width: 380, maxWidth: "90vw", border: "1px solid rgba(239,83,80,0.4)", textAlign: "center" }}>
+        <div style={{ fontSize: 64, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ color: "#EF5350", fontSize: 25, fontWeight: 800, margin: "0 0 12px" }}>Acceso No Autorizado</h2>
+        <p style={{ color: "var(--text-muted)", fontSize: 16, lineHeight: 1.6, margin: "0 0 20px" }}>Esta aplicación no está autorizada para funcionar en este dominio.</p>
+        <p style={{ color: "var(--text-dim)", fontSize: 14 }}>Si crees que es un error contacta al administrador del sistema.</p>
       </div>
     </div>
   );
 
   if (trialExpiresAt && today > trialExpiresAt) return (
-    <div style={{ minHeight: "100vh", background: "#0D1117", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
-      <div style={{ background: "#161B22", borderRadius: 20, padding: "48px 40px", width: 380, maxWidth: "90vw", border: "1px solid rgba(255,213,79,0.4)", textAlign: "center" }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>⏰</div>
-        <h2 style={{ color: "#FFD54F", fontSize: 22, fontWeight: 800, margin: "0 0 12px" }}>Período de Prueba Finalizado</h2>
-        <p style={{ color: "#8B949E", fontSize: 14, lineHeight: 1.6, margin: "0 0 20px" }}>El período de prueba de LavaGest para este negocio ya terminó.</p>
-        <p style={{ color: "#484F58", fontSize: 12 }}>Contacta a tu proveedor para continuar usando el sistema.</p>
+    <div style={{ minHeight: "100vh", background: "var(--bg-app)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 20, padding: "48px 40px", width: 380, maxWidth: "90vw", border: "1px solid rgba(255,213,79,0.4)", textAlign: "center" }}>
+        <div style={{ fontSize: 64, marginBottom: 16 }}>⏰</div>
+        <h2 style={{ color: "#FFD54F", fontSize: 25, fontWeight: 800, margin: "0 0 12px" }}>Período de Prueba Finalizado</h2>
+        <p style={{ color: "var(--text-muted)", fontSize: 16, lineHeight: 1.6, margin: "0 0 20px" }}>El período de prueba de LavaGest para este negocio ya terminó.</p>
+        <p style={{ color: "var(--text-dim)", fontSize: 14 }}>Contacta a tu proveedor para continuar usando el sistema.</p>
       </div>
     </div>
   );
@@ -1733,27 +1746,27 @@ export default function LavanderiaApp() {
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           {negocioLogo
             ? <img src={negocioLogo} alt="logo" style={{ width: 80, height: 80, borderRadius: 16, objectFit: "cover", marginBottom: 12 }} />
-            : <div style={{ fontSize: 48, marginBottom: 8 }}>🫧</div>}
-          <h1 style={{ color: "#fff", fontSize: 26, fontWeight: 800, margin: 0 }}>{negocioNombre}</h1>
-          <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, marginTop: 4 }}>Sistema de Gestión Lavanderías by LavaGest</p>
+            : <div style={{ fontSize: 55, marginBottom: 8 }}>🫧</div>}
+          <h1 style={{ color: "#fff", fontSize: 30, fontWeight: 800, margin: 0 }}>{negocioNombre}</h1>
+          <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 15, marginTop: 4 }}>Sistema de Gestión Lavanderías by LavaGest</p>
           {trialExpiresAt && today <= trialExpiresAt && (() => {
             const dias = Math.max(0, Math.round((new Date(trialExpiresAt+"T00:00:00") - new Date(today+"T00:00:00")) / 86400000));
-            return <div style={{ marginTop: 10, display: "inline-block", background: "rgba(255,213,79,0.15)", border: "1px solid rgba(255,213,79,0.4)", borderRadius: 20, padding: "4px 12px", fontSize: 11, color: "#FFD54F", fontWeight: 700 }}>⏰ Prueba: {dias === 0 ? "vence hoy" : `${dias} día${dias!==1?"s":""} restante${dias!==1?"s":""}`}</div>;
+            return <div style={{ marginTop: 10, display: "inline-block", background: "rgba(255,213,79,0.15)", border: "1px solid rgba(255,213,79,0.4)", borderRadius: 20, padding: "4px 12px", fontSize: 13, color: "#FFD54F", fontWeight: 700 }}>⏰ Prueba: {dias === 0 ? "vence hoy" : `${dias} día${dias!==1?"s":""} restante${dias!==1?"s":""}`}</div>;
           })()}
         </div>
         <div style={{ marginBottom: 16 }}>
-          <label style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>USUARIO</label>
-          <select value={selectedEmp?.id || ""} onChange={e => setSelectedEmp(employees.find(u => u.id === e.target.value))} style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: 14 }}>
+          <label style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, fontWeight: 600, display: "block", marginBottom: 6 }}>USUARIO</label>
+          <select value={selectedEmp?.id || ""} onChange={e => setSelectedEmp(employees.find(u => u.id === e.target.value))} style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: 16 }}>
             {employees.map(u => <option key={u.id} value={u.id} style={{ background: "#1a1a2e" }}>{u.name}</option>)}
           </select>
         </div>
         <div style={{ marginBottom: 24 }}>
-          <label style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>PIN</label>
+          <label style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, fontWeight: 600, display: "block", marginBottom: 6 }}>PIN</label>
           <input type="password" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} maxLength={6} placeholder="••••"
-            style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${pinError ? "#EF5350" : "rgba(255,255,255,0.15)"}`, background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: 20, letterSpacing: 6, textAlign: "center", boxSizing: "border-box" }} />
-          {pinError && <p style={{ color: "#EF5350", fontSize: 12, marginTop: 4, textAlign: "center" }}>PIN incorrecto</p>}
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${pinError ? "#EF5350" : "rgba(255,255,255,0.15)"}`, background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: 23, letterSpacing: 6, textAlign: "center", boxSizing: "border-box" }} />
+          {pinError && <p style={{ color: "#EF5350", fontSize: 14, marginTop: 4, textAlign: "center" }}>PIN incorrecto</p>}
         </div>
-        <button onClick={handleLogin} style={{ width: "100%", padding: 14, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Entrar</button>
+        <button onClick={handleLogin} style={{ width: "100%", padding: 14, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", fontWeight: 700, fontSize: 17, cursor: "pointer" }}>Entrar</button>
       </div>
     </div>
   );
@@ -1774,7 +1787,7 @@ export default function LavanderiaApp() {
     { id: "inventario_comparativo", label: "Inventario Comparativo", icon: "🔍" },
   ];
 
-  const PayMethod = ({ m }) => { const map = { nequi: ["📱 Nequi","#C792EA","rgba(199,146,234,0.15)"], daviplata: ["💜 Daviplata","#667EEA","rgba(102,126,234,0.15)"], breb: ["🔵 Bre-b","#4FC3F7","rgba(79,195,247,0.15)"], tarjeta: ["💳 Tarjeta","#FFA726","rgba(255,167,38,0.15)"], efectivo: ["💵 Efectivo","#66BB6A","rgba(102,187,106,0.15)"] }; const [l,c,b] = map[m]||map.efectivo; return <span style={{ fontSize:12,background:b,color:c,padding:"3px 10px",borderRadius:20 }}>{l}</span>; };
+  const PayMethod = ({ m }) => { const map = { nequi: ["📱 Nequi","#C792EA","rgba(199,146,234,0.15)"], daviplata: ["💜 Daviplata","#667EEA","rgba(102,126,234,0.15)"], breb: ["🔵 Bre-b","#4FC3F7","rgba(79,195,247,0.15)"], tarjeta: ["💳 Tarjeta","#FFA726","rgba(255,167,38,0.15)"], efectivo: ["💵 Efectivo","#66BB6A","rgba(102,187,106,0.15)"] }; const [l,c,b] = map[m]||map.efectivo; return <span style={{ fontSize:14,background:b,color:c,padding:"3px 10px",borderRadius:20 }}>{l}</span>; };
 
   return (
     <div style={s}>
@@ -1789,7 +1802,7 @@ export default function LavanderiaApp() {
         .lv-sidebar-close { display:none !important; }
         @media (max-width: 860px) {
           .lv-app-shell { flex-direction: column !important; }
-          .lv-mobile-topbar { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:#161B22; border-bottom:1px solid #30363D; position:sticky; top:0; z-index:60; }
+          .lv-mobile-topbar { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:var(--bg-card); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:60; }
           .lv-sidebar { position:fixed !important; top:0; left:0; height:100vh !important; z-index:100; transform:translateX(-104%); transition:transform .22s ease; box-shadow:4px 0 30px rgba(0,0,0,0.6); }
           .lv-sidebar.open { transform:translateX(0); }
           .lv-sidebar-overlay.open { display:block; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:90; }
@@ -1812,41 +1825,44 @@ export default function LavanderiaApp() {
       <div className="lv-app-shell" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         {/* MOBILE TOPBAR */}
         <div className="lv-mobile-topbar">
-          <button onClick={() => setSidebarOpen(true)} style={{ background: "transparent", border: "1px solid #30363D", borderRadius: 8, color: "#4FC3F7", fontSize: 20, padding: "6px 12px", cursor: "pointer" }}>☰</button>
-          <div style={{ fontWeight: 800, fontSize: 15, color: "#4FC3F7" }}>{negocioNombre}</div>
+          <button onClick={() => setSidebarOpen(true)} style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 8, color: "#4FC3F7", fontSize: 23, padding: "6px 12px", cursor: "pointer" }}>☰</button>
+          <div style={{ fontWeight: 800, fontSize: 17, color: "#4FC3F7" }}>{negocioNombre}</div>
           <div style={{ width: 36 }} />
         </div>
         <div className={`lv-sidebar-overlay${sidebarOpen ? " open" : ""}`} onClick={() => setSidebarOpen(false)} />
         {/* SIDEBAR */}
-        <div className={`lv-sidebar${sidebarOpen ? " open" : ""}`} style={{ width: 200, background: "#161B22", borderRight: "1px solid #30363D", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        <div className={`lv-sidebar${sidebarOpen ? " open" : ""}`} style={{ width: 200, background: "var(--bg-card)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 12px 8px" }}>
-            <button className="lv-sidebar-close" onClick={() => setSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "transparent", border: "none", color: "#8B949E", fontSize: 20, cursor: "pointer", marginBottom: 8, marginLeft: "auto" }}>✕</button>
+            <button className="lv-sidebar-close" onClick={() => setSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "transparent", border: "none", color: "var(--text-muted)", fontSize: 23, cursor: "pointer", marginBottom: 8, marginLeft: "auto" }}>✕</button>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
               {negocioLogo
                 ? <img src={negocioLogo} alt="logo" style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", marginBottom: 6 }} />
-                : <div style={{ fontSize: 28 }}>🫧</div>}
-              <div style={{ fontWeight: 800, fontSize: 15, color: "#4FC3F7", lineHeight: 1.2 }}>{negocioNombre}</div>
+                : <div style={{ fontSize: 32 }}>🫧</div>}
+              <div style={{ fontWeight: 800, fontSize: 17, color: "#4FC3F7", lineHeight: 1.2 }}>{negocioNombre}</div>
             </div>
             {tabs.map(t => (
-              <button key={t.id} onClick={() => { setTab(t.id); setSidebarOpen(false); }} style={{ ...btn, background: tab === t.id ? "rgba(79,195,247,0.15)" : "transparent", color: tab === t.id ? "#4FC3F7" : "#8B949E", textAlign: "left", padding: "10px 14px", marginBottom: 4, fontSize: 13, display: "flex", gap: 8, alignItems: "center", width: "100%", boxSizing: "border-box" }}>
+              <button key={t.id} onClick={() => { setTab(t.id); setSidebarOpen(false); }} style={{ ...btn, background: tab === t.id ? "rgba(79,195,247,0.15)" : "transparent", color: tab === t.id ? "#4FC3F7" : "var(--text-muted)", textAlign: "left", padding: "10px 14px", marginBottom: 4, fontSize: 15, display: "flex", gap: 8, alignItems: "center", width: "100%", boxSizing: "border-box" }}>
                 {t.icon} {t.label}
               </button>
             ))}
           </div>
-          <div style={{ flexShrink: 0, padding: "10px 12px 16px", borderTop: "1px solid #30363D" }}>
-            <button onClick={() => { setShowTotalPrendas(true); setEditingPrecio(false); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,rgba(255,213,79,0.2),rgba(245,127,23,0.2))", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "10px 14px", marginBottom: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <div style={{ flexShrink: 0, padding: "10px 12px 16px", borderTop: "1px solid var(--border)" }}>
+            <button onClick={() => { setShowTotalPrendas(true); setEditingPrecio(false); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,rgba(255,213,79,0.2),rgba(245,127,23,0.2))", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "10px 14px", marginBottom: 8, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               👕 Total Prendas
             </button>
-            <button onClick={() => { setShowInformeDiario(true); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "rgba(199,146,234,0.15)", color: "#C792EA", border: "1px solid rgba(199,146,234,0.3)", padding: "8px 14px", marginBottom: 8, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <button onClick={() => { setShowInformeDiario(true); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "rgba(199,146,234,0.15)", color: "#C792EA", border: "1px solid rgba(199,146,234,0.3)", padding: "8px 14px", marginBottom: 8, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               💳 Informe Diario
             </button>
-            <button onClick={() => { setShowAyuda(true); setAyudaSeccion(tab); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "rgba(102,187,106,0.15)", color: "#66BB6A", border: "1px solid rgba(102,187,106,0.3)", padding: "8px 14px", marginBottom: 12, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <button onClick={() => { setShowAyuda(true); setAyudaSeccion(tab); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "rgba(102,187,106,0.15)", color: "#66BB6A", border: "1px solid rgba(102,187,106,0.3)", padding: "8px 14px", marginBottom: 12, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               ❓ Ayuda
             </button>
             <div style={{ paddingTop: 4 }}>
-              <div style={{ fontSize: 12, color: "#8B949E" }}>👤 {user.name}</div>
-              <div style={{ fontSize: 11, color: "#484F58", marginBottom: 8 }}>{user.role === "admin" ? "Administrador" : "Empleado"}</div>
-              <button onClick={() => setUser(null)} style={{ ...btn, background: "transparent", color: "#EF5350", padding: "6px 10px", fontSize: 12 }}>Cerrar sesión</button>
+              <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} style={{ ...btn, width: "100%", background: "rgba(79,195,247,0.15)", color: "#4FC3F7", border: "1px solid rgba(79,195,247,0.3)", padding: "8px 14px", marginBottom: 8, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                {theme === "dark" ? "☀️ Modo Claro" : "🌙 Modo Oscuro"}
+              </button>
+              <div style={{ fontSize: 14, color: "var(--text-muted)" }}>👤 {user.name}</div>
+              <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}>{user.role === "admin" ? "Administrador" : "Empleado"}</div>
+              <button onClick={() => setUser(null)} style={{ ...btn, background: "transparent", color: "#EF5350", padding: "6px 10px", fontSize: 14 }}>Cerrar sesión</button>
             </div>
           </div>
         </div>
@@ -1854,7 +1870,7 @@ export default function LavanderiaApp() {
         {/* MAIN CONTENT */}
         <div className="lv-main" ref={mainContentRef} style={{ flex: 1, padding: 28, overflowY: "auto", minWidth: 0 }}>
 
-          <div className="lv-shortcuts-bar" style={{ position: "sticky", top: -28, marginTop: -28, marginLeft: -28, marginRight: -28, zIndex: 60, background: "rgba(22,27,34,0.97)", backdropFilter: "blur(6px)", borderBottom: "1px solid #30363D", padding: "10px 28px", marginBottom: 20, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="lv-shortcuts-bar" style={{ position: "sticky", top: -28, marginTop: -28, marginLeft: -28, marginRight: -28, zIndex: 60, background: "var(--bg-card)", backdropFilter: "blur(6px)", borderBottom: "1px solid var(--border)", padding: "10px 28px", marginBottom: 20, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             {[
               { key: "F1", icon: "👕", label: "Órdenes" },
               { key: "F2", icon: "📦", label: "Entregas" },
@@ -1864,18 +1880,18 @@ export default function LavanderiaApp() {
               { key: "F6", icon: "🔍", label: "Comparativo" },
               { key: "F7", icon: "🔎", label: "Buscar Prendas" },
             ].map(s => (
-              <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.03)", border: "1px solid #21262D", borderRadius: 8, padding: "4px 10px 4px 6px" }}>
-                <span style={{ background: "#0D1117", border: "1px solid #30363D", borderRadius: 5, padding: "2px 6px", fontSize: 10, fontWeight: 800, color: "#4FC3F7", fontFamily: "monospace", boxShadow: "0 1px 0 #30363D" }}>{s.key}</span>
-                <span style={{ fontSize: 12, color: "#8B949E" }}>{s.icon} {s.label}</span>
+              <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.03)", border: "1px solid var(--bg-surface)", borderRadius: 8, padding: "4px 10px 4px 6px" }}>
+                <span style={{ background: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: 5, padding: "2px 6px", fontSize: 12, fontWeight: 800, color: "#4FC3F7", fontFamily: "monospace", boxShadow: "0 1px 0 var(--border)" }}>{s.key}</span>
+                <span style={{ fontSize: 14, color: "var(--text-muted)" }}>{s.icon} {s.label}</span>
               </div>
             ))}
             {(!isOnline || offlineQueue.length > 0 || offlineActionQueue.length > 0) && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", background: !isOnline ? "rgba(239,83,80,0.15)" : "rgba(255,213,79,0.15)", border: `1px solid ${!isOnline ? "rgba(239,83,80,0.4)" : "rgba(255,213,79,0.4)"}`, borderRadius: 8, padding: "5px 12px" }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: !isOnline ? "#EF5350" : "#FFD54F" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: !isOnline ? "#EF5350" : "#FFD54F" }}>
                   {!isOnline ? "📡 Sin conexión" : syncing ? "🔄 Sincronizando..." : `⏳ ${offlineQueue.length + offlineActionQueue.length} pendiente${(offlineQueue.length+offlineActionQueue.length)!==1?"s":""} por subir`}
                 </span>
                 {isOnline && (offlineQueue.length > 0 || offlineActionQueue.length > 0) && !syncing && (
-                  <button onClick={() => { syncOfflineQueue(); syncOfflineActionQueue(); }} style={{ ...btn, background: "rgba(255,213,79,0.25)", color: "#FFD54F", padding: "3px 10px", fontSize: 11 }}>Sincronizar ahora</button>
+                  <button onClick={() => { syncOfflineQueue(); syncOfflineActionQueue(); }} style={{ ...btn, background: "rgba(255,213,79,0.25)", color: "#FFD54F", padding: "3px 10px", fontSize: 13 }}>Sincronizar ahora</button>
                 )}
               </div>
             )}
@@ -1885,50 +1901,50 @@ export default function LavanderiaApp() {
           {tab === "dashboard" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Dashboard</h2>
+                <h2 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>Dashboard</h2>
                 <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160 }} />
               </div>
               <div className="lv-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 16, marginBottom: 24 }}>
                 {[{label:"Ingresos del día",value:`$${Math.round(todayRevenue)}`,icon:"💵",color:"#66BB6A"},{label:"Gastos del día",value:`$${Math.round(todayExp)}`,icon:"📤",color:"#EF5350"},{label:"Utilidad",value:`$${Math.round(todayRevenue-todayExp)}`,icon:"📈",color:"#4FC3F7"},{label:"Prendas del día",value:todayGarments,icon:"👕",color:"#FFD54F"}].map((kpi,i) => (
                   <div key={i} style={{ ...card, borderLeft: `4px solid ${kpi.color}` }}>
-                    <div style={{ fontSize: 24, marginBottom: 6 }}>{kpi.icon}</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
-                    <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>{kpi.label}</div>
+                    <div style={{ fontSize: 28, marginBottom: 6 }}>{kpi.icon}</div>
+                    <div style={{ fontSize: 25, fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
+                    <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>{kpi.label}</div>
                   </div>
                 ))}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 16 }}>
                 <div style={card}>
-                  <h3 style={{ margin: "0 0 16px", fontSize: 15, color: "#8B949E" }}>Órdenes recientes</h3>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 17, color: "var(--text-muted)" }}>Órdenes recientes</h3>
                   {todayOrders.slice(0,5).map(o => (
-                    <div key={o.id} style={{ padding: "10px 0", borderBottom: "1px solid #21262D" }}>
+                    <div key={o.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--bg-surface)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                            {o.order_number && <span style={{ fontSize: 11, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 7px", borderRadius: 6 }}>{o.order_number}</span>}
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{o.client_name}</div>
+                            {o.order_number && <span style={{ fontSize: 13, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 7px", borderRadius: 6 }}>{o.order_number}</span>}
+                            <div style={{ fontWeight: 600, fontSize: 16 }}>{o.client_name}</div>
                           </div>
-                          <div style={{ fontSize: 12, color: "#8B949E" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
-                          {orderItems[o.id] && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 11, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type} x{it.quantity}{it.color?` · ${it.color}`:""} · ${Math.round(Number(it.price)*Number(it.quantity))}</span>)}</div>}
+                          <div style={{ fontSize: 14, color: "var(--text-muted)" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
+                          {orderItems[o.id] && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 13, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "2px 7px", borderRadius: 10 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type} x{it.quantity}{it.color?` · ${it.color}`:""} · ${Math.round(Number(it.price)*Number(it.quantity))}</span>)}</div>}
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
                           <div style={{ fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price))}</div>
-                          <span style={{ fontSize: 11, background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20 }}>{STATUS_LABELS[o.status]?.label}</span>
+                          <span style={{ fontSize: 13, background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20 }}>{STATUS_LABELS[o.status]?.label}</span>
                         </div>
                       </div>
                     </div>
                   ))}
-                  {todayOrders.length === 0 && <p style={{ color: "#484F58", fontSize: 13 }}>Sin órdenes en esta fecha</p>}
+                  {todayOrders.length === 0 && <p style={{ color: "var(--text-dim)", fontSize: 15 }}>Sin órdenes en esta fecha</p>}
                 </div>
                 <div style={card}>
-                  <h3 style={{ margin: "0 0 16px", fontSize: 15, color: "#8B949E" }}>Servicios del día</h3>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 17, color: "var(--text-muted)" }}>Servicios del día</h3>
                   {services.map(sv => {
                     const cnt = todayOrders.filter(o => (o.service||"").split(",").map(s=>s.trim()).includes(sv.id)).length;
                     return <div key={sv.id} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                      <div style={{ fontSize: 18 }}>{sv.icon}</div>
+                      <div style={{ fontSize: 21 }}>{sv.icon}</div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}><span>{sv.label}</span><span style={{ fontWeight: 700 }}>{cnt}</span></div>
-                        <div style={{ height: 6, borderRadius: 3, background: "#21262D" }}><div style={{ height: 6, borderRadius: 3, background: sv.color, width: `${todayOrders.length?(cnt/todayOrders.length)*100:0}%`, transition: "width 0.5s" }} /></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, marginBottom: 4 }}><span>{sv.label}</span><span style={{ fontWeight: 700 }}>{cnt}</span></div>
+                        <div style={{ height: 6, borderRadius: 3, background: "var(--bg-surface)" }}><div style={{ height: 6, borderRadius: 3, background: sv.color, width: `${todayOrders.length?(cnt/todayOrders.length)*100:0}%`, transition: "width 0.5s" }} /></div>
                       </div>
                     </div>;
                   })}
@@ -1942,16 +1958,16 @@ export default function LavanderiaApp() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Órdenes</h2>
-                  <input type="date" value={orderFilterDate} onChange={e => setOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 13 }} />
-                  {orderFilterDate && <button onClick={() => setOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
-                  <select value={orderStatusFilter} onChange={e => { setOrderStatusFilter(e.target.value); if (e.target.value) setOrderFilterDate(""); }} style={{ ...inp, width: 160, fontSize: 13 }}>
+                  <h2 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>Órdenes</h2>
+                  <input type="date" value={orderFilterDate} onChange={e => setOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 15 }} />
+                  {orderFilterDate && <button onClick={() => setOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 14 }}>Ver todas</button>}
+                  <select value={orderStatusFilter} onChange={e => { setOrderStatusFilter(e.target.value); if (e.target.value) setOrderFilterDate(""); }} style={{ ...inp, width: 160, fontSize: 15 }}>
                     <option value="" style={{ background:"#1a1a2e" }}>Todos los estados</option>
                     {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k} style={{ background:"#1a1a2e" }}>{v.label}</option>)}
                   </select>
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
-                  {isAdmin && <button onClick={exportOrders} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "8px 14px", fontSize: 12 }}>📥 Exportar Excel</button>}
+                  {isAdmin && <button onClick={exportOrders} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "8px 14px", fontSize: 14 }}>📥 Exportar Excel</button>}
                   <button onClick={() => {
                     const defaultSvc = emptyItem.service;
                     const defaultType = emptyItem.garment_type;
@@ -1964,47 +1980,47 @@ export default function LavanderiaApp() {
                   }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
                 </div>
               </div>
-              {orderFilterDate && <p style={{ margin: "0 0 14px", fontSize: 12, color: "#8B949E" }}>{orderStatusFilter === "entregado" ? "📅 Filtrando por fecha de entrega" : "📅 Filtrando por fecha de ingreso"}</p>}
+              {orderFilterDate && <p style={{ margin: "0 0 14px", fontSize: 14, color: "var(--text-muted)" }}>{orderStatusFilter === "entregado" ? "📅 Filtrando por fecha de entrega" : "📅 Filtrando por fecha de ingreso"}</p>}
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                  <thead><tr style={{ background: "#21262D" }}>{["# Orden","Cliente","Prendas","Servicio","Total","Fecha","Entrega","Estado","Recibo",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16 }}>
+                  <thead><tr style={{ background: "var(--bg-surface)" }}>{["# Orden","Cliente","Prendas","Servicio","Total","Fecha","Entrega","Estado","Recibo",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, fontSize: 14 }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {filteredOrders.map(o => (
-                      <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
-                        <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number||"—"}</span></td>
-                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 11, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}{o.paid_at_intake && <span title="Pagado al recibir" style={{ fontSize: 11, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "1px 6px", borderRadius: 10 }}>💰</span>}{o._offline && <span title="Pendiente de sincronizar (guardado sin conexión)" style={{ fontSize: 11, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "1px 6px", borderRadius: 10 }}>⏳</span>}</div><div style={{ fontSize: 11, color: "#8B949E" }}>{o.phone}</div></td>
+                      <tr key={o.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
+                        <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{o.order_number||"—"}</span></td>
+                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 13, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}{o.paid_at_intake && <span title="Pagado al recibir" style={{ fontSize: 13, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "1px 6px", borderRadius: 10 }}>💰</span>}{o._offline && <span title="Pendiente de sincronizar (guardado sin conexión)" style={{ fontSize: 13, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "1px 6px", borderRadius: 10 }}>⏳</span>}</div><div style={{ fontSize: 13, color: "var(--text-muted)" }}>{o.phone}</div></td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ fontWeight: 600 }}>{o.garments} prendas</div>
-                          {orderItems[o.id] && <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 10, background: "#21262D", borderRadius: 8, padding: "3px 7px" }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color&&<span style={{ color: "#C792EA" }}> · {it.color}</span>}<span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price)*Number(it.quantity))}</span></span>)}</div>}
+                          {orderItems[o.id] && <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 12, background: "var(--bg-surface)", borderRadius: 8, padding: "3px 7px" }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color&&<span style={{ color: "#C792EA" }}> · {it.color}</span>}<span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price)*Number(it.quantity))}</span></span>)}</div>}
                         </td>
-                        <td style={{ padding: "12px 14px" }}><div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{(o.service||"").split(",").map(sid => { const sv=services.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"2px 8px",borderRadius:20,fontSize:11 }}>{sv.icon} {sv.label}</span>:null; })}</div></td>
-                        <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 16 }}>${Math.round(Number(o.price))}</td>
-                        <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
-                        <td style={{ padding: "12px 14px" }}><span style={{ fontSize: 12, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date||"—"}</span></td>
-                        <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                        <td style={{ padding: "12px 14px" }}><div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{(o.service||"").split(",").map(sid => { const sv=services.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"2px 8px",borderRadius:20,fontSize:13 }}>{sv.icon} {sv.label}</span>:null; })}</div></td>
+                        <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 18 }}>${Math.round(Number(o.price))}</td>
+                        <td style={{ padding: "12px 14px", color: "var(--text-muted)", fontSize: 14 }}>{o.date}</td>
+                        <td style={{ padding: "12px 14px" }}><span style={{ fontSize: 14, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date||"—"}</span></td>
+                        <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                         <td style={{ padding: "12px 14px" }}>
                           {o.recibo_enviado === "whatsapp"
-                            ? <span style={{ background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>📱 WA</span>
+                            ? <span style={{ background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"3px 8px",borderRadius:20,fontSize:13,fontWeight:600 }}>📱 WA</span>
                             : o.recibo_enviado === "impreso"
-                            ? <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>🖨️ Impreso</span>
-                            : <span style={{ color:"#484F58",fontSize:11 }}>—</span>}
+                            ? <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"3px 8px",borderRadius:20,fontSize:13,fontWeight:600 }}>🖨️ Impreso</span>
+                            : <span style={{ color:"var(--text-dim)",fontSize:13 }}>—</span>}
                         </td>
                         <td style={{ padding: "12px 14px" }}>
-                          {(() => { const abonado=getAbonado(o.id); const saldo=getSaldo(o); return abonado>0?<div style={{ fontSize:11 }}><div style={{ color:"#66BB6A" }}>Abonado: ${Math.round(abonado).toLocaleString()}</div><div style={{ color:saldo>0?"#FFD54F":"#66BB6A",fontWeight:700 }}>Saldo: ${Math.round(saldo).toLocaleString()}</div></div>:null; })()}
+                          {(() => { const abonado=getAbonado(o.id); const saldo=getSaldo(o); return abonado>0?<div style={{ fontSize:13 }}><div style={{ color:"#66BB6A" }}>Abonado: ${Math.round(abonado).toLocaleString()}</div><div style={{ color:saldo>0?"#FFD54F":"#66BB6A",fontWeight:700 }}>Saldo: ${Math.round(saldo).toLocaleString()}</div></div>:null; })()}
                         </td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "5px 10px", fontSize: 12 }}>💰</button>
-                            {!o.paid_at_intake && <button title="Marcar como pagada al recibir" onClick={() => { setMarkPaidModal(o); setMarkPaidMethod("efectivo"); }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "5px 10px", fontSize: 12 }}>✅💰</button>}
-                            <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
-                            <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                            <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "5px 10px", fontSize: 14 }}>💰</button>
+                            {!o.paid_at_intake && <button title="Marcar como pagada al recibir" onClick={() => { setMarkPaidModal(o); setMarkPaidMethod("efectivo"); }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "5px 10px", fontSize: 14 }}>✅💰</button>}
+                            <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>
+                            <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 14 }}>🗑</button>
                           </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {filteredOrders.length === 0 && <p style={{ color: "#484F58", textAlign: "center", padding: 40 }}>No hay órdenes en esta fecha</p>}
+                {filteredOrders.length === 0 && <p style={{ color: "var(--text-dim)", textAlign: "center", padding: 40 }}>No hay órdenes en esta fecha</p>}
               </div>
             </div>
           )}
@@ -2012,55 +2028,55 @@ export default function LavanderiaApp() {
           {/* ENTREGAS */}
           {tab === "entregas" && (
             <div>
-              <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 800 }}>📦 Entregas</h2>
+              <h2 style={{ margin: "0 0 24px", fontSize: 25, fontWeight: 800 }}>📦 Entregas</h2>
               <div style={{ ...card, marginBottom: 20 }}>
-                <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>BUSCAR POR TELÉFONO O NÚMERO DE ORDEN</label>
+                <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>BUSCAR POR TELÉFONO O NÚMERO DE ORDEN</label>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <input style={{ ...inp, flex: 1, fontSize: 16 }} placeholder="Ej: 3105604421 o S0001" value={entregaSearch} onChange={e => { setEntregaSearch(e.target.value); setEntregaResults(null); setEntregaResult(null); }} onKeyDown={e => e.key === "Enter" && searchEntrega()} />
+                  <input style={{ ...inp, flex: 1, fontSize: 18 }} placeholder="Ej: 3105604421 o S0001" value={entregaSearch} onChange={e => { setEntregaSearch(e.target.value); setEntregaResults(null); setEntregaResult(null); }} onKeyDown={e => e.key === "Enter" && searchEntrega()} />
                   <button onClick={searchEntrega} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 24px" }}>🔍 Buscar</button>
                 </div>
               </div>
 
-              {entregaResults !== null && entregaResults.length === 0 && <div style={{ ...card, textAlign: "center", color: "#EF5350", padding: 32 }}><div style={{ fontSize: 40, marginBottom: 8 }}>😕</div><div style={{ fontWeight: 600 }}>No se encontró ninguna orden</div></div>}
+              {entregaResults !== null && entregaResults.length === 0 && <div style={{ ...card, textAlign: "center", color: "#EF5350", padding: 32 }}><div style={{ fontSize: 46, marginBottom: 8 }}>😕</div><div style={{ fontWeight: 600 }}>No se encontró ninguna orden</div></div>}
 
               {entregaResults !== null && entregaResults.length > 0 && !entregaResult && (
                 <div style={{ paddingBottom: selectedEntregas.length > 0 ? 280 : 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div style={{ fontSize: 13, color: "#8B949E" }}>Se encontraron <strong style={{ color: "#4FC3F7" }}>{entregaResults.length} órdenes</strong> para este cliente</div>
+                    <div style={{ fontSize: 15, color: "var(--text-muted)" }}>Se encontraron <strong style={{ color: "#4FC3F7" }}>{entregaResults.length} órdenes</strong> para este cliente</div>
                     {entregaResults.some(o => o.status !== "entregado") && (
-                      <button onClick={() => { const pending=entregaResults.filter(o=>o.status!=="entregado"); if(selectedEntregas.length===pending.length)setSelectedEntregas([]);else setSelectedEntregas(pending); }} style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "6px 14px", fontSize: 12 }}>
+                      <button onClick={() => { const pending=entregaResults.filter(o=>o.status!=="entregado"); if(selectedEntregas.length===pending.length)setSelectedEntregas([]);else setSelectedEntregas(pending); }} style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", padding: "6px 14px", fontSize: 14 }}>
                         {selectedEntregas.length===entregaResults.filter(o=>o.status!=="entregado").length?"Deseleccionar todo":"Seleccionar pendientes"}
                       </button>
                     )}
                   </div>
                   {selectedEntregas.length > 0 && (
-                    <div className="lv-fixed-actionbar" style={{ ...card, border: "1px solid #66BB6A", background: "#161B22", boxShadow: "0 -6px 24px rgba(0,0,0,0.6)", borderRadius: "16px 16px 0 0" }}>
+                    <div className="lv-fixed-actionbar" style={{ ...card, border: "1px solid #66BB6A", background: "var(--bg-card)", boxShadow: "0 -6px 24px rgba(0,0,0,0.6)", borderRadius: "16px 16px 0 0" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                         <div>
-                          <div style={{ fontWeight: 700, color: "#66BB6A", fontSize: 16 }}>{selectedEntregas.length} orden{selectedEntregas.length>1?"es":""} seleccionada{selectedEntregas.length>1?"s":""}</div>
-                          <div style={{ fontSize: 13, color: "#8B949E" }}>Total: <strong style={{ color: "#66BB6A" }}>${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}</strong> · {selectedEntregas.reduce((s,o)=>s+Number(o.garments),0)} prendas</div>
+                          <div style={{ fontWeight: 700, color: "#66BB6A", fontSize: 18 }}>{selectedEntregas.length} orden{selectedEntregas.length>1?"es":""} seleccionada{selectedEntregas.length>1?"s":""}</div>
+                          <div style={{ fontSize: 15, color: "var(--text-muted)" }}>Total: <strong style={{ color: "#66BB6A" }}>${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}</strong> · {selectedEntregas.reduce((s,o)=>s+Number(o.garments),0)} prendas</div>
                         </div>
-                        <button onClick={() => setSelectedEntregas([])} style={{ ...btn, background: "transparent", color: "#8B949E", padding: "4px 10px", fontSize: 12 }}>✕ Cancelar</button>
+                        <button onClick={() => setSelectedEntregas([])} style={{ ...btn, background: "transparent", color: "var(--text-muted)", padding: "4px 10px", fontSize: 14 }}>✕ Cancelar</button>
                       </div>
                       <div style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE LA ENTREGA</label>
+                        <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE LA ENTREGA</label>
                         <input type="date" value={entregaMultiDate} onChange={e=>setEntregaMultiDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 180 }} />
                       </div>
                       <div style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
+                        <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
                         <div style={{ display: "flex", gap: 8 }}>
                           {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
-                            <label key={opt.value} onClick={() => setEntregaMultiPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,fontWeight:600,background:entregaMultiPayment===opt.value?"rgba(102,187,106,0.2)":"rgba(255,255,255,0.04)",border:`2px solid ${entregaMultiPayment===opt.value?"#66BB6A":"#30363D"}`,borderRadius:8,padding:"8px 4px",color:entregaMultiPayment===opt.value?"#66BB6A":"#8B949E" }}>{opt.label}</label>
+                            <label key={opt.value} onClick={() => setEntregaMultiPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:entregaMultiPayment===opt.value?"rgba(102,187,106,0.2)":"rgba(255,255,255,0.04)",border:`2px solid ${entregaMultiPayment===opt.value?"#66BB6A":"var(--border)"}`,borderRadius:8,padding:"8px 4px",color:entregaMultiPayment===opt.value?"#66BB6A":"var(--text-muted)" }}>{opt.label}</label>
                           ))}
                         </div>
                       </div>
                       <div style={{ marginBottom: 16 }}>
-                        <label onClick={() => setEntregaMultiSinRecibo(!entregaMultiSinRecibo)} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",background:entregaMultiSinRecibo?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${entregaMultiSinRecibo?"#FFD54F":"#30363D"}`,borderRadius:8,padding:"10px 14px" }}>
+                        <label onClick={() => setEntregaMultiSinRecibo(!entregaMultiSinRecibo)} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",background:entregaMultiSinRecibo?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${entregaMultiSinRecibo?"#FFD54F":"var(--border)"}`,borderRadius:8,padding:"10px 14px" }}>
                           <input type="checkbox" checked={entregaMultiSinRecibo} onChange={e=>setEntregaMultiSinRecibo(e.target.checked)} style={{ width:16,height:16,accentColor:"#FFD54F" }} />
-                          <span style={{ fontSize:13,color:entregaMultiSinRecibo?"#FFD54F":"#8B949E" }}>📋 Entregado sin recibo</span>
+                          <span style={{ fontSize:15,color:entregaMultiSinRecibo?"#FFD54F":"var(--text-muted)" }}>📋 Entregado sin recibo</span>
                         </label>
                       </div>
-                      <button onClick={confirmarMultiEntrega} disabled={!entregaMultiPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:15,fontWeight:800,borderRadius:10,opacity:!entregaMultiPayment?0.5:1,cursor:!entregaMultiPayment?"not-allowed":"pointer" }}>
+                      <button onClick={confirmarMultiEntrega} disabled={!entregaMultiPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:17,fontWeight:800,borderRadius:10,opacity:!entregaMultiPayment?0.5:1,cursor:!entregaMultiPayment?"not-allowed":"pointer" }}>
                         {!entregaMultiPayment ? "⚠️ Selecciona un método de pago" : `✅ Confirmar ${selectedEntregas.length} entrega${selectedEntregas.length>1?"s":""} · $${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}`}
                       </button>
                     </div>
@@ -2068,24 +2084,24 @@ export default function LavanderiaApp() {
                   {entregaResults.map(o => {
                     const isSelected=selectedEntregas.some(s=>s.id===o.id), isPending=o.status!=="entregado";
                     const yaSinRecibo = !isPending && o.sin_recibo;
-                    return <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${yaSinRecibo?"#EF5350":isSelected?"#66BB6A":STATUS_LABELS[o.status]?.color||"#30363D"}`, background: yaSinRecibo?"rgba(239,83,80,0.06)":isSelected?"rgba(102,187,106,0.06)":"#161B22" }}>
+                    return <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${yaSinRecibo?"#EF5350":isSelected?"#66BB6A":STATUS_LABELS[o.status]?.color||"var(--border)"}`, background: yaSinRecibo?"rgba(239,83,80,0.06)":isSelected?"rgba(102,187,106,0.06)":"var(--bg-card)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
                           {isPending && <input type="checkbox" checked={isSelected} onChange={() => setSelectedEntregas(prev=>isSelected?prev.filter(s=>s.id!==o.id):[...prev,o])} style={{ width:20,height:20,accentColor:"#66BB6A",cursor:"pointer",flexShrink:0 }} />}
-                          {!isPending && <span style={{ fontSize: 18, flexShrink: 0 }}>{yaSinRecibo?"⚠️":"✅"}</span>}
+                          {!isPending && <span style={{ fontSize: 21, flexShrink: 0 }}>{yaSinRecibo?"⚠️":"✅"}</span>}
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                              <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number||"—"}</span>
-                              <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
-                              {yaSinRecibo && <span style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>⚠️ Entregada sin recibo</span>}
+                              <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 15 }}>{o.order_number||"—"}</span>
+                              <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
+                              {yaSinRecibo && <span style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 700 }}>⚠️ Entregada sin recibo</span>}
                             </div>
-                            <div style={{ fontSize: 13, color: "#8B949E" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
-                            <div style={{ fontSize: 12, color: "#484F58", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date||"—"}{o.delivered_by&&<span style={{ color:"#C792EA" }}> · 👤 {o.delivered_by}</span>}</div>
+                            <div style={{ fontSize: 15, color: "var(--text-muted)" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
+                            <div style={{ fontSize: 14, color: "var(--text-dim)", marginTop: 2 }}>Ingreso: {o.date} · Entrega: {o.delivery_date||"—"}{o.delivered_by&&<span style={{ color:"#C792EA" }}> · 👤 {o.delivered_by}</span>}</div>
                           </div>
                         </div>
                         <div style={{ textAlign: "right", marginLeft: 12 }}>
-                          <div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A", marginBottom: 4 }}>${Math.round(Number(o.price))}</div>
-                          <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(""); setEntregaSinRecibo(false); setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null); setParcialPayment(""); }} style={{ ...btn, background: yaSinRecibo?"rgba(239,83,80,0.15)":"rgba(79,195,247,0.1)", color: yaSinRecibo?"#EF5350":"#4FC3F7", padding: "4px 10px", fontSize: 11 }}>Ver detalle →</button>
+                          <div style={{ fontWeight: 800, fontSize: 21, color: "#66BB6A", marginBottom: 4 }}>${Math.round(Number(o.price))}</div>
+                          <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(""); setEntregaSinRecibo(false); setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null); setParcialPayment(""); }} style={{ ...btn, background: yaSinRecibo?"rgba(239,83,80,0.15)":"rgba(79,195,247,0.1)", color: yaSinRecibo?"#EF5350":"#4FC3F7", padding: "4px 10px", fontSize: 13 }}>Ver detalle →</button>
                         </div>
                       </div>
                     </div>;
@@ -2095,88 +2111,87 @@ export default function LavanderiaApp() {
 
               {entregaResult && (
                 <div>
-                  {entregaResults && entregaResults.length > 1 && <button onClick={() => { setEntregaResult(null); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", marginBottom: 16, fontSize: 13, padding: "8px 16px" }}>← Volver a la lista</button>}
+                  {entregaResults && entregaResults.length > 1 && <button onClick={() => { setEntregaResult(null); setEntregaConfirmed(false); }} style={{ ...btn, background: "rgba(79,195,247,0.1)", color: "#4FC3F7", marginBottom: 16, fontSize: 15, padding: "8px 16px" }}>← Volver a la lista</button>}
                   <div style={{ ...card, border: entregaConfirmed ? "1px solid #66BB6A" : "1px solid #4FC3F7" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 12px", borderRadius: 8, fontSize: 16 }}>{entregaResult.order_number||"—"}</span>
-                          <span style={{ background: STATUS_LABELS[entregaResult.status]?.color+"22", color: STATUS_LABELS[entregaResult.status]?.color, padding: "4px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>{STATUS_LABELS[entregaResult.status]?.label}</span>
+                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 12px", borderRadius: 8, fontSize: 18 }}>{entregaResult.order_number||"—"}</span>
+                          <span style={{ background: STATUS_LABELS[entregaResult.status]?.color+"22", color: STATUS_LABELS[entregaResult.status]?.color, padding: "4px 12px", borderRadius: 20, fontSize: 15, fontWeight: 600 }}>{STATUS_LABELS[entregaResult.status]?.label}</span>
                         </div>
-                        <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 2 }}>{entregaResult.client_name}</div>
-                        <div style={{ color: "#8B949E", fontSize: 14 }}>📞 {entregaResult.phone}</div>
+                        <div style={{ fontWeight: 800, fontSize: 23, marginBottom: 2 }}>{entregaResult.client_name}</div>
+                        <div style={{ color: "var(--text-muted)", fontSize: 16 }}>📞 {entregaResult.phone}</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontWeight: 800, fontSize: 28, color: "#66BB6A" }}>${Math.round(Number(entregaResult.price))}</div>
-                        <div style={{ fontSize: 12, color: "#8B949E" }}>Total orden</div>
+                        <div style={{ fontWeight: 800, fontSize: 32, color: "#66BB6A" }}>${Math.round(Number(entregaResult.price))}</div>
+                        <div style={{ fontSize: 14, color: "var(--text-muted)" }}>Total orden</div>
                         {getAbonado(entregaResult.id) > 0 && <>
-                          <div style={{ fontSize: 13, color: "#4FC3F7", marginTop: 4 }}>Abonado: ${Math.round(getAbonado(entregaResult.id)).toLocaleString()}</div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: "#FFD54F" }}>Saldo: ${Math.round(getSaldo(entregaResult)).toLocaleString()}</div>
+                          <div style={{ fontSize: 15, color: "#4FC3F7", marginTop: 4 }}>Abonado: ${Math.round(getAbonado(entregaResult.id)).toLocaleString()}</div>
+                          <div style={{ fontSize: 17, fontWeight: 800, color: "#FFD54F" }}>Saldo: ${Math.round(getSaldo(entregaResult)).toLocaleString()}</div>
                         </>}
                       </div>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
                       {[{label:"SERVICIO",value:getServiceLabel(entregaResult.service, services)},{label:"PRENDAS",value:`${entregaResult.garments} prendas`},{label:"FECHA ENTREGA",value:`📅 ${entregaResult.delivery_date||"—"}`,color:"#FFD54F"}].map((item,i) => (
-                        <div key={i} style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px" }}>
-                          <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 2 }}>{item.label}</div>
-                          <div style={{ fontWeight: 600, color: item.color||"#E6EDF3" }}>{item.value}</div>
+                        <div key={i} style={{ background: "var(--bg-app)", borderRadius: 8, padding: "10px 14px" }}>
+                          <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 2 }}>{item.label}</div>
+                          <div style={{ fontWeight: 600, color: item.color||"var(--text-primary)" }}>{item.value}</div>
                         </div>
                       ))}
                     </div>
-                    {orderItems[entregaResult.id] && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 12, color: "#8B949E", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{orderItems[entregaResult.id].map((it,i) => <div key={i} style={{ background: "#21262D", borderRadius: 8, padding: "6px 12px", fontSize: 12 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?<span style={{ color:sv.color }}>{sv.icon} </span>:null; })()}<span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>{it.color&&<span style={{ color:"#C792EA" }}> · {it.color}</span>}<span style={{ color:"#66BB6A",fontWeight:700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span></div>)}</div></div>}
-                    {entregaResult.paid_at_intake && <div style={{ background: "rgba(255,213,79,0.1)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#FFD54F", fontWeight: 700 }}>💰 Esta orden ya fue pagada al recibir la ropa el {entregaResult.date} ({entregaResult.payment_method==="nequi"?"Nequi":entregaResult.payment_method==="daviplata"?"Daviplata":entregaResult.payment_method==="breb"?"Bre-b":entregaResult.payment_method==="tarjeta"?"Tarjeta":"Efectivo"}). No hay nada pendiente por cobrar.</div>}
-                    {entregaResult.notes && <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#FFD54F" }}>📝 {entregaResult.notes}</div>}
+                    {orderItems[entregaResult.id] && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{orderItems[entregaResult.id].map((it,i) => <div key={i} style={{ background: "var(--bg-surface)", borderRadius: 8, padding: "6px 12px", fontSize: 14 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?<span style={{ color:sv.color }}>{sv.icon} </span>:null; })()}<span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>{it.color&&<span style={{ color:"#C792EA" }}> · {it.color}</span>}<span style={{ color:"#66BB6A",fontWeight:700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span></div>)}</div></div>}
+                    {entregaResult.paid_at_intake && <div style={{ background: "rgba(255,213,79,0.1)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 15, color: "#FFD54F", fontWeight: 700 }}>💰 Esta orden ya fue pagada al recibir la ropa el {entregaResult.date} ({entregaResult.payment_method==="nequi"?"Nequi":entregaResult.payment_method==="daviplata"?"Daviplata":entregaResult.payment_method==="breb"?"Bre-b":entregaResult.payment_method==="tarjeta"?"Tarjeta":"Efectivo"}). No hay nada pendiente por cobrar.</div>}
+                    {entregaResult.notes && <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 15, color: "#FFD54F" }}>📝 {entregaResult.notes}</div>}
                     {entregaResult.status !== "entregado" && !entregaConfirmed && !showParcialForm && !parcialConfirmedInfo && (
                       <>
                         <div style={{ marginBottom: 16 }}>
-                          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE LA ENTREGA</label>
+                          <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE LA ENTREGA</label>
                           <input type="date" value={entregaDate} onChange={e=>setEntregaDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 180 }} />
                         </div>
                         <div style={{ marginBottom: 16 }}>
-                          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
+                          <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
                           <div style={{ display: "flex", gap: 10 }}>
                             {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
-                              <label key={opt.value} onClick={() => setEntregaPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:entregaPayment===opt.value?"rgba(79,195,247,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${entregaPayment===opt.value?"#4FC3F7":"#30363D"}`,borderRadius:10,padding:"8px 4px",color:entregaPayment===opt.value?"#4FC3F7":"#8B949E" }}>{opt.label}</label>
+                              <label key={opt.value} onClick={() => setEntregaPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:entregaPayment===opt.value?"rgba(79,195,247,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${entregaPayment===opt.value?"#4FC3F7":"var(--border)"}`,borderRadius:10,padding:"8px 4px",color:entregaPayment===opt.value?"#4FC3F7":"var(--text-muted)" }}>{opt.label}</label>
                             ))}
                           </div>
                         </div>
                         <div style={{ marginBottom: 20 }}>
-                          <label onClick={() => setEntregaSinRecibo(!entregaSinRecibo)} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:entregaSinRecibo?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${entregaSinRecibo?"#FFD54F":"#30363D"}`,borderRadius:10,padding:"12px 16px" }}>
+                          <label onClick={() => setEntregaSinRecibo(!entregaSinRecibo)} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:entregaSinRecibo?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${entregaSinRecibo?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"12px 16px" }}>
                             <input type="checkbox" checked={entregaSinRecibo} onChange={e=>setEntregaSinRecibo(e.target.checked)} style={{ width:18,height:18,accentColor:"#FFD54F" }} />
-                            <div><div style={{ fontWeight:600,color:entregaSinRecibo?"#FFD54F":"#8B949E" }}>📋 Entregado sin recibo</div><div style={{ fontSize:12,color:"#484F58" }}>El cliente no presentó recibo físico</div></div>
+                            <div><div style={{ fontWeight:600,color:entregaSinRecibo?"#FFD54F":"var(--text-muted)" }}>📋 Entregado sin recibo</div><div style={{ fontSize:14,color:"var(--text-dim)" }}>El cliente no presentó recibo físico</div></div>
                           </label>
                         </div>
-                        <button onClick={confirmarEntrega} disabled={!entregaPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:16,fontWeight:800,borderRadius:10,marginBottom:10,opacity:!entregaPayment?0.5:1,cursor:!entregaPayment?"not-allowed":"pointer" }}>{!entregaPayment?"⚠️ Selecciona un método de pago":`✅ Confirmar Entrega Completa · $${Math.round(getSaldo(entregaResult))}`}</button>
+                        <button onClick={confirmarEntrega} disabled={!entregaPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:18,fontWeight:800,borderRadius:10,marginBottom:10,opacity:!entregaPayment?0.5:1,cursor:!entregaPayment?"not-allowed":"pointer" }}>{!entregaPayment?"⚠️ Selecciona un método de pago":`✅ Confirmar Entrega Completa · $${Math.round(getSaldo(entregaResult))}`}</button>
                         {getItemsPendientes(entregaResult.id).length > 1 && (
-                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:14,fontWeight:700,borderRadius:10,marginBottom:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
+                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:16,fontWeight:700,borderRadius:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
                         )}
-                        <button onClick={() => { setAbonoModal(entregaResult); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, width:"100%",background:"rgba(255,213,79,0.1)",color:"#FFD54F",border:"1px solid rgba(255,213,79,0.3)",padding:14,fontSize:14,fontWeight:700,borderRadius:10 }}>💰 Registrar Abono (el cliente no se lleva la ropa hoy)</button>
                       </>
                     )}
 
                     {showParcialForm && !parcialConfirmedInfo && (
                       <div>
-                        <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:10 }}>¿CUÁNTAS SE LLEVA EL CLIENTE AHORA?</div>
+                        <div style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600,marginBottom:10 }}>¿CUÁNTAS SE LLEVA EL CLIENTE AHORA?</div>
                         <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:16 }}>
                           {getItemsPendientes(entregaResult.id).map(it => (
-                            <div key={it.id} style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10 }}>
+                            <div key={it.id} style={{ background:"var(--bg-app)",borderRadius:10,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10 }}>
                               <div>
-                                <div style={{ fontWeight:600,fontSize:13 }}>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color?<span style={{ color:"#C792EA" }}> · {it.color}</span>:null}</div>
-                                <div style={{ fontSize:11,color:"#8B949E" }}>Pendientes: {it.pendiente} · ${Math.round(Number(it.price)).toLocaleString()} c/u</div>
+                                <div style={{ fontWeight:600,fontSize:15 }}>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color?<span style={{ color:"#C792EA" }}> · {it.color}</span>:null}</div>
+                                <div style={{ fontSize:13,color:"var(--text-muted)" }}>Pendientes: {it.pendiente} · ${Math.round(Number(it.price)).toLocaleString()} c/u</div>
                               </div>
-                              <input type="number" min={0} max={it.pendiente} placeholder="0" value={parcialQtys[it.id]||""} onChange={e=>{ const v=Math.max(0,Math.min(Number(e.target.value)||0,it.pendiente)); setParcialQtys(p=>({...p,[it.id]:v})); }} style={{ width:70,padding:"8px 6px",borderRadius:8,border:"1px solid #30363D",background:"#161B22",color:"#E6EDF3",fontSize:15,fontWeight:700,textAlign:"center" }} />
+                              <input type="number" min={0} max={it.pendiente} placeholder="0" value={parcialQtys[it.id]||""} onChange={e=>{ const v=Math.max(0,Math.min(Number(e.target.value)||0,it.pendiente)); setParcialQtys(p=>({...p,[it.id]:v})); }} style={{ width:70,padding:"8px 6px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-card)",color:"var(--text-primary)",fontSize:17,fontWeight:700,textAlign:"center" }} />
                             </div>
                           ))}
                         </div>
                         <div style={{ marginBottom: 16 }}>
-                          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE ESTA ENTREGA PARCIAL</label>
+                          <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE ESTA ENTREGA PARCIAL</label>
                           <input type="date" value={parcialDate} onChange={e=>setParcialDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 180 }} />
                         </div>
                         <div style={{ marginBottom: 16 }}>
-                          <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
+                          <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
                           <div style={{ display: "flex", gap: 10 }}>
                             {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
-                              <label key={opt.value} onClick={() => setParcialPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:parcialPayment===opt.value?"rgba(255,138,101,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${parcialPayment===opt.value?"#FF8A65":"#30363D"}`,borderRadius:10,padding:"8px 4px",color:parcialPayment===opt.value?"#FF8A65":"#8B949E" }}>{opt.label}</label>
+                              <label key={opt.value} onClick={() => setParcialPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:parcialPayment===opt.value?"rgba(255,138,101,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${parcialPayment===opt.value?"#FF8A65":"var(--border)"}`,borderRadius:10,padding:"8px 4px",color:parcialPayment===opt.value?"#FF8A65":"var(--text-muted)" }}>{opt.label}</label>
                             ))}
                           </div>
                         </div>
@@ -2185,12 +2200,12 @@ export default function LavanderiaApp() {
                           const subtotal = its.reduce((s,it) => s + (Math.min(Number(parcialQtys[it.id])||0,it.pendiente))*Number(it.price), 0);
                           return <>
                             <div style={{ background:"rgba(255,138,101,0.08)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:16,display:"flex",justifyContent:"space-between" }}>
-                              <span style={{ color:"#8B949E",fontSize:13 }}>Subtotal a cobrar ahora</span>
-                              <span style={{ fontWeight:800,color:"#FF8A65",fontSize:17 }}>${Math.round(subtotal).toLocaleString()}</span>
+                              <span style={{ color:"var(--text-muted)",fontSize:15 }}>Subtotal a cobrar ahora</span>
+                              <span style={{ fontWeight:800,color:"#FF8A65",fontSize:20 }}>${Math.round(subtotal).toLocaleString()}</span>
                             </div>
                             <div style={{ display:"flex",gap:10 }}>
-                              <button onClick={() => { setShowParcialForm(false); setParcialQtys({}); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",flex:1,padding:12 }}>‹ Cancelar</button>
-                              <button onClick={confirmarEntregaParcial} disabled={savingParcial||subtotal<=0||!parcialPayment} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",flex:2,padding:14,fontSize:14,fontWeight:800,opacity:(savingParcial||subtotal<=0||!parcialPayment)?0.5:1,cursor:(savingParcial||subtotal<=0||!parcialPayment)?"not-allowed":"pointer" }}>{savingParcial?"Guardando...":subtotal<=0?"Ingresa una cantidad primero":!parcialPayment?"Selecciona un método de pago":"📦 Confirmar Entrega Parcial"}</button>
+                              <button onClick={() => { setShowParcialForm(false); setParcialQtys({}); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",flex:1,padding:12 }}>‹ Cancelar</button>
+                              <button onClick={confirmarEntregaParcial} disabled={savingParcial||subtotal<=0||!parcialPayment} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",flex:2,padding:14,fontSize:16,fontWeight:800,opacity:(savingParcial||subtotal<=0||!parcialPayment)?0.5:1,cursor:(savingParcial||subtotal<=0||!parcialPayment)?"not-allowed":"pointer" }}>{savingParcial?"Guardando...":subtotal<=0?"Ingresa una cantidad primero":!parcialPayment?"Selecciona un método de pago":"📦 Confirmar Entrega Parcial"}</button>
                             </div>
                           </>;
                         })()}
@@ -2200,43 +2215,43 @@ export default function LavanderiaApp() {
                     {parcialConfirmedInfo && (
                       <div>
                         <div style={{ textAlign: "center", marginBottom: 20 }}>
-                          <div style={{ fontSize: 48, marginBottom: 8 }}>{parcialConfirmedInfo.fullyDelivered?"✅":"📦"}</div>
-                          <div style={{ fontWeight: 800, fontSize: 20, color: "#FF8A65" }}>{parcialConfirmedInfo.fullyDelivered?"¡Última entrega registrada!":"Entrega parcial registrada"}</div>
+                          <div style={{ fontSize: 55, marginBottom: 8 }}>{parcialConfirmedInfo.fullyDelivered?"✅":"📦"}</div>
+                          <div style={{ fontWeight: 800, fontSize: 23, color: "#FF8A65" }}>{parcialConfirmedInfo.fullyDelivered?"¡Última entrega registrada!":"Entrega parcial registrada"}</div>
                         </div>
-                        <div style={{ background:"#0D1117",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
-                          <div style={{ fontSize:11,color:"#8B949E",marginBottom:4,fontWeight:600 }}>SE ENTREGÓ AHORA</div>
-                          <div style={{ fontWeight:700,fontSize:14 }}>{parcialConfirmedInfo.itemsSummary}</div>
-                          <div style={{ fontWeight:800,fontSize:18,color:"#66BB6A",marginTop:4 }}>${Math.round(parcialConfirmedInfo.amount).toLocaleString()}</div>
+                        <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
+                          <div style={{ fontSize:13,color:"var(--text-muted)",marginBottom:4,fontWeight:600 }}>SE ENTREGÓ AHORA</div>
+                          <div style={{ fontWeight:700,fontSize:16 }}>{parcialConfirmedInfo.itemsSummary}</div>
+                          <div style={{ fontWeight:800,fontSize:21,color:"#66BB6A",marginTop:4 }}>${Math.round(parcialConfirmedInfo.amount).toLocaleString()}</div>
                         </div>
                         {!parcialConfirmedInfo.fullyDelivered && <div style={{ background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.2)",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
-                          <div style={{ fontSize:11,color:"#8B949E",marginBottom:4,fontWeight:600 }}>PENDIENTE POR RECOGER</div>
-                          <div style={{ fontWeight:700,fontSize:14,color:"#FFD54F" }}>{parcialConfirmedInfo.pendientesSummary}</div>
-                          <div style={{ fontSize:13,color:"#8B949E",marginTop:4 }}>Saldo: <b style={{ color:"#FFD54F" }}>${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}</b></div>
+                          <div style={{ fontSize:13,color:"var(--text-muted)",marginBottom:4,fontWeight:600 }}>PENDIENTE POR RECOGER</div>
+                          <div style={{ fontWeight:700,fontSize:16,color:"#FFD54F" }}>{parcialConfirmedInfo.pendientesSummary}</div>
+                          <div style={{ fontSize:15,color:"var(--text-muted)",marginTop:4 }}>Saldo: <b style={{ color:"#FFD54F" }}>${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}</b></div>
                         </div>}
                         <div style={{ display:"flex",gap:10 }}>
                           {entregaResult.phone && <button onClick={() => {
                             const msg = `Hola ${entregaResult.client_name}, resumen de tu retiro en ${negocioNombre} (Orden ${entregaResult.order_number}):\n\nSe entregó: ${parcialConfirmedInfo.itemsSummary}\nPagado ahora: $${Math.round(parcialConfirmedInfo.amount).toLocaleString()}\n${!parcialConfirmedInfo.fullyDelivered?`\nPendiente por recoger: ${parcialConfirmedInfo.pendientesSummary}\nSaldo: $${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}`:"\n¡Ya recogiste todo! Gracias por preferirnos."}`;
                             window.open(getWhatsAppUrl(negocioPais + entregaResult.phone.replace(/[^0-9]/g,""), msg), "lavagest_whatsapp");
                           }} style={{ ...btn, background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#fff", flex: 1, padding: 12 }}>📱 Enviar resumen por WhatsApp</button>}
-                          <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setParcialConfirmedInfo(null); setEntregaPayment(""); setEntregaSinRecibo(false); setParcialPayment(""); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
+                          <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setParcialConfirmedInfo(null); setEntregaPayment(""); setEntregaSinRecibo(false); setParcialPayment(""); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
                       </div>
                     )}
                     {(entregaResult.status === "entregado" || entregaConfirmed) && !parcialConfirmedInfo && (
                       <div style={{ padding: "16px 0" }}>
-                        <div style={{ textAlign: "center", marginBottom: 20 }}><div style={{ fontSize: 48, marginBottom: 8 }}>✅</div><div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>¡Entrega confirmada!</div></div>
+                        <div style={{ textAlign: "center", marginBottom: 20 }}><div style={{ fontSize: 55, marginBottom: 8 }}>✅</div><div style={{ fontWeight: 800, fontSize: 23, color: "#66BB6A" }}>¡Entrega confirmada!</div></div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginBottom: 16 }}>
                           {[{label:"📅 FECHA DE ENTREGA",value:entregaResult.delivered_at||today,color:"#66BB6A"},{label:"💳 MÉTODO DE PAGO",value:entregaResult.payment_method==="nequi"?"📱 Nequi":entregaResult.payment_method==="daviplata"?"💜 Daviplata":"💵 Efectivo",color:"#4FC3F7"},{label:"💰 TOTAL COBRADO",value:`$${Math.round(getSaldo(entregaResult))}`,color:"#66BB6A"},{label:"📋 RECIBO",value:entregaResult.sin_recibo?"⚠️ Sin recibo":"✅ Con recibo",color:entregaResult.sin_recibo?"#FFD54F":"#66BB6A"},{label:"👤 ENTREGADO POR",value:entregaResult.delivered_by||"—",color:"#C792EA"}].map((item,i) => (
-                            <div key={i} style={{ background: "#0D1117", borderRadius: 10, padding: "14px 16px" }}>
-                              <div style={{ fontSize: 11, color: "#8B949E", marginBottom: 4, fontWeight: 600 }}>{item.label}</div>
-                              <div style={{ fontWeight: 800, fontSize: 16, color: item.color }}>{item.value}</div>
+                            <div key={i} style={{ background: "var(--bg-app)", borderRadius: 10, padding: "14px 16px" }}>
+                              <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 4, fontWeight: 600 }}>{item.label}</div>
+                              <div style={{ fontWeight: 800, fontSize: 18, color: item.color }}>{item.value}</div>
                             </div>
                           ))}
                         </div>
                         <div style={{ display: "flex", gap: 10 }}>
                           <button onClick={() => printOrderQZ(entregaResult, null, 1)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
                           <button onClick={() => marcarSinReciboEImprimir(entregaResult)} title="Imprimir constancia sin recibo" style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", flex: 1, padding: 12 }}>📝 {entregaResult.sin_recibo ? "Reimprimir constancia" : "Marcar sin recibo e imprimir"}</button>
-                          <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setEntregaPayment(""); setEntregaSinRecibo(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
+                          <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setEntregaPayment(""); setEntregaSinRecibo(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
                       </div>
                     )}
@@ -2250,37 +2265,37 @@ export default function LavanderiaApp() {
           {tab === "clients" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Clientes</h2>
+                <h2 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>Clientes</h2>
                 <div style={{ display: "flex", gap: 10 }}>
-                  {isAdmin && <button onClick={exportClients} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "8px 14px", fontSize: 12 }}>📥 Exportar Excel</button>}
+                  {isAdmin && <button onClick={exportClients} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "8px 14px", fontSize: 14 }}>📥 Exportar Excel</button>}
                   <button onClick={() => setModal("newClient")} style={{ ...btn, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff" }}>+ Nuevo Cliente</button>
                 </div>
               </div>
               <div style={{ marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
                 <input style={{ ...inp, maxWidth: 320 }} placeholder="🔍 Buscar por nombre o teléfono..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} />
-                {clientSearch && <button onClick={() => setClientSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 14px", fontSize: 12 }}>✕ Limpiar</button>}
-                <span style={{ fontSize: 13, color: "#8B949E" }}>{filteredClients.length} cliente{filteredClients.length !== 1 ? "s" : ""}</span>
+                {clientSearch && <button onClick={() => setClientSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "8px 14px", fontSize: 14 }}>✕ Limpiar</button>}
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{filteredClients.length} cliente{filteredClients.length !== 1 ? "s" : ""}</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 16 }}>
                 {filteredClients.map(c => (
                   <div key={c.id} style={{ ...card, borderTop: "3px solid #4FC3F7" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                      <div style={{ fontSize: 28 }}>👤</div>
+                      <div style={{ fontSize: 32 }}>👤</div>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button onClick={() => setEditingClient({ ...c })} title="Editar" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
-                        <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar este cliente?"))deleteClient(c.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
+                        <button onClick={() => setEditingClient({ ...c })} title="Editar" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 14 }}>✏️</button>
+                        <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar este cliente?"))deleteClient(c.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 14 }}>🗑</button>
                       </div>
                     </div>
-                    <div style={{ fontWeight: 700, fontSize: 16 }}>{c.name}</div>
-                    <div style={{ color: "#8B949E", fontSize: 13, marginTop: 4 }}>📞 {c.phone}</div>
-                    {c.email && <div style={{ color: "#8B949E", fontSize: 13 }}>✉️ {c.email}</div>}
+                    <div style={{ fontWeight: 700, fontSize: 18 }}>{c.name}</div>
+                    <div style={{ color: "var(--text-muted)", fontSize: 15, marginTop: 4 }}>📞 {c.phone}</div>
+                    {c.email && <div style={{ color: "var(--text-muted)", fontSize: 15 }}>✉️ {c.email}</div>}
                     <div style={{ marginTop: 12, background: "rgba(79,195,247,0.1)", borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 12, color: "#8B949E" }}>Total órdenes</span>
+                      <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Total órdenes</span>
                       <span style={{ fontWeight: 800, color: "#4FC3F7" }}>{c.total_orders||0}</span>
                     </div>
                   </div>
                 ))}
-                {filteredClients.length === 0 && <p style={{ color: "#484F58" }}>No se encontraron clientes</p>}
+                {filteredClients.length === 0 && <p style={{ color: "var(--text-dim)" }}>No se encontraron clientes</p>}
               </div>
             </div>
           )}
@@ -2289,12 +2304,12 @@ export default function LavanderiaApp() {
           {tab === "agencias" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>🏢 Agencias</h2>
+                <h2 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>🏢 Agencias</h2>
                 <button onClick={() => setModal("newAgency")} style={{ ...btn, background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff" }}>+ Nueva Agencia</button>
               </div>
               <div style={{ marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
                 <input style={{ ...inp, maxWidth: 320 }} placeholder="🔍 Buscar por nombre o teléfono..." value={agencySearch} onChange={e => setAgencySearch(e.target.value)} />
-                {agencySearch && <button onClick={() => setAgencySearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 14px", fontSize: 12 }}>✕ Limpiar</button>}
+                {agencySearch && <button onClick={() => setAgencySearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "8px 14px", fontSize: 14 }}>✕ Limpiar</button>}
               </div>
 
               {(() => {
@@ -2305,19 +2320,19 @@ export default function LavanderiaApp() {
                     const totalValor = agOrders.reduce((s,o) => s+Number(o.price), 0);
                     return <div key={ag.id} style={{ ...card, borderTop: "3px solid #FF8A65" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                        <div style={{ fontSize: 28 }}>🏢</div>
+                        <div style={{ fontSize: 32 }}>🏢</div>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => setEditingAgency({ ...ag })} title="Editar" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
-                          <button onClick={() => deleteAgency(ag.id)} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
+                          <button onClick={() => setEditingAgency({ ...ag })} title="Editar" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 14 }}>✏️</button>
+                          <button onClick={() => deleteAgency(ag.id)} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 14 }}>🗑</button>
                         </div>
                       </div>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{ag.name}</div>
-                      {ag.contact_name && <div style={{ color: "#8B949E", fontSize: 13, marginTop: 2 }}>👤 {ag.contact_name}</div>}
-                      {ag.phone && <div style={{ color: "#8B949E", fontSize: 13 }}>📞 {ag.phone}</div>}
-                      {ag.address && <div style={{ color: "#8B949E", fontSize: 13 }}>📍 {ag.address}</div>}
-                      {Number(ag.discount_percent) > 0 && <div style={{ color: "#66BB6A", fontSize: 13, fontWeight: 600, marginTop: 2 }}>🏷️ {ag.discount_percent}% de descuento</div>}
+                      <div style={{ fontWeight: 700, fontSize: 18 }}>{ag.name}</div>
+                      {ag.contact_name && <div style={{ color: "var(--text-muted)", fontSize: 15, marginTop: 2 }}>👤 {ag.contact_name}</div>}
+                      {ag.phone && <div style={{ color: "var(--text-muted)", fontSize: 15 }}>📞 {ag.phone}</div>}
+                      {ag.address && <div style={{ color: "var(--text-muted)", fontSize: 15 }}>📍 {ag.address}</div>}
+                      {Number(ag.discount_percent) > 0 && <div style={{ color: "#66BB6A", fontSize: 15, fontWeight: 600, marginTop: 2 }}>🏷️ {ag.discount_percent}% de descuento</div>}
                       <div style={{ marginTop: 12, background: "rgba(255,138,101,0.1)", borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                        <span style={{ fontSize: 12, color: "#8B949E" }}>{agOrders.length} orden{agOrders.length!==1?"es":""}</span>
+                        <span style={{ fontSize: 14, color: "var(--text-muted)" }}>{agOrders.length} orden{agOrders.length!==1?"es":""}</span>
                         <span style={{ fontWeight: 800, color: "#FF8A65" }}>${Math.round(totalValor).toLocaleString()}</span>
                       </div>
                       <button onClick={() => {
@@ -2328,46 +2343,46 @@ export default function LavanderiaApp() {
                         setNewOrder({ ...emptyOrder, client_name: ag.name, phone: ag.phone||"", agencia_id: ag.id, delivery_date: getDeliveryDefault() });
                         setItems([{ ...emptyItem, price: defaultPrice }]);
                         setModal("newOrder");
-                      }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff", padding: 10, fontSize: 13, fontWeight: 700 }}>+ Nueva Orden</button>
+                      }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff", padding: 10, fontSize: 15, fontWeight: 700 }}>+ Nueva Orden</button>
                     </div>;
                   })}
-                  {filteredAgencies.length === 0 && <p style={{ color: "#484F58" }}>No se encontraron agencias</p>}
+                  {filteredAgencies.length === 0 && <p style={{ color: "var(--text-dim)" }}>No se encontraron agencias</p>}
                 </div>;
               })()}
 
               <div style={{ ...card }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, color: "#8B949E" }}>Órdenes de agencias</h3>
+                  <h3 style={{ margin: 0, fontSize: 18, color: "var(--text-muted)" }}>Órdenes de agencias</h3>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <select value={selectedAgencyId} onChange={e => setSelectedAgencyId(e.target.value)} style={{ ...inp, width: 180, fontSize: 13 }}>
+                    <select value={selectedAgencyId} onChange={e => setSelectedAgencyId(e.target.value)} style={{ ...inp, width: 180, fontSize: 15 }}>
                       <option value="" style={{ background:"#1a1a2e" }}>Todas las agencias</option>
                       {agencies.map(ag => <option key={ag.id} value={ag.id} style={{ background:"#1a1a2e" }}>{ag.name}</option>)}
                     </select>
-                    <input type="date" value={agencyOrderFilterDate} onChange={e => setAgencyOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
-                    {agencyOrderFilterDate && <button onClick={() => setAgencyOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
+                    <input type="date" value={agencyOrderFilterDate} onChange={e => setAgencyOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
+                    {agencyOrderFilterDate && <button onClick={() => setAgencyOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 14 }}>Ver todas</button>}
                   </div>
                 </div>
                 {(() => {
                   const agencyOrders = orders.filter(o => o.agencia_id && (!selectedAgencyId || o.agencia_id === selectedAgencyId) && (!agencyOrderFilterDate || o.date === agencyOrderFilterDate));
                   return agencyOrders.length === 0
-                    ? <div style={{ textAlign: "center", padding: 32, color: "#484F58" }}><div style={{ fontSize: 36, marginBottom: 8 }}>🏢</div><div>No hay órdenes de agencias con este filtro</div></div>
+                    ? <div style={{ textAlign: "center", padding: 32, color: "var(--text-dim)" }}><div style={{ fontSize: 41, marginBottom: 8 }}>🏢</div><div>No hay órdenes de agencias con este filtro</div></div>
                     : <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                          <thead><tr style={{ background: "#21262D" }}>{["# Orden","Agencia","Prendas","Total","Fecha","Entrega","Estado",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16 }}>
+                          <thead><tr style={{ background: "var(--bg-surface)" }}>{["# Orden","Agencia","Prendas","Total","Fecha","Entrega","Estado",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, fontSize: 14 }}>{h}</th>)}</tr></thead>
                           <tbody>
                             {agencyOrders.map(o => (
-                              <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
-                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,138,101,0.15)", color: "#FF8A65", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number||"—"}</span></td>
+                              <tr key={o.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,138,101,0.15)", color: "#FF8A65", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{o.order_number||"—"}</span></td>
                                 <td style={{ padding: "12px 14px", fontWeight: 600 }}>{o.client_name}</td>
                                 <td style={{ padding: "12px 14px" }}>{o.garments} prendas</td>
                                 <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
-                                <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
-                                <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.delivery_date||"—"}</td>
-                                <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                <td style={{ padding: "12px 14px", color: "var(--text-muted)", fontSize: 14 }}>{o.date}</td>
+                                <td style={{ padding: "12px 14px", color: "var(--text-muted)", fontSize: 14 }}>{o.delivery_date||"—"}</td>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                                 <td style={{ padding: "12px 14px" }}>
                                   <div style={{ display: "flex", gap: 6 }}>
-                                    <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
-                                    <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden de agencia?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                                    <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>
+                                    <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden de agencia?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 14 }}>🗑</button>
                                   </div>
                                 </td>
                               </tr>
@@ -2384,12 +2399,12 @@ export default function LavanderiaApp() {
           {tab === "domiciliarios" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>🛵 Domiciliarios</h2>
+                <h2 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>🛵 Domiciliarios</h2>
                 <button onClick={() => setModal("newDomiciliario")} style={{ ...btn, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff" }}>+ Nuevo Domiciliario</button>
               </div>
               <div style={{ marginBottom: 16, display: "flex", gap: 10, alignItems: "center" }}>
                 <input style={{ ...inp, maxWidth: 320 }} placeholder="🔍 Buscar por nombre o teléfono..." value={domiciliarioSearch} onChange={e => setDomiciliarioSearch(e.target.value)} />
-                {domiciliarioSearch && <button onClick={() => setDomiciliarioSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 14px", fontSize: 12 }}>✕ Limpiar</button>}
+                {domiciliarioSearch && <button onClick={() => setDomiciliarioSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "8px 14px", fontSize: 14 }}>✕ Limpiar</button>}
               </div>
 
               {(() => {
@@ -2400,18 +2415,18 @@ export default function LavanderiaApp() {
                     const totalValor = dmOrders.reduce((s,o) => s+Number(o.price), 0);
                     return <div key={dm.id} style={{ ...card, borderTop: "3px solid #66BB6A" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                        <div style={{ fontSize: 28 }}>🛵</div>
+                        <div style={{ fontSize: 32 }}>🛵</div>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => setEditingDomiciliario({ ...dm })} title="Editar" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 12 }}>✏️</button>
-                          <button onClick={() => deleteDomiciliario(dm.id)} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 12 }}>🗑</button>
+                          <button onClick={() => setEditingDomiciliario({ ...dm })} title="Editar" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "4px 10px", fontSize: 14 }}>✏️</button>
+                          <button onClick={() => deleteDomiciliario(dm.id)} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "4px 10px", fontSize: 14 }}>🗑</button>
                         </div>
                       </div>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{dm.name}</div>
-                      {dm.contact_name && <div style={{ color: "#8B949E", fontSize: 13, marginTop: 2 }}>👤 {dm.contact_name}</div>}
-                      {dm.phone && <div style={{ color: "#8B949E", fontSize: 13 }}>📞 {dm.phone}</div>}
-                      {dm.address && <div style={{ color: "#8B949E", fontSize: 13 }}>📍 {dm.address}</div>}
+                      <div style={{ fontWeight: 700, fontSize: 18 }}>{dm.name}</div>
+                      {dm.contact_name && <div style={{ color: "var(--text-muted)", fontSize: 15, marginTop: 2 }}>👤 {dm.contact_name}</div>}
+                      {dm.phone && <div style={{ color: "var(--text-muted)", fontSize: 15 }}>📞 {dm.phone}</div>}
+                      {dm.address && <div style={{ color: "var(--text-muted)", fontSize: 15 }}>📍 {dm.address}</div>}
                       <div style={{ marginTop: 12, background: "rgba(102,187,106,0.1)", borderRadius: 8, padding: "8px 12px", display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                        <span style={{ fontSize: 12, color: "#8B949E" }}>{dmOrders.length} orden{dmOrders.length!==1?"es":""}</span>
+                        <span style={{ fontSize: 14, color: "var(--text-muted)" }}>{dmOrders.length} orden{dmOrders.length!==1?"es":""}</span>
                         <span style={{ fontWeight: 800, color: "#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</span>
                       </div>
                       <button onClick={() => {
@@ -2422,46 +2437,46 @@ export default function LavanderiaApp() {
                         setNewOrder({ ...emptyOrder, client_name: dm.name, phone: dm.phone||"", domiciliario_id: dm.id, delivery_date: getDeliveryDefault() });
                         setItems([{ ...emptyItem, price: defaultPrice }]);
                         setModal("newOrder");
-                      }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff", padding: 10, fontSize: 13, fontWeight: 700 }}>+ Nueva Orden</button>
+                      }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff", padding: 10, fontSize: 15, fontWeight: 700 }}>+ Nueva Orden</button>
                     </div>;
                   })}
-                  {filteredDomiciliarios.length === 0 && <p style={{ color: "#484F58" }}>No se encontraron domiciliarios</p>}
+                  {filteredDomiciliarios.length === 0 && <p style={{ color: "var(--text-dim)" }}>No se encontraron domiciliarios</p>}
                 </div>;
               })()}
 
               <div style={{ ...card }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, color: "#8B949E" }}>Órdenes de domiciliarios</h3>
+                  <h3 style={{ margin: 0, fontSize: 18, color: "var(--text-muted)" }}>Órdenes de domiciliarios</h3>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <select value={selectedDomiciliarioId} onChange={e => setSelectedDomiciliarioId(e.target.value)} style={{ ...inp, width: 180, fontSize: 13 }}>
+                    <select value={selectedDomiciliarioId} onChange={e => setSelectedDomiciliarioId(e.target.value)} style={{ ...inp, width: 180, fontSize: 15 }}>
                       <option value="" style={{ background:"#1a1a2e" }}>Todos los domiciliarios</option>
                       {domiciliarios.map(dm => <option key={dm.id} value={dm.id} style={{ background:"#1a1a2e" }}>{dm.name}</option>)}
                     </select>
-                    <input type="date" value={domiciliarioOrderFilterDate} onChange={e => setDomiciliarioOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
-                    {domiciliarioOrderFilterDate && <button onClick={() => setDomiciliarioOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
+                    <input type="date" value={domiciliarioOrderFilterDate} onChange={e => setDomiciliarioOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
+                    {domiciliarioOrderFilterDate && <button onClick={() => setDomiciliarioOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 14 }}>Ver todas</button>}
                   </div>
                 </div>
                 {(() => {
                   const domiciliarioOrders = orders.filter(o => o.domiciliario_id && (!selectedDomiciliarioId || o.domiciliario_id === selectedDomiciliarioId) && (!domiciliarioOrderFilterDate || o.date === domiciliarioOrderFilterDate));
                   return domiciliarioOrders.length === 0
-                    ? <div style={{ textAlign: "center", padding: 32, color: "#484F58" }}><div style={{ fontSize: 36, marginBottom: 8 }}>🛵</div><div>No hay órdenes de domiciliarios con este filtro</div></div>
+                    ? <div style={{ textAlign: "center", padding: 32, color: "var(--text-dim)" }}><div style={{ fontSize: 41, marginBottom: 8 }}>🛵</div><div>No hay órdenes de domiciliarios con este filtro</div></div>
                     : <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                          <thead><tr style={{ background: "#21262D" }}>{["# Orden","Domiciliario","Prendas","Total","Fecha","Entrega","Estado",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 12 }}>{h}</th>)}</tr></thead>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16 }}>
+                          <thead><tr style={{ background: "var(--bg-surface)" }}>{["# Orden","Domiciliario","Prendas","Total","Fecha","Entrega","Estado",""].map((h,i) => <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, fontSize: 14 }}>{h}</th>)}</tr></thead>
                           <tbody>
                             {domiciliarioOrders.map(o => (
-                              <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
-                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(102,187,106,0.15)", color: "#66BB6A", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 13 }}>{o.order_number||"—"}</span></td>
+                              <tr key={o.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(102,187,106,0.15)", color: "#66BB6A", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{o.order_number||"—"}</span></td>
                                 <td style={{ padding: "12px 14px", fontWeight: 600 }}>{o.client_name}</td>
                                 <td style={{ padding: "12px 14px" }}>{o.garments} prendas</td>
                                 <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
-                                <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.date}</td>
-                                <td style={{ padding: "12px 14px", color: "#8B949E", fontSize: 12 }}>{o.delivery_date||"—"}</td>
-                                <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                <td style={{ padding: "12px 14px", color: "var(--text-muted)", fontSize: 14 }}>{o.date}</td>
+                                <td style={{ padding: "12px 14px", color: "var(--text-muted)", fontSize: 14 }}>{o.delivery_date||"—"}</td>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                                 <td style={{ padding: "12px 14px" }}>
                                   <div style={{ display: "flex", gap: 6 }}>
-                                    <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 12 }}>🖨️</button>
-                                    <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden de domiciliario?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 12 }}>🗑</button>
+                                    <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>
+                                    <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden de domiciliario?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 14 }}>🗑</button>
                                   </div>
                                 </td>
                               </tr>
@@ -2479,14 +2494,14 @@ export default function LavanderiaApp() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Gastos</h2>
+                  <h2 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>Gastos</h2>
                   {!showEliminados && <>
-                    <input type="date" value={expenseFilterDate} onChange={e => setExpenseFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 13 }} />
-                    {expenseFilterDate && <button onClick={() => setExpenseFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todos</button>}
+                    <input type="date" value={expenseFilterDate} onChange={e => setExpenseFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 15 }} />
+                    {expenseFilterDate && <button onClick={() => setExpenseFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 14 }}>Ver todos</button>}
                   </>}
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => setShowEliminados(!showEliminados)} style={{ ...btn, background: showEliminados?"rgba(239,83,80,0.2)":"rgba(255,255,255,0.05)", color: showEliminados?"#EF5350":"#8B949E", padding: "8px 14px", fontSize: 12 }}>
+                  <button onClick={() => setShowEliminados(!showEliminados)} style={{ ...btn, background: showEliminados?"rgba(239,83,80,0.2)":"rgba(255,255,255,0.05)", color: showEliminados?"#EF5350":"var(--text-muted)", padding: "8px 14px", fontSize: 14 }}>
                     {showEliminados ? "← Volver" : "🗑 Ver eliminados"}
                   </button>
                   {!showEliminados && <button onClick={() => setModal("newExpense")} style={{ ...btn, background: "linear-gradient(135deg,#EF5350,#B71C1C)", color: "#fff" }}>+ Nuevo Gasto</button>}
@@ -2497,22 +2512,22 @@ export default function LavanderiaApp() {
                 <div>
                   <div style={{ ...card, marginBottom: 16, border: "1px solid rgba(239,83,80,0.4)" }}>
                     <div style={{ display: "flex", gap: 40 }}>
-                      <div><div style={{ fontSize: 22, fontWeight: 800, color: "#EF5350" }}>${Math.round(expenses.filter(e=>e.eliminado).reduce((s,e)=>s+Number(e.amount),0))}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Total eliminado</div></div>
-                      <div><div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>{expenses.filter(e=>e.eliminado).length}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Registros</div></div>
+                      <div><div style={{ fontSize: 25, fontWeight: 800, color: "#EF5350" }}>${Math.round(expenses.filter(e=>e.eliminado).reduce((s,e)=>s+Number(e.amount),0))}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>Total eliminado</div></div>
+                      <div><div style={{ fontSize: 25, fontWeight: 800, color: "#FFD54F" }}>{expenses.filter(e=>e.eliminado).length}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>Registros</div></div>
                     </div>
                   </div>
                   {expenses.filter(e=>e.eliminado).length === 0
-                    ? <div style={{ ...card, textAlign: "center", padding: 40, color: "#484F58" }}><div style={{ fontSize: 40, marginBottom: 8 }}>🗑</div><div>No hay gastos eliminados</div></div>
-                    : <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                        <thead><tr style={{ background: "#21262D" }}>{["Concepto","Categoría","Pago","Monto","Fecha",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
+                    ? <div style={{ ...card, textAlign: "center", padding: 40, color: "var(--text-dim)" }}><div style={{ fontSize: 46, marginBottom: 8 }}>🗑</div><div>No hay gastos eliminados</div></div>
+                    : <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16 }}>
+                        <thead><tr style={{ background: "var(--bg-surface)" }}>{["Concepto","Categoría","Pago","Monto","Fecha",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:14 }}>{h}</th>)}</tr></thead>
                         <tbody>{expenses.filter(e=>e.eliminado).map(e=>(
-                          <tr key={e.id} style={{ borderBottom:"1px solid #21262D",opacity:0.7 }}>
+                          <tr key={e.id} style={{ borderBottom:"1px solid var(--bg-surface)",opacity:0.7 }}>
                             <td style={{ padding:"12px 14px",fontWeight:600 }}>{e.concept}</td>
-                            <td style={{ padding:"12px 14px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"3px 10px",borderRadius:20,fontSize:12 }}>{e.category}</span></td>
+                            <td style={{ padding:"12px 14px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"3px 10px",borderRadius:20,fontSize:14 }}>{e.category}</span></td>
                             <td style={{ padding:"12px 14px" }}><PayMethod m={e.payment_method} /></td>
                             <td style={{ padding:"12px 14px",fontWeight:700,color:"#EF5350" }}>${e.amount}</td>
-                            <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{e.date}</td>
-                            <td style={{ padding:"12px 14px" }}><button onClick={async()=>{ await db.patch("expenses",e.id,{eliminado:false}); setExpenses(prev=>prev.map(ex=>ex.id===e.id?{...ex,eliminado:false}:ex)); }} title="Restaurar" style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"5px 10px",fontSize:12 }}>↩️ Restaurar</button></td>
+                            <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{e.date}</td>
+                            <td style={{ padding:"12px 14px" }}><button onClick={async()=>{ await db.patch("expenses",e.id,{eliminado:false}); setExpenses(prev=>prev.map(ex=>ex.id===e.id?{...ex,eliminado:false}:ex)); }} title="Restaurar" style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"5px 10px",fontSize:14 }}>↩️ Restaurar</button></td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -2523,21 +2538,21 @@ export default function LavanderiaApp() {
               {!showEliminados && <>
                 <div style={{ ...card, marginBottom: 20 }}>
                   <div style={{ display: "flex", gap: 40 }}>
-                    <div><div style={{ fontSize: 22, fontWeight: 800, color: "#EF5350" }}>${Math.round(filteredExpenses.reduce((s,e)=>s+Number(e.amount),0))}</div><div style={{ fontSize: 12, color: "#8B949E" }}>{expenseFilterDate?"Gastos del día":"Total gastos"}</div></div>
-                    <div><div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>{filteredExpenses.length}</div><div style={{ fontSize: 12, color: "#8B949E" }}>Registros</div></div>
+                    <div><div style={{ fontSize: 25, fontWeight: 800, color: "#EF5350" }}>${Math.round(filteredExpenses.reduce((s,e)=>s+Number(e.amount),0))}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>{expenseFilterDate?"Gastos del día":"Total gastos"}</div></div>
+                    <div><div style={{ fontSize: 25, fontWeight: 800, color: "#FFD54F" }}>{filteredExpenses.length}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>Registros</div></div>
                   </div>
                 </div>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                  <thead><tr style={{ background: "#21262D" }}>{["Concepto","Categoría","Pago","Monto","Fecha",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16 }}>
+                  <thead><tr style={{ background: "var(--bg-surface)" }}>{["Concepto","Categoría","Pago","Monto","Fecha",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:14 }}>{h}</th>)}</tr></thead>
                   <tbody>
                     {filteredExpenses.map(e => (
-                      <tr key={e.id} style={{ borderBottom: "1px solid #21262D" }}>
+                      <tr key={e.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
                         <td style={{ padding:"12px 14px",fontWeight:600 }}>{e.concept}</td>
-                        <td style={{ padding:"12px 14px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"3px 10px",borderRadius:20,fontSize:12 }}>{e.category}</span></td>
+                        <td style={{ padding:"12px 14px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"3px 10px",borderRadius:20,fontSize:14 }}>{e.category}</span></td>
                         <td style={{ padding:"12px 14px" }}><PayMethod m={e.payment_method} /></td>
                         <td style={{ padding:"12px 14px",fontWeight:700,color:"#EF5350" }}>${e.amount}</td>
-                        <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{e.date}</td>
-                        <td style={{ padding:"12px 14px" }}><button onClick={async()=>{ const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar este gasto?"))deleteExpense(e.id); }} title="Eliminar" title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
+                        <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{e.date}</td>
+                        <td style={{ padding:"12px 14px" }}><button onClick={async()=>{ const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar este gasto?"))deleteExpense(e.id); }} title="Eliminar" title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:14 }}>🗑</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -2550,23 +2565,23 @@ export default function LavanderiaApp() {
           {tab === "nomina" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>💸 Nómina — Adelantos de Empleados</h2>
+                <h2 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>💸 Nómina — Adelantos de Empleados</h2>
                 <button onClick={() => setModal("newAdvance")} style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000" }}>+ Registrar Adelanto</button>
               </div>
 
               <div style={{ ...card, marginBottom: 20 }}>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
-                    <input type="date" value={advanceFrom} onChange={e => setAdvanceFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={advanceFrom} onChange={e => setAdvanceFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
-                    <input type="date" value={advanceTo} onChange={e => setAdvanceTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={advanceTo} onChange={e => setAdvanceTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div style={{ display: "flex", gap: 8, alignSelf: "flex-end" }}>
-                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; setAdvanceFrom(`${ym}-01`); setAdvanceTo(`${ym}-15`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "8px 14px", fontSize: 12 }}>Quincena 1 (1-15)</button>
-                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; const lastDay=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); setAdvanceFrom(`${ym}-16`); setAdvanceTo(`${ym}-${String(lastDay).padStart(2,"0")}`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "8px 14px", fontSize: 12 }}>Quincena 2 (16-fin)</button>
+                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; setAdvanceFrom(`${ym}-01`); setAdvanceTo(`${ym}-15`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "8px 14px", fontSize: 14 }}>Quincena 1 (1-15)</button>
+                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; const lastDay=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); setAdvanceFrom(`${ym}-16`); setAdvanceTo(`${ym}-${String(lastDay).padStart(2,"0")}`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "8px 14px", fontSize: 14 }}>Quincena 2 (16-fin)</button>
                   </div>
                 </div>
               </div>
@@ -2597,32 +2612,32 @@ export default function LavanderiaApp() {
                 return <>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 16, marginBottom: 20 }}>
                     <div style={{ ...card, borderLeft: "4px solid #FFD54F" }}>
-                      <div style={{ fontSize: 24, marginBottom: 6 }}>💸</div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: "#FFD54F" }}>${Math.round(totalPeriodo).toLocaleString()}</div>
-                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Total adelantado en el período</div>
+                      <div style={{ fontSize: 28, marginBottom: 6 }}>💸</div>
+                      <div style={{ fontSize: 25, fontWeight: 800, color: "#FFD54F" }}>${Math.round(totalPeriodo).toLocaleString()}</div>
+                      <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>Total adelantado en el período</div>
                     </div>
                     <div style={{ ...card, borderLeft: "4px solid #4FC3F7" }}>
-                      <div style={{ fontSize: 24, marginBottom: 6 }}>👥</div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: "#4FC3F7" }}>{empleadosList.length}</div>
-                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Empleados con adelantos</div>
+                      <div style={{ fontSize: 28, marginBottom: 6 }}>👥</div>
+                      <div style={{ fontSize: 25, fontWeight: 800, color: "#4FC3F7" }}>{empleadosList.length}</div>
+                      <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>Empleados con adelantos</div>
                     </div>
                     <div style={{ ...card, borderLeft: "4px solid #66BB6A" }}>
-                      <div style={{ fontSize: 24, marginBottom: 6 }}>📋</div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: "#66BB6A" }}>{filteredAdvances.length}</div>
-                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Registros</div>
+                      <div style={{ fontSize: 28, marginBottom: 6 }}>📋</div>
+                      <div style={{ fontSize: 25, fontWeight: 800, color: "#66BB6A" }}>{filteredAdvances.length}</div>
+                      <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>Registros</div>
                     </div>
                   </div>
 
                   {empleadosList.length > 0 && (
                     <div style={{ ...card, marginBottom: 20 }}>
-                      <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#8B949E" }}>Total a descontar por empleado</h3>
+                      <h3 style={{ margin: "0 0 14px", fontSize: 17, color: "var(--text-muted)" }}>Total a descontar por empleado</h3>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 12 }}>
                         {empleadosList.map((emp,i) => (
-                          <div key={i} style={{ background: "#0D1117", borderRadius: 10, padding: "12px 16px", borderLeft: "3px solid #FFD54F" }}>
-                            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{emp.name}</div>
+                          <div key={i} style={{ background: "var(--bg-app)", borderRadius: 10, padding: "12px 16px", borderLeft: "3px solid #FFD54F" }}>
+                            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{emp.name}</div>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                              <span style={{ fontSize: 11, color: "#8B949E" }}>{emp.count} adelanto{emp.count!==1?"s":""}</span>
-                              <span style={{ fontWeight: 800, fontSize: 17, color: "#FFD54F" }}>${Math.round(emp.total).toLocaleString()}</span>
+                              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{emp.count} adelanto{emp.count!==1?"s":""}</span>
+                              <span style={{ fontWeight: 800, fontSize: 20, color: "#FFD54F" }}>${Math.round(emp.total).toLocaleString()}</span>
                             </div>
                           </div>
                         ))}
@@ -2631,24 +2646,24 @@ export default function LavanderiaApp() {
                   )}
 
                   {isAdmin && filteredAdvances.length > 0 && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                    <button onClick={exportNomina} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                    <button onClick={exportNomina} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
                   </div>}
 
                   {filteredAdvances.length === 0
-                    ? <div style={{ ...card, textAlign: "center", padding: 40, color: "#484F58" }}><div style={{ fontSize: 40, marginBottom: 8 }}>💸</div><div>No hay adelantos registrados en este período</div></div>
+                    ? <div style={{ ...card, textAlign: "center", padding: 40, color: "var(--text-dim)" }}><div style={{ fontSize: 46, marginBottom: 8 }}>💸</div><div>No hay adelantos registrados en este período</div></div>
                     : <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                          <thead><tr style={{ background: "#21262D" }}>{["Empleado","Fecha","Monto","Método","Nota","Registrado por",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16 }}>
+                          <thead><tr style={{ background: "var(--bg-surface)" }}>{["Empleado","Fecha","Monto","Método","Nota","Registrado por",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:14 }}>{h}</th>)}</tr></thead>
                           <tbody>
                             {filteredAdvances.map(a => (
-                              <tr key={a.id} style={{ borderBottom: "1px solid #21262D" }}>
+                              <tr key={a.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
                                 <td style={{ padding:"12px 14px",fontWeight:600 }}>{a.employee_name}</td>
-                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{a.date}</td>
+                                <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{a.date}</td>
                                 <td style={{ padding:"12px 14px",fontWeight:700,color:"#FFD54F" }}>${Math.round(Number(a.amount)).toLocaleString()}</td>
                                 <td style={{ padding:"12px 14px" }}><PayMethod m={a.payment_method||"efectivo"} /></td>
-                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:13 }}>{a.note||"—"}</td>
-                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{a.created_by||"—"}</td>
-                                <td style={{ padding:"12px 14px" }}><button onClick={()=>deleteAdvance(a.id)} title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
+                                <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:15 }}>{a.note||"—"}</td>
+                                <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{a.created_by||"—"}</td>
+                                <td style={{ padding:"12px 14px" }}><button onClick={()=>deleteAdvance(a.id)} title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:14 }}>🗑</button></td>
                               </tr>
                             ))}
                           </tbody>
@@ -2664,31 +2679,31 @@ export default function LavanderiaApp() {
           {tab === "report" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Informe del Día</h2>
+                <h2 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>Informe del Día</h2>
                 <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160 }} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 16, marginBottom: 20 }}>
                 <div style={{ ...card, borderColor: "#66BB6A" }}>
                   <h3 style={{ margin: "0 0 16px", color: "#66BB6A" }}>💵 Resumen Financiero</h3>
                   {[["Ingresos totales",`$${Math.round(todayRevenue)}`,"#66BB6A"],["Gastos totales",`$${Math.round(todayExp)}`,"#EF5350"],["Utilidad neta",`$${Math.round(todayRevenue-todayExp)}`,"#4FC3F7"]].map(([l,v,c]) => (
-                    <div key={l} style={{ display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #21262D" }}><span style={{ color:"#8B949E" }}>{l}</span><span style={{ fontWeight:800,color:c,fontSize:16 }}>{v}</span></div>
+                    <div key={l} style={{ display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid var(--bg-surface)" }}><span style={{ color:"var(--text-muted)" }}>{l}</span><span style={{ fontWeight:800,color:c,fontSize:18 }}>{v}</span></div>
                   ))}
                 </div>
                 <div style={card}>
                   <h3 style={{ margin: "0 0 16px", color: "#4FC3F7" }}>👕 Resumen de Prendas</h3>
                   {[["Total prendas",todayGarments],["Total órdenes",todayOrders.length],["Ticket promedio",todayOrders.length?`$${Math.round(todayRevenue/todayOrders.length)}`:"$0"]].map(([l,v]) => (
-                    <div key={l} style={{ display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #21262D" }}><span style={{ color:"#8B949E" }}>{l}</span><span style={{ fontWeight:800,fontSize:16 }}>{v}</span></div>
+                    <div key={l} style={{ display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid var(--bg-surface)" }}><span style={{ color:"var(--text-muted)" }}>{l}</span><span style={{ fontWeight:800,fontSize:18 }}>{v}</span></div>
                   ))}
                 </div>
               </div>
               <div style={card}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-                  <h3 style={{ margin: 0, color: "#8B949E" }}>📊 Desglose por Servicio</h3>
+                  <h3 style={{ margin: 0, color: "var(--text-muted)" }}>📊 Desglose por Servicio</h3>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input type="date" value={desgloseServDesde} onChange={e => setDesgloseServDesde(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 12, padding: "6px 10px" }} />
-                    <span style={{ color: "#484F58", fontSize: 12 }}>a</span>
-                    <input type="date" value={desgloseServHasta} onChange={e => setDesgloseServHasta(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 12, padding: "6px 10px" }} />
-                    <button onClick={() => { setDesgloseServDesde(today); setDesgloseServHasta(today); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Hoy</button>
+                    <input type="date" value={desgloseServDesde} onChange={e => setDesgloseServDesde(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 14, padding: "6px 10px" }} />
+                    <span style={{ color: "var(--text-dim)", fontSize: 14 }}>a</span>
+                    <input type="date" value={desgloseServHasta} onChange={e => setDesgloseServHasta(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 14, padding: "6px 10px" }} />
+                    <button onClick={() => { setDesgloseServDesde(today); setDesgloseServHasta(today); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 14 }}>Hoy</button>
                   </div>
                 </div>
                 {(() => {
@@ -2697,20 +2712,20 @@ export default function LavanderiaApp() {
                     const ords = ordenesRango.filter(o=>(o.service||"").split(",").map(s=>s.trim()).includes(sv.id));
                     const expandido = desgloseServExpandido === sv.id;
                     return <div key={sv.id}>
-                      <div onClick={() => setDesgloseServExpandido(expandido ? null : sv.id)} style={{ display:"flex",alignItems:"center",gap:16,padding:"12px 0",borderBottom: expandido ? "none" : "1px solid #21262D",cursor:"pointer" }}>
-                        <div style={{ fontSize:24 }}>{sv.icon}</div>
-                        <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{sv.label}</div><div style={{ fontSize:12,color:"#8B949E" }}>{ords.length} órdenes · {ords.reduce((s,o)=>s+Number(o.garments),0)} prendas</div></div>
-                        <div style={{ fontWeight:800,color:sv.color,fontSize:16 }}>${Math.round(ords.reduce((s,o)=>s+Number(o.price),0))}</div>
-                        <div style={{ color:"#484F58",fontSize:12 }}>{expandido?"▲":"▼"}</div>
+                      <div onClick={() => setDesgloseServExpandido(expandido ? null : sv.id)} style={{ display:"flex",alignItems:"center",gap:16,padding:"12px 0",borderBottom: expandido ? "none" : "1px solid var(--bg-surface)",cursor:"pointer" }}>
+                        <div style={{ fontSize:28 }}>{sv.icon}</div>
+                        <div style={{ flex:1 }}><div style={{ fontWeight:600 }}>{sv.label}</div><div style={{ fontSize:14,color:"var(--text-muted)" }}>{ords.length} órdenes · {ords.reduce((s,o)=>s+Number(o.garments),0)} prendas</div></div>
+                        <div style={{ fontWeight:800,color:sv.color,fontSize:18 }}>${Math.round(ords.reduce((s,o)=>s+Number(o.price),0))}</div>
+                        <div style={{ color:"var(--text-dim)",fontSize:14 }}>{expandido?"▲":"▼"}</div>
                       </div>
                       {expandido && (
-                        <div style={{ padding:"4px 0 14px",borderBottom:"1px solid #21262D" }}>
+                        <div style={{ padding:"4px 0 14px",borderBottom:"1px solid var(--bg-surface)" }}>
                           {ords.length === 0 ? (
-                            <p style={{ color:"#484F58",fontSize:13,padding:"8px 0 0" }}>No hay órdenes de este servicio en el rango seleccionado.</p>
+                            <p style={{ color:"var(--text-dim)",fontSize:15,padding:"8px 0 0" }}>No hay órdenes de este servicio en el rango seleccionado.</p>
                           ) : (
-                            <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+                            <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
                               <thead>
-                                <tr style={{ borderBottom:"1px solid #30363D",color:"#8B949E",textAlign:"left" }}>
+                                <tr style={{ borderBottom:"1px solid var(--border)",color:"var(--text-muted)",textAlign:"left" }}>
                                   <th style={{ padding:"6px 10px" }}>Orden</th>
                                   <th style={{ padding:"6px 10px" }}>Cliente</th>
                                   <th style={{ padding:"6px 10px",textAlign:"right" }}>Prendas</th>
@@ -2721,13 +2736,13 @@ export default function LavanderiaApp() {
                               </thead>
                               <tbody>
                                 {ords.map(o => (
-                                  <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                  <tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
                                     <td style={{ padding:"6px 10px",fontWeight:700,color:sv.color }}>{o.order_number}</td>
                                     <td style={{ padding:"6px 10px" }}>{o.client_name}</td>
                                     <td style={{ padding:"6px 10px",textAlign:"right" }}>{o.garments}</td>
                                     <td style={{ padding:"6px 10px",textAlign:"right",fontWeight:700 }}>${Math.round(Number(o.price)).toLocaleString()}</td>
-                                    <td style={{ padding:"6px 10px",color:"#8B949E" }}>{o.date}</td>
-                                    <td style={{ padding:"6px 10px",color:"#8B949E" }}>{STATUS_LABELS[o.status]?.label || o.status}</td>
+                                    <td style={{ padding:"6px 10px",color:"var(--text-muted)" }}>{o.date}</td>
+                                    <td style={{ padding:"6px 10px",color:"var(--text-muted)" }}>{STATUS_LABELS[o.status]?.label || o.status}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -2740,13 +2755,13 @@ export default function LavanderiaApp() {
                 })()}
               </div>
               <div style={{ ...card, marginTop: 16 }}>
-                <h3 style={{ margin: "0 0 16px", color: "#8B949E" }}>📋 Estado de órdenes</h3>
+                <h3 style={{ margin: "0 0 16px", color: "var(--text-muted)" }}>📋 Estado de órdenes</h3>
                 <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                   {Object.entries(STATUS_LABELS).map(([k,v]) => {
                     const cnt=todayOrders.filter(o=>o.status===k).length;
                     return <div key={k} style={{ background:v.color+"15",border:`1px solid ${v.color}40`,borderRadius:10,padding:"12px 20px",textAlign:"center",minWidth:100 }}>
-                      <div style={{ fontWeight:800,fontSize:24,color:v.color }}>{cnt}</div>
-                      <div style={{ fontSize:12,color:"#8B949E",marginTop:2 }}>{v.label}</div>
+                      <div style={{ fontWeight:800,fontSize:28,color:v.color }}>{cnt}</div>
+                      <div style={{ fontSize:14,color:"var(--text-muted)",marginTop:2 }}>{v.label}</div>
                     </div>;
                   })}
                 </div>
@@ -2754,19 +2769,19 @@ export default function LavanderiaApp() {
 
               {/* INFORME POR RANGO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#4FC3F7" }}>📊 Informe por Rango de Fechas</h3>
+                <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "#4FC3F7" }}>📊 Informe por Rango de Fechas</h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
-                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
-                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div style={{ display: "flex", gap: 8, alignSelf: "flex-end" }}>
-                    <button onClick={() => setReportView("dia")} style={{ ...btn, background: reportView==="dia"?"linear-gradient(135deg,#4FC3F7,#0288D1)":"rgba(255,255,255,0.05)", color: reportView==="dia"?"#fff":"#8B949E", padding: "8px 16px", fontSize: 12 }}>Por Día</button>
-                    <button onClick={() => setReportView("mes")} style={{ ...btn, background: reportView==="mes"?"linear-gradient(135deg,#4FC3F7,#0288D1)":"rgba(255,255,255,0.05)", color: reportView==="mes"?"#fff":"#8B949E", padding: "8px 16px", fontSize: 12 }}>Por Mes</button>
+                    <button onClick={() => setReportView("dia")} style={{ ...btn, background: reportView==="dia"?"linear-gradient(135deg,#4FC3F7,#0288D1)":"rgba(255,255,255,0.05)", color: reportView==="dia"?"#fff":"var(--text-muted)", padding: "8px 16px", fontSize: 14 }}>Por Día</button>
+                    <button onClick={() => setReportView("mes")} style={{ ...btn, background: reportView==="mes"?"linear-gradient(135deg,#4FC3F7,#0288D1)":"rgba(255,255,255,0.05)", color: reportView==="mes"?"#fff":"var(--text-muted)", padding: "8px 16px", fontSize: 14 }}>Por Mes</button>
                   </div>
                 </div>
                 {(() => {
@@ -2782,20 +2797,20 @@ export default function LavanderiaApp() {
                       const csv=[["Fecha","Ordenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],...sortedDays.map(d=>[d,days[d].ordenes||0,days[d].prendas||0,Math.round(days[d].ingresos||0),days[d].entregas||0,Math.round(days[d].valorEntregado||0)]),["TOTAL",totalOrd,totalPrend,Math.round(totalIng),sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0),Math.round(totalEnt)]].map(r=>r.join(",")).join("\n");
                       const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`informe_diario_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
                     };
-                    return sortedDays.length===0 ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p> : (
+                    return sortedDays.length===0 ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p> : (
                       <>
                         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:16 }}>
                           {[{label:"Total Ingresado",value:`$${Math.round(totalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(totalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:totalOrd,color:"#FFD54F"},{label:"Prendas",value:totalPrend,color:"#FF8A65"}].map((k,i)=>(
-                            <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}><div style={{ fontWeight:800,fontSize:18,color:k.color }}>{k.value}</div><div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{k.label}</div></div>
+                            <div key={i} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}><div style={{ fontWeight:800,fontSize:21,color:k.color }}>{k.value}</div><div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{k.label}</div></div>
                           ))}
                         </div>
-                        {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}><button onClick={exportDia} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button></div>}
+                        {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}><button onClick={exportDia} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button></div>}
                         <div style={{ overflowX:"auto" }}>
-                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                            <thead><tr style={{ background:"#21262D" }}>{["Fecha","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                            <thead><tr style={{ background:"var(--bg-surface)" }}>{["Fecha","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
                             <tbody>
-                              {sortedDays.map(d=>(<tr key={d} style={{ borderBottom:"1px solid #21262D" }}><td style={{ padding:"10px 12px",fontWeight:600 }}>{d}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].ordenes||0}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].prendas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(days[d].ingresos||0).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].entregas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(days[d].valorEntregado||0).toLocaleString()}</td></tr>))}
-                              <tr style={{ background:"#21262D",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(totalEnt).toLocaleString()}</td></tr>
+                              {sortedDays.map(d=>(<tr key={d} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px",fontWeight:600 }}>{d}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].ordenes||0}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].prendas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(days[d].ingresos||0).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].entregas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(days[d].valorEntregado||0).toLocaleString()}</td></tr>))}
+                              <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(totalEnt).toLocaleString()}</td></tr>
                             </tbody>
                           </table>
                         </div>
@@ -2812,20 +2827,20 @@ export default function LavanderiaApp() {
                     const csv=[["Mes","Ordenes Ingresadas","Prendas","Valor Ingresado","Entregas","Valor Entregado"],...sortedMonths.map(m=>{const[y,mo]=m.split("-");return[`${monthNames[mo]} ${y}`,months[m].ordenes||0,months[m].prendas||0,Math.round(months[m].ingresos||0),months[m].entregas||0,Math.round(months[m].valorEntregado||0)];}),["TOTAL",mTotalOrd,mTotalPrend,Math.round(mTotalIng),sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0),Math.round(mTotalEnt)]].map(r=>r.join(",")).join("\n");
                     const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`informe_mensual_${reportFrom}_${reportTo}.csv`; a.click(); URL.revokeObjectURL(url);
                   };
-                  return sortedMonths.length===0 ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p> : (
+                  return sortedMonths.length===0 ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p> : (
                     <>
                       <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:16 }}>
                         {[{label:"Total Ingresado",value:`$${Math.round(mTotalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(mTotalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:mTotalOrd,color:"#FFD54F"},{label:"Prendas",value:mTotalPrend,color:"#FF8A65"}].map((k,i)=>(
-                          <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}><div style={{ fontWeight:800,fontSize:18,color:k.color }}>{k.value}</div><div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{k.label}</div></div>
+                          <div key={i} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}><div style={{ fontWeight:800,fontSize:21,color:k.color }}>{k.value}</div><div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{k.label}</div></div>
                         ))}
                       </div>
-                      {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}><button onClick={exportMes} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button></div>}
+                      {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}><button onClick={exportMes} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button></div>}
                       <div style={{ overflowX:"auto" }}>
-                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                          <thead><tr style={{ background:"#21262D" }}>{["Mes","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
+                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                          <thead><tr style={{ background:"var(--bg-surface)" }}>{["Mes","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
                           <tbody>
-                            {sortedMonths.map(m=>{const[y,mo]=m.split("-");return<tr key={m} style={{ borderBottom:"1px solid #21262D" }}><td style={{ padding:"10px 12px",fontWeight:600 }}>{monthNames[mo]} {y}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].ordenes||0}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].prendas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(months[m].ingresos||0).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].entregas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(months[m].valorEntregado||0).toLocaleString()}</td></tr>;})}
-                            <tr style={{ background:"#21262D",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(mTotalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(mTotalEnt).toLocaleString()}</td></tr>
+                            {sortedMonths.map(m=>{const[y,mo]=m.split("-");return<tr key={m} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px",fontWeight:600 }}>{monthNames[mo]} {y}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].ordenes||0}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].prendas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(months[m].ingresos||0).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].entregas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(months[m].valorEntregado||0).toLocaleString()}</td></tr>;})}
+                            <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(mTotalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(mTotalEnt).toLocaleString()}</td></tr>
                           </tbody>
                         </table>
                       </div>
@@ -2836,15 +2851,15 @@ export default function LavanderiaApp() {
 
               {/* GASTOS POR RANGO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#EF5350" }}>💰 Gastos por Rango de Fechas</h3>
+                <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "#EF5350" }}>💰 Gastos por Rango de Fechas</h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
-                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
-                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                 </div>
                 {(() => {
@@ -2879,31 +2894,31 @@ export default function LavanderiaApp() {
                   };
 
                   return gastosRango.length === 0
-                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay gastos en este rango de fechas</p>
+                    ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay gastos en este rango de fechas</p>
                     : <>
                         {/* KPIs */}
                         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16 }}>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #EF5350" }}>
-                            <div style={{ fontWeight:800,fontSize:20,color:"#EF5350" }}>${Math.round(totalGastosRango).toLocaleString()}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total gastos</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #EF5350" }}>
+                            <div style={{ fontWeight:800,fontSize:23,color:"#EF5350" }}>${Math.round(totalGastosRango).toLocaleString()}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total gastos</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:20,color:"#FFD54F" }}>{gastosRango.length}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Registros</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:23,color:"#FFD54F" }}>{gastosRango.length}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Registros</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
-                            <div style={{ fontWeight:800,fontSize:20,color:"#4FC3F7" }}>{sortedDays.length}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Días con gastos</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:23,color:"#4FC3F7" }}>{sortedDays.length}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Días con gastos</div>
                           </div>
                         </div>
 
                         {/* Por categoría */}
                         <div style={{ marginBottom:16 }}>
-                          <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:8 }}>POR CATEGORÍA</div>
+                          <div style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600,marginBottom:8 }}>POR CATEGORÍA</div>
                           <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                             {Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,total]) => (
                               <div key={cat} style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.3)",borderRadius:10,padding:"8px 14px" }}>
-                                <div style={{ fontSize:11,color:"#8B949E",marginBottom:2 }}>{cat.charAt(0).toUpperCase()+cat.slice(1)}</div>
+                                <div style={{ fontSize:13,color:"var(--text-muted)",marginBottom:2 }}>{cat.charAt(0).toUpperCase()+cat.slice(1)}</div>
                                 <div style={{ fontWeight:800,color:"#EF5350" }}>${Math.round(total).toLocaleString()}</div>
                               </div>
                             ))}
@@ -2911,26 +2926,26 @@ export default function LavanderiaApp() {
                         </div>
 
                         {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                          <button onClick={exportGastos} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                          <button onClick={exportGastos} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
                         </div>}
 
                         {/* Tabla detalle */}
                         <div style={{ overflowX:"auto" }}>
-                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                            <thead><tr style={{ background:"#21262D" }}>
-                              {["Fecha","Concepto","Categoría","Pago","Monto"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                            <thead><tr style={{ background:"var(--bg-surface)" }}>
+                              {["Fecha","Concepto","Categoría","Pago","Monto"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}
                             </tr></thead>
                             <tbody>
                               {gastosRango.map(e => (
-                                <tr key={e.id} style={{ borderBottom:"1px solid #21262D" }}>
-                                  <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{e.date}</td>
+                                <tr key={e.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
+                                  <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{e.date}</td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{e.concept}</td>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"2px 8px",borderRadius:20,fontSize:11 }}>{e.category}</span></td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"2px 8px",borderRadius:20,fontSize:13 }}>{e.category}</span></td>
                                   <td style={{ padding:"10px 12px" }}><PayMethod m={e.payment_method} /></td>
                                   <td style={{ padding:"10px 12px",fontWeight:700,color:"#EF5350" }}>${Math.round(Number(e.amount)).toLocaleString()}</td>
                                 </tr>
                               ))}
-                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                              <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
                                 <td colSpan={4} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#EF5350" }}>${Math.round(totalGastosRango).toLocaleString()}</td>
                               </tr>
@@ -2943,15 +2958,15 @@ export default function LavanderiaApp() {
 
               {/* ABONOS POR RANGO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#FFD54F" }}>💰 Abonos por Rango de Fechas</h3>
+                <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "#FFD54F" }}>💰 Abonos por Rango de Fechas</h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
-                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
-                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                 </div>
                 {(() => {
@@ -2986,25 +3001,25 @@ export default function LavanderiaApp() {
                   };
 
                   return abonosRango.length === 0
-                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay abonos en este rango de fechas</p>
+                    ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay abonos en este rango de fechas</p>
                     : <>
                         {/* KPIs */}
                         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:16 }}>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:20,color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total abonado</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:23,color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total abonado</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
-                            <div style={{ fontWeight:800,fontSize:20,color:"#4FC3F7" }}>{abonosRango.length}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total abonos</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:23,color:"#4FC3F7" }}>{abonosRango.length}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total abonos</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
-                            <div style={{ fontWeight:800,fontSize:20,color:"#66BB6A" }}>{new Set(abonosRango.map(a=>a.order_id)).size}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Órdenes con abono</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
+                            <div style={{ fontWeight:800,fontSize:23,color:"#66BB6A" }}>{new Set(abonosRango.map(a=>a.order_id)).size}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Órdenes con abono</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FF8A65" }}>
-                            <div style={{ fontWeight:800,fontSize:20,color:"#FF8A65" }}>{sortedDays.length}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Días con abonos</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FF8A65" }}>
+                            <div style={{ fontWeight:800,fontSize:23,color:"#FF8A65" }}>{sortedDays.length}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Días con abonos</div>
                           </div>
                         </div>
 
@@ -3012,35 +3027,35 @@ export default function LavanderiaApp() {
                         <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:16 }}>
                           {[{k:"efectivo",l:"💵 Efectivo",c:"#66BB6A"},{k:"nequi",l:"📱 Nequi",c:"#C792EA"},{k:"daviplata",l:"💜 Daviplata",c:"#667EEA"},{k:"breb",l:"🔵 Bre-b",c:"#4FC3F7"},{k:"tarjeta",l:"💳 Tarjeta",c:"#FFA726"}].filter(m=>byMetodo[m.k]>0).map(m=>(
                             <div key={m.k} style={{ background:m.c+"15",border:`1px solid ${m.c}40`,borderRadius:10,padding:"8px 14px" }}>
-                              <div style={{ fontSize:11,color:"#8B949E" }}>{m.l}</div>
+                              <div style={{ fontSize:13,color:"var(--text-muted)" }}>{m.l}</div>
                               <div style={{ fontWeight:800,color:m.c }}>${Math.round(byMetodo[m.k]).toLocaleString()}</div>
                             </div>
                           ))}
                         </div>
 
                         {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                          <button onClick={exportAbonos} style={{ ...btn,background:"rgba(255,213,79,0.15)",color:"#FFD54F",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                          <button onClick={exportAbonos} style={{ ...btn,background:"rgba(255,213,79,0.15)",color:"#FFD54F",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
                         </div>}
 
                         {/* Tabla detalle */}
                         <div style={{ overflowX:"auto" }}>
-                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                            <thead><tr style={{ background:"#21262D" }}>
-                              {["Fecha","# Orden","Cliente","Empleado","Método","Monto"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                            <thead><tr style={{ background:"var(--bg-surface)" }}>
+                              {["Fecha","# Orden","Cliente","Empleado","Método","Monto"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}
                             </tr></thead>
                             <tbody>
                               {abonosRango.map(a => {
                                 const orden = orders.find(o => o.id === a.order_id);
-                                return <tr key={a.id} style={{ borderBottom:"1px solid #21262D" }}>
-                                  <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{a.date}</td>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:12 }}>{orden?.order_number||"—"}</span></td>
+                                return <tr key={a.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
+                                  <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{a.date}</td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:14 }}>{orden?.order_number||"—"}</span></td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{orden?.client_name||"—"}</td>
-                                  <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{a.employee||"—"}</td>
+                                  <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{a.employee||"—"}</td>
                                   <td style={{ padding:"10px 12px" }}><PayMethod m={a.payment_method||"efectivo"} /></td>
                                   <td style={{ padding:"10px 12px",fontWeight:700,color:"#FFD54F" }}>${Math.round(Number(a.amount)).toLocaleString()}</td>
                                 </tr>;
                               })}
-                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                              <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
                                 <td colSpan={5} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</td>
                               </tr>
@@ -3053,19 +3068,19 @@ export default function LavanderiaApp() {
 
               {/* AGENCIAS POR RANGO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#FF8A65" }}>🏢 Informe de Agencias</h3>
+                <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "#FF8A65" }}>🏢 Informe de Agencias</h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
-                    <input type="date" value={agencyReportFrom} onChange={e => setAgencyReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={agencyReportFrom} onChange={e => setAgencyReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
-                    <input type="date" value={agencyReportTo} onChange={e => setAgencyReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={agencyReportTo} onChange={e => setAgencyReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>AGENCIA</label>
-                    <select value={agencyReportId} onChange={e => setAgencyReportId(e.target.value)} style={{ ...inp, width: 180, fontSize: 13 }}>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>AGENCIA</label>
+                    <select value={agencyReportId} onChange={e => setAgencyReportId(e.target.value)} style={{ ...inp, width: 180, fontSize: 15 }}>
                       <option value="todas" style={{ background:"#1a1a2e" }}>Todas las agencias</option>
                       {agencies.map(ag => <option key={ag.id} value={ag.id} style={{ background:"#1a1a2e" }}>{ag.name}</option>)}
                     </select>
@@ -3097,37 +3112,37 @@ export default function LavanderiaApp() {
                   };
 
                   return rango.length === 0
-                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay órdenes de agencias en este rango de fechas</p>
+                    ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay órdenes de agencias en este rango de fechas</p>
                     : <>
                         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16 }}>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FF8A65" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#FF8A65" }}>${Math.round(totalValor).toLocaleString()}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total facturado</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FF8A65" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#FF8A65" }}>${Math.round(totalValor).toLocaleString()}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total facturado</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#FFD54F" }}>{rango.length}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Órdenes</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#FFD54F" }}>{rango.length}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Órdenes</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#4FC3F7" }}>{totalPrendas}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Prendas</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#4FC3F7" }}>{totalPrendas}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Prendas</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#66BB6A" }}>{agenciasList.length}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Agencias activas</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#66BB6A" }}>{agenciasList.length}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Agencias activas</div>
                           </div>
                         </div>
 
                         {agencyReportId === "todas" && agenciasList.length > 0 && (
                           <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:8 }}>TOTAL A FACTURAR POR AGENCIA</div>
+                            <div style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600,marginBottom:8 }}>TOTAL A FACTURAR POR AGENCIA</div>
                             <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12 }}>
                               {agenciasList.map((ag,i) => (
-                                <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 16px",borderLeft:"3px solid #FF8A65" }}>
-                                  <div style={{ fontWeight:700,fontSize:14,marginBottom:4 }}>{ag.name}</div>
+                                <div key={i} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 16px",borderLeft:"3px solid #FF8A65" }}>
+                                  <div style={{ fontWeight:700,fontSize:16,marginBottom:4 }}>{ag.name}</div>
                                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"baseline" }}>
-                                    <span style={{ fontSize:11,color:"#8B949E" }}>{ag.count} orden{ag.count!==1?"es":""} · {ag.garments} prendas</span>
-                                    <span style={{ fontWeight:800,fontSize:17,color:"#FF8A65" }}>${Math.round(ag.total).toLocaleString()}</span>
+                                    <span style={{ fontSize:13,color:"var(--text-muted)" }}>{ag.count} orden{ag.count!==1?"es":""} · {ag.garments} prendas</span>
+                                    <span style={{ fontWeight:800,fontSize:20,color:"#FF8A65" }}>${Math.round(ag.total).toLocaleString()}</span>
                                   </div>
                                 </div>
                               ))}
@@ -3136,25 +3151,25 @@ export default function LavanderiaApp() {
                         )}
 
                         {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                          <button onClick={exportAgencias} style={{ ...btn,background:"rgba(255,138,101,0.15)",color:"#FF8A65",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                          <button onClick={exportAgencias} style={{ ...btn,background:"rgba(255,138,101,0.15)",color:"#FF8A65",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
                         </div>}
 
                         <div style={{ overflowX:"auto" }}>
-                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                            <thead><tr style={{ background:"#21262D" }}>{["# Orden","Agencia","Prendas","Total","Fecha","Entrega","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                            <thead><tr style={{ background:"var(--bg-surface)" }}>{["# Orden","Agencia","Prendas","Total","Fecha","Entrega","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
                             <tbody>
                               {rango.map(o => (
-                                <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                <tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
                                   <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,138,101,0.15)",color:"#FF8A65",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
                                   <td style={{ padding:"10px 12px" }}>{o.garments}</td>
                                   <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
-                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.date}</td>
-                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.delivery_date||"—"}</td>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                  <td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.date}</td>
+                                  <td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.delivery_date||"—"}</td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:13,fontWeight:600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                                 </tr>
                               ))}
-                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                              <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
                                 <td colSpan={3} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
                                 <td colSpan={3}></td>
@@ -3168,19 +3183,19 @@ export default function LavanderiaApp() {
 
               {/* DOMICILIARIOS POR RANGO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#66BB6A" }}>🛵 Informe de Domiciliarios</h3>
+                <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "#66BB6A" }}>🛵 Informe de Domiciliarios</h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
-                    <input type="date" value={domiciliarioReportFrom} onChange={e => setDomiciliarioReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={domiciliarioReportFrom} onChange={e => setDomiciliarioReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
-                    <input type="date" value={domiciliarioReportTo} onChange={e => setDomiciliarioReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={domiciliarioReportTo} onChange={e => setDomiciliarioReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DOMICILIARIO</label>
-                    <select value={domiciliarioReportId} onChange={e => setDomiciliarioReportId(e.target.value)} style={{ ...inp, width: 180, fontSize: 13 }}>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DOMICILIARIO</label>
+                    <select value={domiciliarioReportId} onChange={e => setDomiciliarioReportId(e.target.value)} style={{ ...inp, width: 180, fontSize: 15 }}>
                       <option value="todas" style={{ background:"#1a1a2e" }}>Todos los domiciliarios</option>
                       {domiciliarios.map(dm => <option key={dm.id} value={dm.id} style={{ background:"#1a1a2e" }}>{dm.name}</option>)}
                     </select>
@@ -3212,37 +3227,37 @@ export default function LavanderiaApp() {
                   };
 
                   return rango.length === 0
-                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay órdenes de domiciliarios en este rango de fechas</p>
+                    ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay órdenes de domiciliarios en este rango de fechas</p>
                     : <>
                         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16 }}>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total facturado</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total facturado</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#FFD54F" }}>{rango.length}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Órdenes</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#FFD54F" }}>{rango.length}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Órdenes</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#4FC3F7" }}>{totalPrendas}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Prendas</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#4FC3F7" }}>{totalPrendas}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Prendas</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FF8A65" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#FF8A65" }}>{domiciliariosList.length}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Domiciliarios activos</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FF8A65" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#FF8A65" }}>{domiciliariosList.length}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Domiciliarios activos</div>
                           </div>
                         </div>
 
                         {domiciliarioReportId === "todas" && domiciliariosList.length > 0 && (
                           <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:8 }}>TOTAL A FACTURAR POR DOMICILIARIO</div>
+                            <div style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600,marginBottom:8 }}>TOTAL A FACTURAR POR DOMICILIARIO</div>
                             <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12 }}>
                               {domiciliariosList.map((dm,i) => (
-                                <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 16px",borderLeft:"3px solid #66BB6A" }}>
-                                  <div style={{ fontWeight:700,fontSize:14,marginBottom:4 }}>{dm.name}</div>
+                                <div key={i} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 16px",borderLeft:"3px solid #66BB6A" }}>
+                                  <div style={{ fontWeight:700,fontSize:16,marginBottom:4 }}>{dm.name}</div>
                                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"baseline" }}>
-                                    <span style={{ fontSize:11,color:"#8B949E" }}>{dm.count} orden{dm.count!==1?"es":""} · {dm.garments} prendas</span>
-                                    <span style={{ fontWeight:800,fontSize:17,color:"#66BB6A" }}>${Math.round(dm.total).toLocaleString()}</span>
+                                    <span style={{ fontSize:13,color:"var(--text-muted)" }}>{dm.count} orden{dm.count!==1?"es":""} · {dm.garments} prendas</span>
+                                    <span style={{ fontWeight:800,fontSize:20,color:"#66BB6A" }}>${Math.round(dm.total).toLocaleString()}</span>
                                   </div>
                                 </div>
                               ))}
@@ -3251,25 +3266,25 @@ export default function LavanderiaApp() {
                         )}
 
                         {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                          <button onClick={exportDomiciliarios} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                          <button onClick={exportDomiciliarios} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
                         </div>}
 
                         <div style={{ overflowX:"auto" }}>
-                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                            <thead><tr style={{ background:"#21262D" }}>{["# Orden","Domiciliario","Prendas","Total","Fecha","Entrega","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                            <thead><tr style={{ background:"var(--bg-surface)" }}>{["# Orden","Domiciliario","Prendas","Total","Fecha","Entrega","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
                             <tbody>
                               {rango.map(o => (
-                                <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                <tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
                                   <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(102,187,106,0.15)",color:"#66BB6A",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
                                   <td style={{ padding:"10px 12px" }}>{o.garments}</td>
                                   <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
-                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.date}</td>
-                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.delivery_date||"—"}</td>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                  <td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.date}</td>
+                                  <td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.delivery_date||"—"}</td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:13,fontWeight:600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                                 </tr>
                               ))}
-                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                              <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
                                 <td colSpan={3} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
                                 <td colSpan={3}></td>
@@ -3283,16 +3298,16 @@ export default function LavanderiaApp() {
 
               {/* DOMICILIOS PROPIOS POR RANGO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#4FC3F7" }}>🛵 Domicilios Propios (recogidos en casa del cliente)</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Órdenes marcadas como "Recibido a domicilio"</p>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#4FC3F7" }}>🛵 Domicilios Propios (recogidos en casa del cliente)</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Órdenes marcadas como "Recibido a domicilio"</p>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
-                    <input type="date" value={domicilioReportFrom} onChange={e => setDomicilioReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={domicilioReportFrom} onChange={e => setDomicilioReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
-                    <input type="date" value={domicilioReportTo} onChange={e => setDomicilioReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={domicilioReportTo} onChange={e => setDomicilioReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                 </div>
                 {(() => {
@@ -3312,44 +3327,44 @@ export default function LavanderiaApp() {
                   };
 
                   return rango.length === 0
-                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay órdenes a domicilio en este rango de fechas</p>
+                    ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay órdenes a domicilio en este rango de fechas</p>
                     : <>
                         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16 }}>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#4FC3F7" }}>${Math.round(totalValor).toLocaleString()}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Total recaudado</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#4FC3F7" }}>${Math.round(totalValor).toLocaleString()}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total recaudado</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#FFD54F" }}>{rango.length}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Órdenes a domicilio</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#FFD54F" }}>{rango.length}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Órdenes a domicilio</div>
                           </div>
-                          <div style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
-                            <div style={{ fontWeight:800,fontSize:18,color:"#66BB6A" }}>{totalPrendas}</div>
-                            <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>Prendas</div>
+                          <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
+                            <div style={{ fontWeight:800,fontSize:21,color:"#66BB6A" }}>{totalPrendas}</div>
+                            <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Prendas</div>
                           </div>
                         </div>
 
                         {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                          <button onClick={exportDomicilios} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                          <button onClick={exportDomicilios} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
                         </div>}
 
                         <div style={{ overflowX:"auto" }}>
-                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                            <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Dirección","Empleado","Prendas","Total","Fecha","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                            <thead><tr style={{ background:"var(--bg-surface)" }}>{["# Orden","Cliente","Dirección","Empleado","Prendas","Total","Fecha","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
                             <tbody>
                               {rango.map(o => (
-                                <tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}>
+                                <tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
                                   <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
-                                  <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.address||"—"}</td>
+                                  <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.address||"—"}</td>
                                   <td style={{ padding:"10px 12px",color:"#C792EA" }}>{o.employee||"—"}</td>
                                   <td style={{ padding:"10px 12px" }}>{o.garments}</td>
                                   <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
-                                  <td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.date}</td>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                  <td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.date}</td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:13,fontWeight:600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                                 </tr>
                               ))}
-                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                              <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
                                 <td colSpan={5} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
                                 <td colSpan={2}></td>
@@ -3363,15 +3378,15 @@ export default function LavanderiaApp() {
 
               {/* PAGOS POR MÉTODO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#C792EA" }}>💳 Pagos por Método — Rango de Fechas</h3>
+                <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "#C792EA" }}>💳 Pagos por Método — Rango de Fechas</h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
-                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
-                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                 </div>
                 {(() => {
@@ -3418,38 +3433,38 @@ export default function LavanderiaApp() {
                   };
 
                   return entregadas.length === 0
-                    ? <p style={{ color:"#484F58",textAlign:"center",padding:32 }}>No hay entregas en este rango de fechas</p>
+                    ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay entregas en este rango de fechas</p>
                     : <>
                         {/* KPIs por método */}
                         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:16 }}>
                           {totalesPorMetodo.map(m => (
-                            <div key={m.key} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${m.color}` }}>
-                              <div style={{ fontSize:13,color:"#8B949E",marginBottom:4 }}>{m.label}</div>
-                              <div style={{ fontWeight:800,fontSize:18,color:m.color }}>${Math.round(m.total).toLocaleString()}</div>
-                              <div style={{ fontSize:11,color:"#484F58",marginTop:2 }}>{m.count} entrega{m.count!==1?"s":""}</div>
+                            <div key={m.key} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${m.color}` }}>
+                              <div style={{ fontSize:15,color:"var(--text-muted)",marginBottom:4 }}>{m.label}</div>
+                              <div style={{ fontWeight:800,fontSize:21,color:m.color }}>${Math.round(m.total).toLocaleString()}</div>
+                              <div style={{ fontSize:13,color:"var(--text-dim)",marginTop:2 }}>{m.count} entrega{m.count!==1?"s":""}</div>
                             </div>
                           ))}
                         </div>
 
                         {/* Total general */}
                         <div style={{ background:"rgba(199,146,234,0.08)",border:"1px solid rgba(199,146,234,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                          <span style={{ fontWeight:600,color:"#8B949E" }}>Total recaudado en el período</span>
-                          <span style={{ fontWeight:800,fontSize:20,color:"#C792EA" }}>${Math.round(totalGeneral).toLocaleString()}</span>
+                          <span style={{ fontWeight:600,color:"var(--text-muted)" }}>Total recaudado en el período</span>
+                          <span style={{ fontWeight:800,fontSize:23,color:"#C792EA" }}>${Math.round(totalGeneral).toLocaleString()}</span>
                         </div>
 
                         {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                          <button onClick={exportPagos} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                          <button onClick={exportPagos} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
                         </div>}
 
                         {/* Tabla por día */}
                         {sortedDays.length > 0 && <div style={{ overflowX:"auto" }}>
-                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                            <thead><tr style={{ background:"#21262D" }}>
-                              {["Fecha","💵 Efectivo","📱 Nequi","💜 Daviplata","🔵 Bre-b","💳 Tarjeta","Total"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}
+                          <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                            <thead><tr style={{ background:"var(--bg-surface)" }}>
+                              {["Fecha","💵 Efectivo","📱 Nequi","💜 Daviplata","🔵 Bre-b","💳 Tarjeta","Total"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}
                             </tr></thead>
                             <tbody>
                               {sortedDays.map(d => (
-                                <tr key={d} style={{ borderBottom:"1px solid #21262D" }}>
+                                <tr key={d} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{d}</td>
                                   <td style={{ padding:"10px 12px",color:"#66BB6A",fontWeight:600 }}>{byDay[d].efectivo>0?`$${Math.round(byDay[d].efectivo).toLocaleString()}`:"—"}</td>
                                   <td style={{ padding:"10px 12px",color:"#C792EA",fontWeight:600 }}>{byDay[d].nequi>0?`$${Math.round(byDay[d].nequi).toLocaleString()}`:"—"}</td>
@@ -3459,7 +3474,7 @@ export default function LavanderiaApp() {
                                   <td style={{ padding:"10px 12px",fontWeight:800 }}>${Math.round(byDay[d].total).toLocaleString()}</td>
                                 </tr>
                               ))}
-                              <tr style={{ background:"#21262D",fontWeight:800 }}>
+                              <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
                                 <td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="efectivo")?.total||0).toLocaleString()}</td>
                                 <td style={{ padding:"10px 12px",color:"#C792EA" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="nequi")?.total||0).toLocaleString()}</td>
@@ -3477,22 +3492,22 @@ export default function LavanderiaApp() {
 
               {/* REVERSADAS */}
               <div style={{ ...card, marginTop: 20 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FFD54F" }}>↩️ Órdenes Reversadas</h3>
-                <p style={{ margin: "0 0 14px", fontSize: 13, color: "#8B949E" }}>Órdenes que estuvieron entregadas y fueron reversadas</p>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#FFD54F" }}>↩️ Órdenes Reversadas</h3>
+                <p style={{ margin: "0 0 14px", fontSize: 15, color: "var(--text-muted)" }}>Órdenes que estuvieron entregadas y fueron reversadas</p>
                 <div style={{ marginBottom: 14, display: "flex", gap: 10 }}>
                   <input style={{ ...inp, maxWidth: 300 }} placeholder="🔍 Buscar por nombre, teléfono o # orden..." value={reversadasSearch} onChange={e => setReversadasSearch(e.target.value)} />
-                  {reversadasSearch && <button onClick={() => setReversadasSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "8px 12px", fontSize: 12 }}>✕</button>}
+                  {reversadasSearch && <button onClick={() => setReversadasSearch("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "8px 12px", fontSize: 14 }}>✕</button>}
                 </div>
                 {(() => {
                   const q=reversadasSearch.toLowerCase();
                   const reversadas=orders.filter(o=>{ if(!o.reversada)return false; if(!q)return true; return o.client_name?.toLowerCase().includes(q)||o.phone?.includes(q)||o.order_number?.toLowerCase().includes(q); });
                   return reversadas.length===0
-                    ?<div style={{ textAlign:"center",padding:32,color:"#484F58" }}><div style={{ fontSize:32,marginBottom:8 }}>↩️</div><div>{reversadasSearch?"No se encontraron con ese criterio":"No hay órdenes reversadas aún"}</div></div>
+                    ?<div style={{ textAlign:"center",padding:32,color:"var(--text-dim)" }}><div style={{ fontSize:37,marginBottom:8 }}>↩️</div><div>{reversadasSearch?"No se encontraron con ese criterio":"No hay órdenes reversadas aún"}</div></div>
                     :<div style={{ overflowX:"auto" }}>
-                        <div style={{ fontSize:13,color:"#8B949E",marginBottom:12 }}><strong style={{ color:"#FFD54F" }}>{reversadas.length}</strong> orden{reversadas.length!==1?"es":""} reversada{reversadas.length!==1?"s":""}</div>
-                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                          <thead><tr style={{ background:"#21262D" }}>{["# Orden","Cliente","Teléfono","Servicio","Total","Entregado por","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11 }}>{h}</th>)}</tr></thead>
-                          <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid #21262D" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"#FFD54F",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"#8B949E" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:12 }}>👤 {o.delivered_by}</span>:<span style={{ color:"#484F58",fontSize:12 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:11,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
+                        <div style={{ fontSize:15,color:"var(--text-muted)",marginBottom:12 }}><strong style={{ color:"#FFD54F" }}>{reversadas.length}</strong> orden{reversadas.length!==1?"es":""} reversada{reversadas.length!==1?"s":""}</div>
+                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                          <thead><tr style={{ background:"var(--bg-surface)" }}>{["# Orden","Cliente","Teléfono","Servicio","Total","Entregado por","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
+                          <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"#FFD54F",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:13,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:14 }}>👤 {o.delivered_by}</span>:<span style={{ color:"var(--text-dim)",fontSize:14 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:13,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
                         </table>
                       </div>;
                 })()}
@@ -3500,25 +3515,25 @@ export default function LavanderiaApp() {
 
               {/* BUSCAR PRENDAS POR TIPO */}
               <div ref={buscarPrendaSectionRef} style={{ ...card, marginTop: 20 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#4FC3F7" }}>🔎 Buscar Prendas por Tipo</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>¿Cuántos pares de tenis, camisas, maletas, cubrelechos, etc. entraron en un rango de fechas?</p>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#4FC3F7" }}>🔎 Buscar Prendas por Tipo</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>¿Cuántos pares de tenis, camisas, maletas, cubrelechos, etc. entraron en un rango de fechas?</p>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>TIPO DE PRENDA</label>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>TIPO DE PRENDA</label>
                     <select value={buscarPrendaTipo} onChange={e => setBuscarPrendaTipo(e.target.value)} style={{ ...inp, width: 200 }}>
                       <option value="">Todas las prendas</option>
                       {garmentTypes.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
                     <input type="date" value={buscarPrendaDesde} onChange={e => setBuscarPrendaDesde(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
                     <input type="date" value={buscarPrendaHasta} onChange={e => setBuscarPrendaHasta(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150 }} />
                   </div>
-                  <button onClick={() => { setBuscarPrendaDesde(today); setBuscarPrendaHasta(today); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "10px 14px", fontSize: 12 }}>Hoy</button>
+                  <button onClick={() => { setBuscarPrendaDesde(today); setBuscarPrendaHasta(today); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "10px 14px", fontSize: 14 }}>Hoy</button>
                 </div>
                 {(() => {
                   const ordenesEnRango = orders.filter(o => o.date >= buscarPrendaDesde && o.date <= buscarPrendaHasta);
@@ -3536,14 +3551,14 @@ export default function LavanderiaApp() {
                   return (
                     <>
                       <div style={{ background: "rgba(79,195,247,0.1)", border: "1px solid rgba(79,195,247,0.3)", borderRadius: 10, padding: "12px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: 13, color: "#8B949E" }}>{buscarPrendaTipo || "Todas las prendas"} · {buscarPrendaDesde === buscarPrendaHasta ? buscarPrendaDesde : `${buscarPrendaDesde} a ${buscarPrendaHasta}`}</span>
-                        <span style={{ fontWeight: 800, fontSize: 20, color: "#4FC3F7" }}>{totalPiezas} pieza{totalPiezas !== 1 ? "s" : ""}</span>
+                        <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{buscarPrendaTipo || "Todas las prendas"} · {buscarPrendaDesde === buscarPrendaHasta ? buscarPrendaDesde : `${buscarPrendaDesde} a ${buscarPrendaHasta}`}</span>
+                        <span style={{ fontWeight: 800, fontSize: 22, color: "#4FC3F7" }}>{totalPiezas} pieza{totalPiezas !== 1 ? "s" : ""}</span>
                       </div>
                       {resultados.length > 0 && (
                         <div style={{ maxHeight: 300, overflowY: "auto" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 15 }}>
                             <thead>
-                              <tr style={{ borderBottom: "1px solid #30363D", color: "#8B949E", textAlign: "left" }}>
+                              <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-muted)", textAlign: "left" }}>
                                 <th style={{ padding: "6px 10px" }}>Orden</th>
                                 <th style={{ padding: "6px 10px" }}>Cliente</th>
                                 <th style={{ padding: "6px 10px" }}>Prenda</th>
@@ -3554,20 +3569,20 @@ export default function LavanderiaApp() {
                             </thead>
                             <tbody>
                               {resultados.map((r, i) => (
-                                <tr key={i} style={{ borderBottom: "1px solid #21262D" }}>
+                                <tr key={i} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
                                   <td style={{ padding: "6px 10px", fontWeight: 700, color: "#4FC3F7" }}>{r.order.order_number}</td>
                                   <td style={{ padding: "6px 10px" }}>{r.order.client_name}</td>
                                   <td style={{ padding: "6px 10px" }}>{r.item.garment_type}</td>
-                                  <td style={{ padding: "6px 10px", color: "#8B949E" }}>{r.item.color || "—"}</td>
+                                  <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>{r.item.color || "—"}</td>
                                   <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>{r.item.quantity}</td>
-                                  <td style={{ padding: "6px 10px", color: "#8B949E" }}>{r.order.date}</td>
+                                  <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>{r.order.date}</td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
                       )}
-                      {resultados.length === 0 && <p style={{ color: "#484F58", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No se encontraron prendas con esos filtros.</p>}
+                      {resultados.length === 0 && <p style={{ color: "var(--text-dim)", fontSize: 15, textAlign: "center", padding: "20px 0" }}>No se encontraron prendas con esos filtros.</p>}
                     </>
                   );
                 })()}
@@ -3577,13 +3592,13 @@ export default function LavanderiaApp() {
               <div ref={inventarioSectionRef} style={{ ...card, marginTop: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <div>
-                    <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FF8A65" }}>📦 Inventario — Prendas sin retirar</h3>
-                    <p style={{ margin: 0, fontSize: 13, color: "#8B949E" }}>Órdenes que aún no han sido entregadas al cliente</p>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#FF8A65" }}>📦 Inventario — Prendas sin retirar</h3>
+                    <p style={{ margin: 0, fontSize: 15, color: "var(--text-muted)" }}>Órdenes que aún no han sido entregadas al cliente</p>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    <input type="date" value={inventoryFilter} onChange={e => setInventoryFilter(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 13 }} />
-                    {inventoryFilter && <button onClick={() => setInventoryFilter("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "6px 12px", fontSize: 12 }}>Ver todas</button>}
-                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 13 }}>
+                    <input type="date" value={inventoryFilter} onChange={e => setInventoryFilter(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 15 }} />
+                    {inventoryFilter && <button onClick={() => setInventoryFilter("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 14 }}>Ver todas</button>}
+                    <select value={inventoryDaysFilter} onChange={e => setInventoryDaysFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 15 }}>
                       <option value="">Todos los días</option>
                       <option value="7">Más de 7 días</option>
                       <option value="30">Más de 30 días</option>
@@ -3595,57 +3610,57 @@ export default function LavanderiaApp() {
                       const daysIn=r=>Math.floor((new Date()-new Date(r.date))/(1000*60*60*24));
                       const csv=[["# Orden","Cliente","Telefono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Dias"],...rows.map(o=>[o.order_number||"",o.client_name,o.phone,getServiceLabel(o.service, services),o.garments,Math.round(Number(o.price)),STATUS_LABELS[o.status]?.label,o.date,o.delivery_date||"",daysIn(o)])].map(r=>r.join(",")).join("\n");
                       const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`inventario_${today}.csv`; a.click(); URL.revokeObjectURL(url);
-                    }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "6px 14px", fontSize: 12 }}>📥 Exportar Excel</button>}
+                    }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "6px 14px", fontSize: 14 }}>📥 Exportar Excel</button>}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginBottom: 20 }}>
                   {[{label:"Órdenes pendientes",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#4FC3F7"},{label:"Prendas en local",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.garments),0),color:"#FFD54F"},{label:"Valor en inventario",value:`$${Math.round(orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.price),0))}`,color:"#66BB6A"},{label:"Listas para retiro",value:orders.filter(o=>o.status==="listo"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#FF8A65"}].map((kpi,i)=>(
-                    <div key={i} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${kpi.color}` }}><div style={{ fontWeight:800,fontSize:18,color:kpi.color }}>{kpi.value}</div><div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{kpi.label}</div></div>
+                    <div key={i} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${kpi.color}` }}><div style={{ fontWeight:800,fontSize:21,color:kpi.color }}>{kpi.value}</div><div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{kpi.label}</div></div>
                   ))}
                 </div>
                 {(() => {
                   const pendingOrders=orders.filter(o=>{ if(o.status==="entregado")return false; if(inventoryFilter&&o.date!==inventoryFilter)return false; if(inventoryDaysFilter){const d=Math.floor((new Date()-new Date(o.date))/(1000*60*60*24));if(Number(inventoryDaysFilter)>0&&d<Number(inventoryDaysFilter))return false;} return true; }).sort((a,b)=>new Date(a.delivery_date||"9999")-new Date(b.delivery_date||"9999"));
                   return pendingOrders.length===0
-                    ?<div style={{ textAlign:"center",padding:32,color:"#484F58" }}><div style={{ fontSize:40,marginBottom:8 }}>✅</div><div>No hay prendas pendientes de retiro</div></div>
+                    ?<div style={{ textAlign:"center",padding:32,color:"var(--text-dim)" }}><div style={{ fontSize:46,marginBottom:8 }}>✅</div><div>No hay prendas pendientes de retiro</div></div>
                     :<div style={{ overflowX:"auto" }}>
                         {/* Botones selección masiva */}
                         <div style={{ display:"flex",gap:10,marginBottom:10,flexWrap:"wrap",alignItems:"center" }}>
-                          <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"6px 12px",fontSize:12 }}>✅ Seleccionar todos</button>
-                          <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.status==="listo"&&o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 12px",fontSize:12 }}>🟢 Solo "Listo"</button>
+                          <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"6px 12px",fontSize:14 }}>✅ Seleccionar todos</button>
+                          <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.status==="listo"&&o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 12px",fontSize:14 }}>🟢 Solo "Listo"</button>
                           {selectedInventory.length > 0 && <>
-                            <button onClick={() => setSelectedInventory([])} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",padding:"6px 12px",fontSize:12 }}>✕ Limpiar</button>
+                            <button onClick={() => setSelectedInventory([])} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",padding:"6px 12px",fontSize:14 }}>✕ Limpiar</button>
                             <button onClick={() => {
                               const selected = pendingOrders.filter(o => selectedInventory.includes(o.id) && o.phone);
                               selected.forEach(o => {
                                 const msg = waMensaje.replace("{nombre}", o.client_name).replace("{orden}", o.order_number||"");
                                 window.open(getWhatsAppUrl(negocioPais + (o.phone||"").replace(/[^0-9]/g,""), msg), "lavagest_whatsapp");
                               });
-                            }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:"6px 14px",fontSize:12,fontWeight:700 }}>
+                            }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:"6px 14px",fontSize:14,fontWeight:700 }}>
                               📱 Enviar WA a {selectedInventory.length} seleccionado{selectedInventory.length!==1?"s":""}
                             </button>
                           </>}
                         </div>
-                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
-                          <thead><tr style={{ background:"#21262D" }}>{["","# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días","📱"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:11,whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
+                          <thead><tr style={{ background:"var(--bg-surface)" }}>{["","# Orden","Cliente","Teléfono","Servicio","Prendas","Valor","Estado","F. Ingreso","F. Entrega","Días","📱"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13,whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
                           <tbody>{pendingOrders.map(o=>{
                             const daysIn=Math.floor((new Date()-new Date(o.date))/(1000*60*60*24));
                             const isLate=o.delivery_date&&new Date(o.delivery_date)<new Date()&&o.status!=="entregado";
                             const isSelected = selectedInventory.includes(o.id);
-                            return<tr key={o.id} style={{ borderBottom:"1px solid #21262D",background:isSelected?"rgba(37,211,102,0.05)":isLate?"rgba(239,83,80,0.05)":"transparent" }}>
+                            return<tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)",background:isSelected?"rgba(37,211,102,0.05)":isLate?"rgba(239,83,80,0.05)":"transparent" }}>
                               <td style={{ padding:"10px 12px" }}>
                                 {o.phone && <input type="checkbox" checked={isSelected} onChange={() => setSelectedInventory(prev => isSelected ? prev.filter(id=>id!==o.id) : [...prev,o.id])} style={{ width:16,height:16,accentColor:"#25D366",cursor:"pointer" }} />}
                               </td>
-                              <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:12 }}>{o.order_number||"—"}</span></td>
+                              <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:14 }}>{o.order_number||"—"}</span></td>
                               <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
-                              <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.phone}</td>
-                              <td style={{ padding:"10px 12px" }}><div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:11,whiteSpace:"nowrap" }}>{sv.icon} {sv.label}</span>:null;})}</div></td>
+                              <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.phone}</td>
+                              <td style={{ padding:"10px 12px" }}><div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:13,whiteSpace:"nowrap" }}>{sv.icon} {sv.label}</span>:null;})}</div></td>
                               <td style={{ padding:"10px 12px",fontWeight:600,textAlign:"center" }}>{o.garments}</td>
                               <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td>
-                              <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap" }}>{STATUS_LABELS[o.status]?.label}</span></td>
-                              <td style={{ padding:"10px 12px",color:"#8B949E",fontSize:12 }}>{o.date}</td>
-                              <td style={{ padding:"10px 12px",fontSize:12 }}><span style={{ color:isLate?"#EF5350":"#FFD54F",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
-                              <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"#FFD54F":"#8B949E",fontSize:13 }}>{daysIn}d</span></td>
-                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:11,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
+                              <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:13,fontWeight:600,whiteSpace:"nowrap" }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                              <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.date}</td>
+                              <td style={{ padding:"10px 12px",fontSize:14 }}><span style={{ color:isLate?"#EF5350":"#FFD54F",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
+                              <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"#FFD54F":"var(--text-muted)",fontSize:15 }}>{daysIn}d</span></td>
+                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
                             </tr>;
                           })}</tbody>
                         </table>
@@ -3658,37 +3673,37 @@ export default function LavanderiaApp() {
           {/* REVERSAR */}
           {tab === "reversar" && (
             <div>
-              <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>↩️ Reversar Entrega</h2>
-              <p style={{ color: "#8B949E", fontSize: 13, marginBottom: 24 }}>Busca una orden y devuélvela a estado "Listo" si hubo un error.</p>
+              <h2 style={{ margin: "0 0 8px", fontSize: 25, fontWeight: 800 }}>↩️ Reversar Entrega</h2>
+              <p style={{ color: "var(--text-muted)", fontSize: 15, marginBottom: 24 }}>Busca una orden y devuélvela a estado "Listo" si hubo un error.</p>
               <div style={{ ...card, marginBottom: 20 }}>
-                <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 8, fontWeight: 600 }}>BUSCAR POR TELÉFONO O NÚMERO DE ORDEN</label>
+                <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>BUSCAR POR TELÉFONO O NÚMERO DE ORDEN</label>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <input style={{ ...inp, flex: 1, fontSize: 16 }} placeholder="Ej: 3105604421 o S0001" value={reversarSearch} onChange={e => { setReversarSearch(e.target.value); setReversarResults(null); setReversarDone(false); }} onKeyDown={e => e.key === "Enter" && searchReversar()} />
+                  <input style={{ ...inp, flex: 1, fontSize: 18 }} placeholder="Ej: 3105604421 o S0001" value={reversarSearch} onChange={e => { setReversarSearch(e.target.value); setReversarResults(null); setReversarDone(false); }} onKeyDown={e => e.key === "Enter" && searchReversar()} />
                   <button onClick={searchReversar} style={{ ...btn, background: "linear-gradient(135deg,#FFD54F,#F57F17)", color: "#000", padding: "10px 24px", fontWeight: 800 }}>🔍 Buscar</button>
                 </div>
               </div>
-              {reversarResults !== null && reversarResults.length === 0 && <div style={{ ...card, textAlign: "center", padding: 32 }}><div style={{ fontSize: 40, marginBottom: 8 }}>😕</div><div style={{ fontWeight: 600, color: "#8B949E" }}>No se encontraron órdenes</div></div>}
-              {reversarDone && <div style={{ ...card, textAlign: "center", padding: 24, border: "1px solid #66BB6A", marginBottom: 16 }}><div style={{ fontSize: 36, marginBottom: 6 }}>✅</div><div style={{ fontWeight: 800, fontSize: 16, color: "#66BB6A" }}>¡Acción realizada correctamente!</div></div>}
+              {reversarResults !== null && reversarResults.length === 0 && <div style={{ ...card, textAlign: "center", padding: 32 }}><div style={{ fontSize: 46, marginBottom: 8 }}>😕</div><div style={{ fontWeight: 600, color: "var(--text-muted)" }}>No se encontraron órdenes</div></div>}
+              {reversarDone && <div style={{ ...card, textAlign: "center", padding: 24, border: "1px solid #66BB6A", marginBottom: 16 }}><div style={{ fontSize: 41, marginBottom: 6 }}>✅</div><div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A" }}>¡Acción realizada correctamente!</div></div>}
               {reversarResults !== null && reversarResults.length > 0 && (
                 <div>{reversarResults.map(o => (
-                  <div key={o.id} style={{ ...card, marginBottom: 12, borderLeft: `4px solid ${STATUS_LABELS[o.status]?.color||"#30363D"}` }}>
+                  <div key={o.id} style={{ ...card, marginBottom: 12, borderLeft: `4px solid ${STATUS_LABELS[o.status]?.color||"var(--border)"}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 13 }}>{o.order_number||"—"}</span>
-                          <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
+                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 15 }}>{o.order_number||"—"}</span>
+                          <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
                         </div>
-                        <div style={{ fontWeight: 700, fontSize: 16 }}>{o.client_name}</div>
-                        <div style={{ fontSize: 13, color: "#8B949E" }}>📞 {o.phone} · {getServiceLabel(o.service, services)} · {o.garments} prendas</div>
-                        <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "#484F58" }}>
+                        <div style={{ fontWeight: 700, fontSize: 18 }}>{o.client_name}</div>
+                        <div style={{ fontSize: 15, color: "var(--text-muted)" }}>📞 {o.phone} · {getServiceLabel(o.service, services)} · {o.garments} prendas</div>
+                        <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 14, color: "var(--text-dim)" }}>
                           <span>📅 Ingreso: {o.date}</span>
                           {o.delivered_at && <span>✅ Entregado: {o.delivered_at}</span>}
                           {o.payment_method && <span>{o.payment_method==="nequi"?"📱 Nequi":o.payment_method==="daviplata"?"💜 Daviplata":"💵 Efectivo"}</span>}
                         </div>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
-                        <div style={{ fontWeight: 800, fontSize: 22, color: "#66BB6A", marginBottom: 8 }}>${Math.round(Number(o.price))}</div>
-                        <button onClick={() => confirmarReversar(o)} style={{ ...btn, background: (o.status==="entregado"||o.status==="parcial")?"linear-gradient(135deg,#FFD54F,#F57F17)":"linear-gradient(135deg,#EF5350,#B71C1C)", color: (o.status==="entregado"||o.status==="parcial")?"#000":"#fff", padding: "10px 18px", fontWeight: 800, fontSize: 13 }}>
+                        <div style={{ fontWeight: 800, fontSize: 25, color: "#66BB6A", marginBottom: 8 }}>${Math.round(Number(o.price))}</div>
+                        <button onClick={() => confirmarReversar(o)} style={{ ...btn, background: (o.status==="entregado"||o.status==="parcial")?"linear-gradient(135deg,#FFD54F,#F57F17)":"linear-gradient(135deg,#EF5350,#B71C1C)", color: (o.status==="entregado"||o.status==="parcial")?"#000":"#fff", padding: "10px 18px", fontWeight: 800, fontSize: 15 }}>
                           {(o.status==="entregado"||o.status==="parcial")?"↩️ Reversar":"🗑 Eliminar orden"}
                         </button>
                       </div>
@@ -3703,24 +3718,24 @@ export default function LavanderiaApp() {
           {tab === "donaciones" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 10 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>🎁 Donaciones y Pérdidas</h2>
+                <h2 style={{ margin: 0, fontSize: 25, fontWeight: 800 }}>🎁 Donaciones y Pérdidas</h2>
                 <button onClick={() => setModal("newDonationLoss")} style={{ ...btn, background: "linear-gradient(135deg,#C792EA,#9B59B6)", color: "#fff" }}>+ Registrar</button>
               </div>
-              <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8B949E" }}>Este registro es solo informativo — no afecta tu inventario, órdenes ni el cuadre de caja.</p>
+              <p style={{ margin: "0 0 20px", fontSize: 15, color: "var(--text-muted)" }}>Este registro es solo informativo — no afecta tu inventario, órdenes ni el cuadre de caja.</p>
 
               <div style={{ ...card, marginBottom: 20 }}>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DESDE</label>
-                    <input type="date" value={dlFrom} onChange={e => setDlFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={dlFrom} onChange={e => setDlFrom(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>HASTA</label>
-                    <input type="date" value={dlTo} onChange={e => setDlTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 13 }} />
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={dlTo} onChange={e => setDlTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>TIPO</label>
-                    <select value={dlTypeFilter} onChange={e => setDlTypeFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 13 }}>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>TIPO</label>
+                    <select value={dlTypeFilter} onChange={e => setDlTypeFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 15 }}>
                       <option value="" style={{ background:"#1a1a2e" }}>Todos</option>
                       <option value="donacion" style={{ background:"#1a1a2e" }}>🎁 Donación</option>
                       <option value="perdida" style={{ background:"#1a1a2e" }}>⚠️ Pérdida</option>
@@ -3749,49 +3764,49 @@ export default function LavanderiaApp() {
                 return <>
                   <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:16,marginBottom:24 }}>
                     <div style={{ ...card, borderLeft:"4px solid #C792EA" }}>
-                      <div style={{ fontSize:24,marginBottom:6 }}>🎁</div>
-                      <div style={{ fontSize:22,fontWeight:800,color:"#C792EA" }}>{donaciones.length}</div>
-                      <div style={{ fontSize:12,color:"#8B949E",marginTop:2 }}>Donaciones registradas</div>
+                      <div style={{ fontSize:28,marginBottom:6 }}>🎁</div>
+                      <div style={{ fontSize:25,fontWeight:800,color:"#C792EA" }}>{donaciones.length}</div>
+                      <div style={{ fontSize:14,color:"var(--text-muted)",marginTop:2 }}>Donaciones registradas</div>
                     </div>
                     <div style={{ ...card, borderLeft:"4px solid #EF5350" }}>
-                      <div style={{ fontSize:24,marginBottom:6 }}>⚠️</div>
-                      <div style={{ fontSize:22,fontWeight:800,color:"#EF5350" }}>{perdidas.length}</div>
-                      <div style={{ fontSize:12,color:"#8B949E",marginTop:2 }}>Pérdidas registradas</div>
+                      <div style={{ fontSize:28,marginBottom:6 }}>⚠️</div>
+                      <div style={{ fontSize:25,fontWeight:800,color:"#EF5350" }}>{perdidas.length}</div>
+                      <div style={{ fontSize:14,color:"var(--text-muted)",marginTop:2 }}>Pérdidas registradas</div>
                     </div>
                     <div style={{ ...card, borderLeft:"4px solid #EF5350" }}>
-                      <div style={{ fontSize:24,marginBottom:6 }}>💸</div>
-                      <div style={{ fontSize:22,fontWeight:800,color:"#EF5350" }}>${Math.round(totalPerdidaValor).toLocaleString()}</div>
-                      <div style={{ fontSize:12,color:"#8B949E",marginTop:2 }}>Valor estimado perdido</div>
+                      <div style={{ fontSize:28,marginBottom:6 }}>💸</div>
+                      <div style={{ fontSize:25,fontWeight:800,color:"#EF5350" }}>${Math.round(totalPerdidaValor).toLocaleString()}</div>
+                      <div style={{ fontSize:14,color:"var(--text-muted)",marginTop:2 }}>Valor estimado perdido</div>
                     </div>
                     <div style={{ ...card, borderLeft:"4px solid #C792EA" }}>
-                      <div style={{ fontSize:24,marginBottom:6 }}>💜</div>
-                      <div style={{ fontSize:22,fontWeight:800,color:"#C792EA" }}>${Math.round(totalDonacionValor).toLocaleString()}</div>
-                      <div style={{ fontSize:12,color:"#8B949E",marginTop:2 }}>Valor estimado donado</div>
+                      <div style={{ fontSize:28,marginBottom:6 }}>💜</div>
+                      <div style={{ fontSize:25,fontWeight:800,color:"#C792EA" }}>${Math.round(totalDonacionValor).toLocaleString()}</div>
+                      <div style={{ fontSize:14,color:"var(--text-muted)",marginTop:2 }}>Valor estimado donado</div>
                     </div>
                   </div>
 
                   {isAdmin && filtered.length > 0 && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                    <button onClick={exportDL} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"6px 14px",fontSize:12 }}>📥 Exportar Excel</button>
+                    <button onClick={exportDL} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
                   </div>}
 
                   {filtered.length === 0
-                    ? <div style={{ ...card, textAlign:"center", padding:40, color:"#484F58" }}><div style={{ fontSize:40,marginBottom:8 }}>🎁</div><div>No hay registros en este rango de fechas</div></div>
+                    ? <div style={{ ...card, textAlign:"center", padding:40, color:"var(--text-dim)" }}><div style={{ fontSize:46,marginBottom:8 }}>🎁</div><div>No hay registros en este rango de fechas</div></div>
                     : <div style={{ overflowX:"auto" }}>
-                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:14 }}>
-                          <thead><tr style={{ background:"#21262D" }}>{["Tipo","Descripción","Cant.","Valor","# Orden","Cliente","Fundación","Fecha","Empleado",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"#8B949E",fontWeight:600,fontSize:12 }}>{h}</th>)}</tr></thead>
+                        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:16 }}>
+                          <thead><tr style={{ background:"var(--bg-surface)" }}>{["Tipo","Descripción","Cant.","Valor","# Orden","Cliente","Fundación","Fecha","Empleado",""].map(h=><th key={h} style={{ padding:"10px 14px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:14 }}>{h}</th>)}</tr></thead>
                           <tbody>
                             {filtered.map(d => (
-                              <tr key={d.id} style={{ borderBottom:"1px solid #21262D" }}>
-                                <td style={{ padding:"12px 14px" }}>{d.type==="donacion"?<span style={{ background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:600 }}>🎁 Donación</span>:<span style={{ background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:600 }}>⚠️ Pérdida</span>}</td>
-                                <td style={{ padding:"12px 14px",fontWeight:600 }}>{d.description}{d.notes && <div style={{ fontSize:11,color:"#8B949E",marginTop:2 }}>{d.notes}</div>}</td>
+                              <tr key={d.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
+                                <td style={{ padding:"12px 14px" }}>{d.type==="donacion"?<span style={{ background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"3px 10px",borderRadius:20,fontSize:14,fontWeight:600 }}>🎁 Donación</span>:<span style={{ background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"3px 10px",borderRadius:20,fontSize:14,fontWeight:600 }}>⚠️ Pérdida</span>}</td>
+                                <td style={{ padding:"12px 14px",fontWeight:600 }}>{d.description}{d.notes && <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{d.notes}</div>}</td>
                                 <td style={{ padding:"12px 14px" }}>{d.quantity||0}</td>
                                 <td style={{ padding:"12px 14px",fontWeight:700,color:d.type==="donacion"?"#C792EA":"#EF5350" }}>${Math.round(Number(d.estimated_value||0)).toLocaleString()}</td>
-                                <td style={{ padding:"12px 14px" }}>{d.order_number?<span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:700,padding:"2px 8px",borderRadius:6,fontSize:12 }}>{d.order_number}</span>:"—"}</td>
-                                <td style={{ padding:"12px 14px",color:"#8B949E" }}>{d.client_name||"—"}</td>
-                                <td style={{ padding:"12px 14px",color:"#8B949E" }}>{d.foundation_name||"—"}</td>
-                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{d.date}</td>
-                                <td style={{ padding:"12px 14px",color:"#8B949E",fontSize:12 }}>{d.employee||"—"}</td>
-                                <td style={{ padding:"12px 14px" }}><button onClick={()=>deleteDonationLoss(d.id)} title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button></td>
+                                <td style={{ padding:"12px 14px" }}>{d.order_number?<span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:700,padding:"2px 8px",borderRadius:6,fontSize:14 }}>{d.order_number}</span>:"—"}</td>
+                                <td style={{ padding:"12px 14px",color:"var(--text-muted)" }}>{d.client_name||"—"}</td>
+                                <td style={{ padding:"12px 14px",color:"var(--text-muted)" }}>{d.foundation_name||"—"}</td>
+                                <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{d.date}</td>
+                                <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{d.employee||"—"}</td>
+                                <td style={{ padding:"12px 14px" }}><button onClick={()=>deleteDonationLoss(d.id)} title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:14 }}>🗑</button></td>
                               </tr>
                             ))}
                           </tbody>
@@ -3806,40 +3821,40 @@ export default function LavanderiaApp() {
           {/* INVENTARIO COMPARATIVO */}
           {tab === "inventario_comparativo" && (
             <div>
-              <h2 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 800 }}>🔍 Inventario Comparativo</h2>
-              <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8B949E" }}>Escanea con la pistola cada recibo de las prendas que tienes colgadas. Se van acumulando aquí solas — al terminar, dale "Comparar" y te muestra las inconsistencias contra lo que el sistema cree que está pendiente.</p>
+              <h2 style={{ margin: "0 0 6px", fontSize: 25, fontWeight: 800 }}>🔍 Inventario Comparativo</h2>
+              <p style={{ margin: "0 0 20px", fontSize: 15, color: "var(--text-muted)" }}>Escanea con la pistola cada recibo de las prendas que tienes colgadas. Se van acumulando aquí solas — al terminar, dale "Comparar" y te muestra las inconsistencias contra lo que el sistema cree que está pendiente.</p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 16, marginBottom: 20 }}>
                 <div style={{ ...card, borderLeft: "4px solid #4FC3F7" }}>
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>📋</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#4FC3F7" }}>{orders.filter(o => o.status !== "entregado").length}</div>
-                  <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Pendientes en el sistema</div>
+                  <div style={{ fontSize: 28, marginBottom: 6 }}>📋</div>
+                  <div style={{ fontSize: 25, fontWeight: 800, color: "#4FC3F7" }}>{orders.filter(o => o.status !== "entregado").length}</div>
+                  <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>Pendientes en el sistema</div>
                 </div>
                 <div style={{ ...card, borderLeft: "4px solid #66BB6A" }}>
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>📷</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#66BB6A" }}>{scannedCodes.length}</div>
-                  <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>Escaneadas ahora</div>
+                  <div style={{ fontSize: 28, marginBottom: 6 }}>📷</div>
+                  <div style={{ fontSize: 25, fontWeight: 800, color: "#66BB6A" }}>{scannedCodes.length}</div>
+                  <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>Escaneadas ahora</div>
                 </div>
               </div>
 
-              <div style={{ ...card, marginBottom: 20, border: lastScanFlash ? "2px solid #66BB6A" : "1px solid #30363D", background: lastScanFlash ? "rgba(102,187,106,0.08)" : "#161B22" }}>
+              <div style={{ ...card, marginBottom: 20, border: lastScanFlash ? "2px solid #66BB6A" : "1px solid var(--border)", background: lastScanFlash ? "rgba(102,187,106,0.08)" : "var(--bg-card)" }}>
                 {lastScanFlash
-                  ? <div style={{ textAlign: "center", padding: "8px 0" }}><div style={{ fontSize: 28 }}>✅</div><div style={{ fontWeight: 800, fontSize: 16, color: "#66BB6A" }}>Escaneada: {lastScanFlash}</div></div>
-                  : <div style={{ textAlign: "center", padding: "8px 0", color: "#484F58" }}><div style={{ fontSize: 28 }}>📷</div><div style={{ fontSize: 13 }}>Esperando escaneo... (haz clic en cualquier parte vacía de esta pantalla y pasa la pistola)</div></div>
+                  ? <div style={{ textAlign: "center", padding: "8px 0" }}><div style={{ fontSize: 32 }}>✅</div><div style={{ fontWeight: 800, fontSize: 18, color: "#66BB6A" }}>Escaneada: {lastScanFlash}</div></div>
+                  : <div style={{ textAlign: "center", padding: "8px 0", color: "var(--text-dim)" }}><div style={{ fontSize: 32 }}>📷</div><div style={{ fontSize: 15 }}>Esperando escaneo... (haz clic en cualquier parte vacía de esta pantalla y pasa la pistola)</div></div>
                 }
               </div>
 
               <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
                 <button onClick={compararInventario} disabled={scannedCodes.length === 0} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 20px", fontWeight: 700, opacity: scannedCodes.length === 0 ? 0.5 : 1 }}>🔍 Comparar con el sistema</button>
-                <button onClick={() => { setScannedCodes([]); setComparisonResult(null); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "#8B949E", padding: "10px 16px" }}>🗑 Limpiar todo</button>
+                <button onClick={() => { setScannedCodes([]); setComparisonResult(null); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "10px 16px" }}>🗑 Limpiar todo</button>
               </div>
 
               {scannedCodes.length > 0 && (
                 <div style={{ ...card, marginBottom: 20 }}>
-                  <h3 style={{ margin: "0 0 12px", fontSize: 14, color: "#8B949E" }}>Escaneadas ({scannedCodes.length})</h3>
+                  <h3 style={{ margin: "0 0 12px", fontSize: 16, color: "var(--text-muted)" }}>Escaneadas ({scannedCodes.length})</h3>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {scannedCodes.map((c,i) => (
-                      <span key={i} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                      <span key={i} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "4px 10px", borderRadius: 20, fontSize: 14, fontWeight: 700 }}>
                         {c}
                         <span onClick={() => setScannedCodes(prev => prev.filter((_,idx) => idx !== i))} style={{ cursor: "pointer", color: "#EF5350", fontWeight: 800 }}>×</span>
                       </span>
@@ -3852,34 +3867,34 @@ export default function LavanderiaApp() {
                 <div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 16, marginBottom: 20 }}>
                     <div style={{ ...card, borderLeft: "4px solid #66BB6A" }}>
-                      <div style={{ fontWeight: 800, fontSize: 20, color: "#66BB6A" }}>{comparisonResult.coinciden}</div>
-                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>✅ Coinciden</div>
+                      <div style={{ fontWeight: 800, fontSize: 23, color: "#66BB6A" }}>{comparisonResult.coinciden}</div>
+                      <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>✅ Coinciden</div>
                     </div>
                     <div style={{ ...card, borderLeft: "4px solid #EF5350" }}>
-                      <div style={{ fontWeight: 800, fontSize: 20, color: "#EF5350" }}>{comparisonResult.faltantes.length}</div>
-                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>⚠️ En sistema, no encontradas físicamente</div>
+                      <div style={{ fontWeight: 800, fontSize: 23, color: "#EF5350" }}>{comparisonResult.faltantes.length}</div>
+                      <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>⚠️ En sistema, no encontradas físicamente</div>
                     </div>
                     <div style={{ ...card, borderLeft: "4px solid #FFD54F" }}>
-                      <div style={{ fontWeight: 800, fontSize: 20, color: "#FFD54F" }}>{comparisonResult.noEsperadas.length}</div>
-                      <div style={{ fontSize: 12, color: "#8B949E", marginTop: 2 }}>⚠️ Escaneadas sin coincidir</div>
+                      <div style={{ fontWeight: 800, fontSize: 23, color: "#FFD54F" }}>{comparisonResult.noEsperadas.length}</div>
+                      <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>⚠️ Escaneadas sin coincidir</div>
                     </div>
                   </div>
 
                   <div style={{ ...card, marginBottom: 20 }}>
-                    <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#EF5350" }}>⚠️ Pendientes en el sistema pero no encontradas físicamente</h3>
-                    <p style={{ margin: "0 0 14px", fontSize: 12, color: "#8B949E" }}>El sistema dice que estas siguen esperando a ser recogidas, pero no las escaneaste — revisa si se perdieron, o si se entregaron sin marcarlas.</p>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 17, color: "#EF5350" }}>⚠️ Pendientes en el sistema pero no encontradas físicamente</h3>
+                    <p style={{ margin: "0 0 14px", fontSize: 14, color: "var(--text-muted)" }}>El sistema dice que estas siguen esperando a ser recogidas, pero no las escaneaste — revisa si se perdieron, o si se entregaron sin marcarlas.</p>
                     {comparisonResult.faltantes.length === 0
-                      ? <p style={{ color: "#66BB6A", fontSize: 13 }}>✅ Ninguna — todo lo pendiente en el sistema fue encontrado físicamente.</p>
+                      ? <p style={{ color: "#66BB6A", fontSize: 15 }}>✅ Ninguna — todo lo pendiente en el sistema fue encontrado físicamente.</p>
                       : <div style={{ overflowX: "auto" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                            <thead><tr style={{ background: "#21262D" }}>{["# Orden","Cliente","Fecha","Estado","Valor"].map(h=><th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "#8B949E", fontWeight: 600, fontSize: 11 }}>{h}</th>)}</tr></thead>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 15 }}>
+                            <thead><tr style={{ background: "var(--bg-surface)" }}>{["# Orden","Cliente","Fecha","Estado","Valor"].map(h=><th key={h} style={{ padding: "8px 12px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, fontSize: 13 }}>{h}</th>)}</tr></thead>
                             <tbody>
                               {comparisonResult.faltantes.map(o => (
-                                <tr key={o.id} style={{ borderBottom: "1px solid #21262D" }}>
+                                <tr key={o.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
                                   <td style={{ padding: "10px 12px" }}><span style={{ background: "rgba(239,83,80,0.15)", color: "#EF5350", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{o.order_number||"—"}</span></td>
                                   <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.client_name}</td>
-                                  <td style={{ padding: "10px 12px", color: "#8B949E" }}>{o.date}</td>
-                                  <td style={{ padding: "10px 12px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
+                                  <td style={{ padding: "10px 12px", color: "var(--text-muted)" }}>{o.date}</td>
+                                  <td style={{ padding: "10px 12px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                                   <td style={{ padding: "10px 12px", fontWeight: 700, color: "#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
                                 </tr>
                               ))}
@@ -3890,15 +3905,15 @@ export default function LavanderiaApp() {
                   </div>
 
                   <div style={{ ...card }}>
-                    <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#FFD54F" }}>⚠️ Escaneadas pero no coinciden con lo pendiente</h3>
-                    <p style={{ margin: "0 0 14px", fontSize: 12, color: "#8B949E" }}>Encontraste físicamente esta prenda, pero el sistema no la tiene como pendiente — revisa por qué.</p>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 17, color: "#FFD54F" }}>⚠️ Escaneadas pero no coinciden con lo pendiente</h3>
+                    <p style={{ margin: "0 0 14px", fontSize: 14, color: "var(--text-muted)" }}>Encontraste físicamente esta prenda, pero el sistema no la tiene como pendiente — revisa por qué.</p>
                     {comparisonResult.noEsperadas.length === 0
-                      ? <p style={{ color: "#66BB6A", fontSize: 13 }}>✅ Ninguna — todo lo escaneado coincide con lo pendiente.</p>
+                      ? <p style={{ color: "#66BB6A", fontSize: 15 }}>✅ Ninguna — todo lo escaneado coincide con lo pendiente.</p>
                       : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {comparisonResult.noEsperadas.map((x,i) => (
-                            <div key={i} style={{ background: "#0D1117", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div key={i} style={{ background: "var(--bg-app)", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                               <span style={{ background: "rgba(255,213,79,0.15)", color: "#FFD54F", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{x.code}</span>
-                              <span style={{ fontSize: 12, color: "#8B949E" }}>
+                              <span style={{ fontSize: 14, color: "var(--text-muted)" }}>
                                 {!x.order ? "No existe esa orden en el sistema (revisa el número)" : `Ya está marcada como Entregada el ${x.order.delivered_at||"—"} por ${x.order.delivered_by||"—"}`}
                               </span>
                             </div>
@@ -3914,20 +3929,20 @@ export default function LavanderiaApp() {
           {/* CONFIG */}
           {tab === "config" && (
             <div>
-              <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 800 }}>⚙️ Configuración</h2>
+              <h2 style={{ margin: "0 0 24px", fontSize: 25, fontWeight: 800 }}>⚙️ Configuración</h2>
 
               {/* WHATSAPP MODE */}
               <div style={{ ...card, marginBottom: 20, border: "1px solid rgba(37,211,102,0.3)" }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#25D366" }}>📱 Envío de WhatsApp en este computador</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Este ajuste se guarda solo en este equipo (cada computador puede tener el suyo, no se comparte con los demás).</p>
+                <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#25D366" }}>📱 Envío de WhatsApp en este computador</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Este ajuste se guarda solo en este equipo (cada computador puede tener el suyo, no se comparte con los demás).</p>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <label onClick={() => setWhatsappWebMode(false)} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", background: !whatsappWebMode ? "rgba(37,211,102,0.12)" : "rgba(255,255,255,0.04)", border: `2px solid ${!whatsappWebMode ? "#25D366" : "#30363D"}`, borderRadius: 10, padding: "12px 14px" }}>
-                    <span style={{ fontWeight: 700, color: !whatsappWebMode ? "#25D366" : "#8B949E" }}>🖥️ App de Escritorio</span>
-                    <span style={{ fontSize: 12, color: "#8B949E" }}>Para computadores donde SÍ está instalada la app de WhatsApp.</span>
+                  <label onClick={() => setWhatsappWebMode(false)} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", background: !whatsappWebMode ? "rgba(37,211,102,0.12)" : "rgba(255,255,255,0.04)", border: `2px solid ${!whatsappWebMode ? "#25D366" : "var(--border)"}`, borderRadius: 10, padding: "12px 14px" }}>
+                    <span style={{ fontWeight: 700, color: !whatsappWebMode ? "#25D366" : "var(--text-muted)" }}>🖥️ App de Escritorio</span>
+                    <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Para computadores donde SÍ está instalada la app de WhatsApp.</span>
                   </label>
-                  <label onClick={() => setWhatsappWebMode(true)} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", background: whatsappWebMode ? "rgba(37,211,102,0.12)" : "rgba(255,255,255,0.04)", border: `2px solid ${whatsappWebMode ? "#25D366" : "#30363D"}`, borderRadius: 10, padding: "12px 14px" }}>
-                    <span style={{ fontWeight: 700, color: whatsappWebMode ? "#25D366" : "#8B949E" }}>🌐 WhatsApp Web</span>
-                    <span style={{ fontSize: 12, color: "#8B949E" }}>Para computadores donde NO se puede instalar la app (como este de la lavandería).</span>
+                  <label onClick={() => setWhatsappWebMode(true)} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, cursor: "pointer", background: whatsappWebMode ? "rgba(37,211,102,0.12)" : "rgba(255,255,255,0.04)", border: `2px solid ${whatsappWebMode ? "#25D366" : "var(--border)"}`, borderRadius: 10, padding: "12px 14px" }}>
+                    <span style={{ fontWeight: 700, color: whatsappWebMode ? "#25D366" : "var(--text-muted)" }}>🌐 WhatsApp Web</span>
+                    <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Para computadores donde NO se puede instalar la app (como este de la lavandería).</span>
                   </label>
                 </div>
               </div>
@@ -3935,52 +3950,52 @@ export default function LavanderiaApp() {
               {/* AUTO LOGOUT ADMIN */}
               {isAdmin && (
                 <div style={{ ...card, marginBottom: 20, border: "1px solid rgba(239,83,80,0.3)" }}>
-                  <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#EF5350" }}>🔒 Cierre automático de sesión (Admin)</h3>
-                  <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Si tu sesión de Administrador queda abierta después de esta hora, se cierra sola una vez al día. No afecta a los empleados.</p>
+                  <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#EF5350" }}>🔒 Cierre automático de sesión (Admin)</h3>
+                  <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Si tu sesión de Administrador queda abierta después de esta hora, se cierra sola una vez al día. No afecta a los empleados.</p>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <input type="time" value={adminAutoLogoutTime} onChange={async e => { const newVal = e.target.value; const ok = await checkClave("cambiar la hora de cierre automático"); if (ok) setAdminAutoLogoutTime(newVal); }} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 15, fontWeight: 700 }} />
-                    <span style={{ fontSize: 12, color: "#8B949E" }}>Se revisa cada minuto mientras tengas la app abierta.</span>
+                    <input type="time" value={adminAutoLogoutTime} onChange={async e => { const newVal = e.target.value; const ok = await checkClave("cambiar la hora de cierre automático"); if (ok) setAdminAutoLogoutTime(newVal); }} style={{ ...inp, colorScheme: "dark", width: 140, fontSize: 17, fontWeight: 700 }} />
+                    <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Se revisa cada minuto mientras tengas la app abierta.</span>
                   </div>
                 </div>
               )}
 
               {/* INFO DEL NEGOCIO */}
               <div style={{ ...card, marginBottom: 20, border: "1px solid rgba(79,195,247,0.3)" }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#4FC3F7" }}>🏪 Información del Negocio</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Estos datos aparecen en el recibo y en la app</p>
+                <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#4FC3F7" }}>🏪 Información del Negocio</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Estos datos aparecen en el recibo y en la app</p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>NOMBRE DEL NEGOCIO</label>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>NOMBRE DEL NEGOCIO</label>
                     <input style={{ ...inp, borderColor: "rgba(79,195,247,0.3)" }} value={negocioNombre} onChange={e => setNegocioNombre(e.target.value)} placeholder="Ej: Lavanderías Shaddai" />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>TELÉFONO</label>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>TELÉFONO</label>
                     <input style={{ ...inp }} value={negocioTelefono} onChange={e => setNegocioTelefono(e.target.value)} placeholder="Ej: 3105604421" />
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>CÓDIGO DE PAÍS (WhatsApp)</label>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>CÓDIGO DE PAÍS (WhatsApp)</label>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{ color: "#8B949E", fontSize: 13 }}>+</span>
+                      <span style={{ color: "var(--text-muted)", fontSize: 15 }}>+</span>
                       <input style={{ ...inp }} value={negocioPais} onChange={e => setNegocioPais(e.target.value.replace(/[^0-9]/g,""))} placeholder="57" maxLength={4} />
                     </div>
-                    <div style={{ fontSize: 11, color: "#484F58", marginTop: 4 }}>Colombia = 57, México = 52, Venezuela = 58</div>
+                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Colombia = 57, México = 52, Venezuela = 58</div>
                   </div>
                   <div style={{ gridColumn: "span 2" }}>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>🖨️ NOMBRE DE LA IMPRESORA (QZ Tray)</label>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>🖨️ NOMBRE DE LA IMPRESORA (QZ Tray)</label>
                     <input style={{ ...inp, borderColor: "rgba(79,195,247,0.3)" }} value={nombreImpresora} onChange={e => setNombreImpresora(e.target.value)} placeholder="Ej: BIXOLON SRP-330II" />
-                    <div style={{ fontSize: 11, color: "#484F58", marginTop: 4 }}>Debe coincidir exactamente con el nombre en Windows → Dispositivos e impresoras</div>
+                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Debe coincidir exactamente con el nombre en Windows → Dispositivos e impresoras</div>
                   </div>
                   <div style={{ gridColumn: "span 2" }}>
-                    <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 4 }}>DIRECCIÓN</label>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DIRECCIÓN</label>
                     <input style={{ ...inp }} value={negocioDireccion} onChange={e => setNegocioDireccion(e.target.value)} placeholder="Ej: Carrera 113 # 75-56" />
                   </div>
                 </div>
                 <div style={{ gridColumn: "span 2", marginTop: 4 }}>
-                  <label style={{ fontSize: 11, color: "#8B949E", display: "block", marginBottom: 8 }}>LOGO DEL NEGOCIO</label>
+                  <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 8 }}>LOGO DEL NEGOCIO</label>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     {negocioLogo
-                      ? <img src={negocioLogo} alt="logo" style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid #30363D" }} />
-                      : <div style={{ width: 64, height: 64, borderRadius: 10, background: "#0D1117", border: "2px dashed #30363D", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🫧</div>}
+                      ? <img src={negocioLogo} alt="logo" style={{ width: 64, height: 64, borderRadius: 10, objectFit: "cover", border: "1px solid var(--border)" }} />
+                      : <div style={{ width: 64, height: 64, borderRadius: 10, background: "var(--bg-app)", border: "2px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🫧</div>}
                     <div style={{ flex: 1 }}>
                       <input type="file" accept="image/*" onChange={e => {
                         const file = e.target.files[0];
@@ -3992,17 +4007,17 @@ export default function LavanderiaApp() {
                         };
                         reader.readAsDataURL(file);
                       }} style={{ display: "none" }} id="logoInput" />
-                      <label htmlFor="logoInput" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", border: "1px solid rgba(79,195,247,0.3)", cursor: "pointer", display: "inline-block", fontSize: 12, padding: "8px 14px" }}>
+                      <label htmlFor="logoInput" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", border: "1px solid rgba(79,195,247,0.3)", cursor: "pointer", display: "inline-block", fontSize: 14, padding: "8px 14px" }}>
                         📁 Subir logo
                       </label>
-                      {negocioLogo && <button onClick={() => { setNegocioLogo(""); try { localStorage.removeItem("negocioLogo"); } catch {} }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", fontSize: 12, padding: "8px 14px", marginLeft: 8 }}>🗑 Quitar</button>}
-                      <div style={{ fontSize: 11, color: "#484F58", marginTop: 6 }}>PNG, JPG. Recomendado: cuadrado 200x200px</div>
+                      {negocioLogo && <button onClick={() => { setNegocioLogo(""); try { localStorage.removeItem("negocioLogo"); } catch {} }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", fontSize: 14, padding: "8px 14px", marginLeft: 8 }}>🗑 Quitar</button>}
+                      <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 6 }}>PNG, JPG. Recomendado: cuadrado 200x200px</div>
                     </div>
                   </div>
                   <div style={{ marginTop: 12 }}>
-                    <label onClick={() => { setLogoEnRecibo(!logoEnRecibo); try { localStorage.setItem("logoEnRecibo", String(!logoEnRecibo)); } catch {} }} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",background:logoEnRecibo?"rgba(79,195,247,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${logoEnRecibo?"rgba(79,195,247,0.3)":"#30363D"}`,borderRadius:8,padding:"8px 12px" }}>
+                    <label onClick={() => { setLogoEnRecibo(!logoEnRecibo); try { localStorage.setItem("logoEnRecibo", String(!logoEnRecibo)); } catch {} }} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",background:logoEnRecibo?"rgba(79,195,247,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${logoEnRecibo?"rgba(79,195,247,0.3)":"var(--border)"}`,borderRadius:8,padding:"8px 12px" }}>
                       <input type="checkbox" checked={logoEnRecibo} onChange={() => {}} style={{ accentColor:"#4FC3F7" }} />
-                      <span style={{ fontSize: 12, color: logoEnRecibo ? "#4FC3F7" : "#8B949E" }}>Mostrar logo en el recibo impreso</span>
+                      <span style={{ fontSize: 14, color: logoEnRecibo ? "#4FC3F7" : "var(--text-muted)" }}>Mostrar logo en el recibo impreso</span>
                     </label>
                   </div>
                 </div>
@@ -4018,45 +4033,45 @@ export default function LavanderiaApp() {
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20 }}>
                 <div style={card}>
-                  <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#4FC3F7" }}>👕 Tipos de Prenda</h3>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "#4FC3F7" }}>👕 Tipos de Prenda</h3>
                   <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                     <input style={{ ...inp, flex: 1 }} placeholder="Nueva prenda..." value={newGarment} onChange={e => setNewGarment(e.target.value)} onKeyDown={e => { if(e.key==="Enter"&&newGarment.trim()){saveGarmentTypes([...garmentTypes,newGarment.trim()]);setNewGarment("");} }} />
                     <button onClick={() => { if(newGarment.trim()){saveGarmentTypes([...garmentTypes,newGarment.trim()]);setNewGarment("");} }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 350, overflowY: "auto" }}>
-                    {garmentTypes.map((g,i) => <div key={i} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0D1117",borderRadius:8,padding:"8px 12px",gap:8 }}>
+                    {garmentTypes.map((g,i) => <div key={i} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",background:"var(--bg-app)",borderRadius:8,padding:"8px 12px",gap:8 }}>
                       <span style={{ flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
                       <div style={{ display:"flex",alignItems:"center",gap:4 }}>
-                        <span style={{ fontSize:10,color:"#8B949E" }}>piezas:</span>
-                        <input type="number" min={1} value={garmentPieces[g]||1} onChange={e => { const v = Math.max(1, Number(e.target.value)||1); saveGarmentPieces({ ...garmentPieces, [g]: v }); }} style={{ width:42,padding:"4px 6px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#FFD54F",fontSize:12,fontWeight:700,textAlign:"center" }} />
+                        <span style={{ fontSize:12,color:"var(--text-muted)" }}>piezas:</span>
+                        <input type="number" min={1} value={garmentPieces[g]||1} onChange={e => { const v = Math.max(1, Number(e.target.value)||1); saveGarmentPieces({ ...garmentPieces, [g]: v }); }} style={{ width:42,padding:"4px 6px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-card)",color:"#FFD54F",fontSize:14,fontWeight:700,textAlign:"center" }} />
                       </div>
                       <div style={{ display:"flex",alignItems:"center",gap:4 }}>
-                        <span style={{ fontSize:10,color:"#8B949E" }}>días extra:</span>
-                        <input type="number" min={0} value={garmentExtraDays[g]||0} onChange={e => { const v = Math.max(0, Number(e.target.value)||0); saveGarmentExtraDays({ ...garmentExtraDays, [g]: v }); }} style={{ width:42,padding:"4px 6px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#FF8A65",fontSize:12,fontWeight:700,textAlign:"center" }} />
+                        <span style={{ fontSize:12,color:"var(--text-muted)" }}>días extra:</span>
+                        <input type="number" min={0} value={garmentExtraDays[g]||0} onChange={e => { const v = Math.max(0, Number(e.target.value)||0); saveGarmentExtraDays({ ...garmentExtraDays, [g]: v }); }} style={{ width:42,padding:"4px 6px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-card)",color:"#FF8A65",fontSize:14,fontWeight:700,textAlign:"center" }} />
                       </div>
                       <button onClick={() => { if(window.confirm(`¿Eliminar "${g}"?`))saveGarmentTypes(garmentTypes.filter((_,idx)=>idx!==i)); }} style={{ background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer" }}>✕</button>
                     </div>)}
                   </div>
-                  <div style={{ fontSize:11,color:"#484F58",marginTop:8 }}>"Piezas" = cuántas prendas físicas cuenta cada unidad (ej: Vestido de hombre = 2, uno normal = 1). Afecta el conteo del recibo, no el precio.<br/>"Días extra" = si esa prenda necesita más tiempo (ej: Tenis, Maletas, Cubrelechos), la fecha de entrega de la orden se ajusta sola al agregarla.</div>
-                  <button onClick={() => { if(window.confirm("¿Restaurar lista por defecto?"))saveGarmentTypes(DEFAULT_GARMENT_TYPES); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid #30363D",background:"transparent",color:"#8B949E",cursor:"pointer",fontSize:12 }}>🔄 Restaurar por defecto</button>
+                  <div style={{ fontSize:13,color:"var(--text-dim)",marginTop:8 }}>"Piezas" = cuántas prendas físicas cuenta cada unidad (ej: Vestido de hombre = 2, uno normal = 1). Afecta el conteo del recibo, no el precio.<br/>"Días extra" = si esa prenda necesita más tiempo (ej: Tenis, Maletas, Cubrelechos), la fecha de entrega de la orden se ajusta sola al agregarla.</div>
+                  <button onClick={() => { if(window.confirm("¿Restaurar lista por defecto?"))saveGarmentTypes(DEFAULT_GARMENT_TYPES); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:14 }}>🔄 Restaurar por defecto</button>
                 </div>
                 <div style={card}>
-                  <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "#C792EA" }}>🎨 Colores</h3>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "#C792EA" }}>🎨 Colores</h3>
                   <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                     <input style={{ ...inp, flex: 1 }} placeholder="Nuevo color..." value={newColor} onChange={e => setNewColor(e.target.value)} onKeyDown={e => { if(e.key==="Enter"&&newColor.trim()){saveColors([...colors,newColor.trim()]);setNewColor("");} }} />
                     <button onClick={() => { if(newColor.trim()){saveColors([...colors,newColor.trim()]);setNewColor("");} }} style={{ ...btn, background: "linear-gradient(135deg,#C792EA,#9B59B6)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 350, overflowY: "auto" }}>
                     {colors.map((c,i) => <div key={i} style={{ display:"flex",alignItems:"center",gap:4,background:"rgba(199,146,234,0.1)",border:"1px solid rgba(199,146,234,0.3)",borderRadius:20,padding:"4px 10px" }}>
-                      <span style={{ fontSize:13,color:"#C792EA" }}>🎨 {c}</span>
-                      <button onClick={() => { if(window.confirm(`¿Eliminar "${c}"?`))saveColors(colors.filter((_,idx)=>idx!==i)); }} style={{ background:"none",color:"#EF5350",border:"none",cursor:"pointer",fontSize:14,fontWeight:700,padding:"0 2px" }}>×</button>
+                      <span style={{ fontSize:15,color:"#C792EA" }}>🎨 {c}</span>
+                      <button onClick={() => { if(window.confirm(`¿Eliminar "${c}"?`))saveColors(colors.filter((_,idx)=>idx!==i)); }} style={{ background:"none",color:"#EF5350",border:"none",cursor:"pointer",fontSize:16,fontWeight:700,padding:"0 2px" }}>×</button>
                     </div>)}
                   </div>
-                  <button onClick={() => { if(window.confirm("¿Restaurar colores por defecto?"))saveColors(DEFAULT_COLORS); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid #30363D",background:"transparent",color:"#8B949E",cursor:"pointer",fontSize:12 }}>🔄 Restaurar por defecto</button>
+                  <button onClick={() => { if(window.confirm("¿Restaurar colores por defecto?"))saveColors(DEFAULT_COLORS); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:14 }}>🔄 Restaurar por defecto</button>
                 </div>
               </div>
               <div style={{ marginTop: 20, ...card }}>
-                <h3 style={{ margin: "0 0 14px", fontSize: 16, color: "#FF8A65" }}>⚠️ Condiciones de prendas</h3>
+                <h3 style={{ margin: "0 0 14px", fontSize: 18, color: "#FF8A65" }}>⚠️ Condiciones de prendas</h3>
                 <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                   <input style={{ ...inp, flex: 1 }} placeholder="Nueva condición... ej: Quemado" value={newCondition} onChange={e => setNewCondition(e.target.value)} onKeyDown={e => { if(e.key==="Enter"&&newCondition.trim()){saveConditions([...conditions,newCondition.trim()]);setNewCondition("");} }} />
                   <button onClick={() => { if(newCondition.trim()){saveConditions([...conditions,newCondition.trim()]);setNewCondition("");} }} style={{ ...btn, background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
@@ -4067,137 +4082,137 @@ export default function LavanderiaApp() {
                     const color=colorsArr[i%colorsArr.length];
                     const isDefault=["Decolorado","Percudido","Roto","Manchado"].includes(c);
                     return <div key={i} style={{ display:"flex",alignItems:"center",gap:6,background:color+"15",border:`1px solid ${color}40`,borderRadius:20,padding:"6px 12px" }}>
-                      <span style={{ fontSize:13,color:color,fontWeight:600 }}>{c}</span>
-                      {!isDefault&&<button onClick={()=>{if(window.confirm(`¿Eliminar "${c}"?`))saveConditions(conditions.filter((_,idx)=>idx!==i));}} style={{ background:"none",color:"#EF5350",border:"none",cursor:"pointer",fontSize:14,fontWeight:700,padding:"0 2px" }}>×</button>}
-                      {isDefault&&<span style={{ fontSize:10,color:color,opacity:0.6 }}>●</span>}
+                      <span style={{ fontSize:15,color:color,fontWeight:600 }}>{c}</span>
+                      {!isDefault&&<button onClick={()=>{if(window.confirm(`¿Eliminar "${c}"?`))saveConditions(conditions.filter((_,idx)=>idx!==i));}} style={{ background:"none",color:"#EF5350",border:"none",cursor:"pointer",fontSize:16,fontWeight:700,padding:"0 2px" }}>×</button>}
+                      {isDefault&&<span style={{ fontSize:12,color:color,opacity:0.6 }}>●</span>}
                     </div>;
                   })}
                 </div>
-                <div style={{ fontSize:11,color:"#484F58",marginTop:10 }}>● Las condiciones base (Decolorado, Percudido, Roto, Manchado) no se pueden eliminar</div>
+                <div style={{ fontSize:13,color:"var(--text-dim)",marginTop:10 }}>● Las condiciones base (Decolorado, Percudido, Roto, Manchado) no se pueden eliminar</div>
               </div>
               {/* SERVICIOS */}
               <div style={{ marginTop: 20, ...card }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#C792EA" }}>🧺 Servicios</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Personaliza los servicios que aparecen al crear una orden</p>
+                <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#C792EA" }}>🧺 Servicios</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Personaliza los servicios que aparecen al crear una orden</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {services.map((sv, i) => (
-                    <div key={sv.id} style={{ display:"flex",alignItems:"center",gap:10,background:"#0D1117",borderRadius:10,padding:"10px 14px",border:`1px solid ${sv.color}33` }}>
-                      <span style={{ fontSize:20 }}>{sv.icon}</span>
+                    <div key={sv.id} style={{ display:"flex",alignItems:"center",gap:10,background:"var(--bg-app)",borderRadius:10,padding:"10px 14px",border:`1px solid ${sv.color}33` }}>
+                      <span style={{ fontSize:23 }}>{sv.icon}</span>
                       <div style={{ flex:1 }}>
                         <input value={sv.label} onChange={e => {
                           const updated = services.map((s,idx) => idx===i ? {...s, label: e.target.value} : s);
                           saveServices(updated);
-                        }} style={{ ...inp, padding:"6px 10px", fontSize:13, width:"100%", borderColor: sv.color+"55" }} />
+                        }} style={{ ...inp, padding:"6px 10px", fontSize:15, width:"100%", borderColor: sv.color+"55" }} />
                       </div>
                       <div style={{ display:"flex",gap:6 }}>
                         {["💧","🔥","🎨","💨","✂️","👒","🧤","🌿"].map(ico => (
                           <button key={ico} onClick={() => { const updated=services.map((s,idx)=>idx===i?{...s,icon:ico}:s); saveServices(updated); }}
-                            style={{ background:sv.icon===ico?"rgba(199,146,234,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${sv.icon===ico?"#C792EA":"#30363D"}`,borderRadius:6,padding:"4px 6px",cursor:"pointer",fontSize:14 }}>{ico}</button>
+                            style={{ background:sv.icon===ico?"rgba(199,146,234,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${sv.icon===ico?"#C792EA":"var(--border)"}`,borderRadius:6,padding:"4px 6px",cursor:"pointer",fontSize:16 }}>{ico}</button>
                         ))}
                       </div>
                     </div>
                   ))}
                 </div>
-                <button onClick={() => { if(window.confirm("¿Restaurar servicios por defecto?")) saveServices(DEFAULT_SERVICES); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid #30363D",background:"transparent",color:"#8B949E",cursor:"pointer",fontSize:12 }}>🔄 Restaurar por defecto</button>
+                <button onClick={() => { if(window.confirm("¿Restaurar servicios por defecto?")) saveServices(DEFAULT_SERVICES); }} style={{ marginTop:12,width:"100%",padding:8,borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:14 }}>🔄 Restaurar por defecto</button>
               </div>
 
               <div style={{ marginTop: 20, ...card }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#66BB6A" }}>💰 Precios por defecto de prendas</h3>
-                <p style={{ margin: "0 0 4px", fontSize: 13, color: "#8B949E" }}>Selecciona un servicio y asigna el precio por prenda. Al crear una orden se llenará automáticamente.</p>
-                <p style={{ margin: "0 0 14px", fontSize: 11, color: "#484F58" }}>El precio por servicio tiene prioridad sobre el precio general.</p>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#66BB6A" }}>💰 Precios por defecto de prendas</h3>
+                <p style={{ margin: "0 0 4px", fontSize: 15, color: "var(--text-muted)" }}>Selecciona un servicio y asigna el precio por prenda. Al crear una orden se llenará automáticamente.</p>
+                <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--text-dim)" }}>El precio por servicio tiene prioridad sobre el precio general.</p>
                 <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
                   {services.map(sv => (
-                    <button key={sv.id} onClick={() => setConfigServiceTab(sv.id)} style={{ ...btn, background: configServiceTab===sv.id ? sv.color+"33" : "rgba(255,255,255,0.04)", color: configServiceTab===sv.id ? sv.color : "#8B949E", border: `1.5px solid ${configServiceTab===sv.id ? sv.color : "#30363D"}`, padding: "6px 14px", fontSize: 12 }}>
+                    <button key={sv.id} onClick={() => setConfigServiceTab(sv.id)} style={{ ...btn, background: configServiceTab===sv.id ? sv.color+"33" : "rgba(255,255,255,0.04)", color: configServiceTab===sv.id ? sv.color : "var(--text-muted)", border: `1.5px solid ${configServiceTab===sv.id ? sv.color : "var(--border)"}`, padding: "6px 14px", fontSize: 14 }}>
                       {sv.icon} {sv.label}
                     </button>
                   ))}
-                  <button onClick={() => setConfigServiceTab("general")} style={{ ...btn, background: configServiceTab==="general" ? "rgba(102,187,106,0.2)" : "rgba(255,255,255,0.04)", color: configServiceTab==="general" ? "#66BB6A" : "#8B949E", border: `1.5px solid ${configServiceTab==="general" ? "#66BB6A" : "#30363D"}`, padding: "6px 14px", fontSize: 12 }}>
+                  <button onClick={() => setConfigServiceTab("general")} style={{ ...btn, background: configServiceTab==="general" ? "rgba(102,187,106,0.2)" : "rgba(255,255,255,0.04)", color: configServiceTab==="general" ? "#66BB6A" : "var(--text-muted)", border: `1.5px solid ${configServiceTab==="general" ? "#66BB6A" : "var(--border)"}`, padding: "6px 14px", fontSize: 14 }}>
                     🏷️ General
                   </button>
                 </div>
                 {configServiceTab === "general" ? (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
-                    {garmentTypes.map(g => <div key={g} style={{ display:"flex",alignItems:"center",gap:8,background:"#0D1117",borderRadius:8,padding:"8px 12px" }}>
-                      <span style={{ fontSize:13,flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
-                      <input type="number" placeholder="Precio" value={precioDefaults[g]||""} onChange={e => { const val=e.target.value; const updated={...precioDefaults,[g]:val?Number(val):undefined}; if(!val)delete updated[g]; setPrecioDefaults(updated); try{localStorage.setItem("precioDefaults",JSON.stringify(updated));}catch{} }} style={{ width:90,padding:"4px 8px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#66BB6A",fontSize:13,fontWeight:700,textAlign:"right" }} />
+                    {garmentTypes.map(g => <div key={g} style={{ display:"flex",alignItems:"center",gap:8,background:"var(--bg-app)",borderRadius:8,padding:"8px 12px" }}>
+                      <span style={{ fontSize:15,flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
+                      <input type="number" placeholder="Precio" value={precioDefaults[g]||""} onChange={e => { const val=e.target.value; const updated={...precioDefaults,[g]:val?Number(val):undefined}; if(!val)delete updated[g]; setPrecioDefaults(updated); try{localStorage.setItem("precioDefaults",JSON.stringify(updated));}catch{} }} style={{ width:90,padding:"4px 8px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-card)",color:"#66BB6A",fontSize:15,fontWeight:700,textAlign:"right" }} />
                     </div>)}
                   </div>
                 ) : (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
                     {garmentTypes.map(g => {
                       const val = precioByService[configServiceTab]?.[g] || "";
-                      return <div key={g} style={{ display:"flex",alignItems:"center",gap:8,background:"#0D1117",borderRadius:8,padding:"8px 12px" }}>
-                        <span style={{ fontSize:13,flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
+                      return <div key={g} style={{ display:"flex",alignItems:"center",gap:8,background:"var(--bg-app)",borderRadius:8,padding:"8px 12px" }}>
+                        <span style={{ fontSize:15,flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
                         <input type="number" placeholder={precioDefaults[g]||"Precio"} value={val} onChange={e => {
                           const newVal = e.target.value;
                           const updated = { ...precioByService, [configServiceTab]: { ...(precioByService[configServiceTab]||{}), [g]: newVal ? Number(newVal) : undefined } };
                           if (!newVal) delete updated[configServiceTab][g];
                           setPrecioByService(updated);
                           try { localStorage.setItem("precioByService", JSON.stringify(updated)); } catch {}
-                        }} style={{ width:90,padding:"4px 8px",borderRadius:6,border:"1px solid #30363D",background:"#161B22",color:"#66BB6A",fontSize:13,fontWeight:700,textAlign:"right" }} />
+                        }} style={{ width:90,padding:"4px 8px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-card)",color:"#66BB6A",fontSize:15,fontWeight:700,textAlign:"right" }} />
                       </div>;
                     })}
                   </div>
                 )}
               </div>
               <div style={{ marginTop: 20, ...card }}>
-                <h3 style={{ margin: "0 0 20px", fontSize: 16, color: "#FFD54F" }}>👥 Usuarios y Turnos</h3>
+                <h3 style={{ margin: "0 0 20px", fontSize: 18, color: "#FFD54F" }}>👥 Usuarios y Turnos</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20 }}>
                   <div>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 13, color: "#8B949E", fontWeight: 600 }}>USUARIOS REGISTRADOS</h4>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 15, color: "var(--text-muted)", fontWeight: 600 }}>USUARIOS REGISTRADOS</h4>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {employees.map(e => <div key={e.id} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",border:`1px solid ${e.id===user.id?"#4FC3F7":"#21262D"}` }}>
+                      {employees.map(e => <div key={e.id} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",border:`1px solid ${e.id===user.id?"#4FC3F7":"var(--bg-surface)"}` }}>
                         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                           <div>
                             <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}>
-                              <span style={{ fontWeight:700,fontSize:15 }}>{e.name}</span>
-                              {e.id===user.id&&<span style={{ fontSize:10,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"1px 7px",borderRadius:10 }}>Tú</span>}
+                              <span style={{ fontWeight:700,fontSize:17 }}>{e.name}</span>
+                              {e.id===user.id&&<span style={{ fontSize:12,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"1px 7px",borderRadius:10 }}>Tú</span>}
                             </div>
                             <div style={{ display:"flex",gap:8 }}>
-                              <span style={{ fontSize:11,background:e.role==="admin"?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.05)",color:e.role==="admin"?"#FFD54F":"#8B949E",padding:"2px 8px",borderRadius:10 }}>{e.role==="admin"?"👑 Admin":"👤 Empleado"}</span>
-                              <span style={{ fontSize:11,background:"rgba(102,187,106,0.1)",color:"#66BB6A",padding:"2px 8px",borderRadius:10 }}>🕐 {e.turno||"mañana"}</span>
+                              <span style={{ fontSize:13,background:e.role==="admin"?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.05)",color:e.role==="admin"?"#FFD54F":"var(--text-muted)",padding:"2px 8px",borderRadius:10 }}>{e.role==="admin"?"👑 Admin":"👤 Empleado"}</span>
+                              <span style={{ fontSize:13,background:"rgba(102,187,106,0.1)",color:"#66BB6A",padding:"2px 8px",borderRadius:10 }}>🕐 {e.turno||"mañana"}</span>
                             </div>
                           </div>
                           <div style={{ display:"flex",gap:6 }}>
-                            <button onClick={()=>setEditingEmployee({...e})} title="Editar" style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"5px 10px",fontSize:12 }}>✏️</button>
-                            {e.id!==user.id&&<button onClick={()=>deleteEmployee(e.id)} title="Eliminar" title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:12 }}>🗑</button>}
+                            <button onClick={()=>setEditingEmployee({...e})} title="Editar" style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"5px 10px",fontSize:14 }}>✏️</button>
+                            {e.id!==user.id&&<button onClick={()=>deleteEmployee(e.id)} title="Eliminar" title="Eliminar" style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",padding:"5px 10px",fontSize:14 }}>🗑</button>}
                           </div>
                         </div>
                       </div>)}
                     </div>
                   </div>
                   <div>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 13, color: "#8B949E", fontWeight: 600 }}>NUEVO USUARIO</h4>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 15, color: "var(--text-muted)", fontWeight: 600 }}>NUEVO USUARIO</h4>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={inp} placeholder="Nombre del empleado" value={newEmployee.name} onChange={e=>setNewEmployee(p=>({...p,name:e.target.value}))} /></div>
-                      <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>PIN (4-6 dígitos)</label><input style={inp} type="password" placeholder="••••" maxLength={6} value={newEmployee.pin} onChange={e=>setNewEmployee(p=>({...p,pin:e.target.value}))} /></div>
-                      <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>ROL</label><select style={inp} value={newEmployee.role} onChange={e=>setNewEmployee(p=>({...p,role:e.target.value}))}><option value="employee" style={{ background:"#1a1a2e" }}>👤 Empleado</option><option value="admin" style={{ background:"#1a1a2e" }}>👑 Administrador</option></select></div>
-                      <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>TURNO</label><select style={inp} value={newEmployee.turno} onChange={e=>setNewEmployee(p=>({...p,turno:e.target.value}))}><option value="mañana" style={{ background:"#1a1a2e" }}>🌅 Mañana</option><option value="tarde" style={{ background:"#1a1a2e" }}>🌆 Tarde</option><option value="noche" style={{ background:"#1a1a2e" }}>🌙 Noche</option><option value="completo" style={{ background:"#1a1a2e" }}>⏰ Día completo</option></select></div>
+                      <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE</label><input style={inp} placeholder="Nombre del empleado" value={newEmployee.name} onChange={e=>setNewEmployee(p=>({...p,name:e.target.value}))} /></div>
+                      <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>PIN (4-6 dígitos)</label><input style={inp} type="password" placeholder="••••" maxLength={6} value={newEmployee.pin} onChange={e=>setNewEmployee(p=>({...p,pin:e.target.value}))} /></div>
+                      <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>ROL</label><select style={inp} value={newEmployee.role} onChange={e=>setNewEmployee(p=>({...p,role:e.target.value}))}><option value="employee" style={{ background:"#1a1a2e" }}>👤 Empleado</option><option value="admin" style={{ background:"#1a1a2e" }}>👑 Administrador</option></select></div>
+                      <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TURNO</label><select style={inp} value={newEmployee.turno} onChange={e=>setNewEmployee(p=>({...p,turno:e.target.value}))}><option value="mañana" style={{ background:"#1a1a2e" }}>🌅 Mañana</option><option value="tarde" style={{ background:"#1a1a2e" }}>🌆 Tarde</option><option value="noche" style={{ background:"#1a1a2e" }}>🌙 Noche</option><option value="completo" style={{ background:"#1a1a2e" }}>⏰ Día completo</option></select></div>
                       <button onClick={addEmployee} disabled={!newEmployee.name||!newEmployee.pin} style={{ ...btn,background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",padding:12,fontWeight:800,opacity:!newEmployee.name||!newEmployee.pin?0.5:1 }}>+ Crear Usuario</button>
                     </div>
                   </div>
                 </div>
               </div>
               <div style={{ marginTop: 20, ...card }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#4FC3F7" }}>🖨️ Texto del Recibo</h3>
-                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Personaliza los textos que aparecen en el recibo impreso</p>
+                <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#4FC3F7" }}>🖨️ Texto del Recibo</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Personaliza los textos que aparecen en el recibo impreso</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div>
-                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>MENSAJE DE WHATSAPP 📱</label>
-                    <p style={{ fontSize: 11, color: "#484F58", marginBottom: 8 }}>Usa <strong style={{color:"#25D366"}}>{"{nombre}"}</strong> para el nombre del cliente y <strong style={{color:"#25D366"}}>{"{orden}"}</strong> para el número de orden</p>
-                    <textarea value={waMensaje} onChange={e => setWaMensaje(e.target.value)} style={{ ...inp, height: 90, resize: "vertical", fontSize: 12, lineHeight: 1.5, borderColor: "rgba(37,211,102,0.3)" }} />
-                    <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("waMensaje",waMensaje);}catch{}alert("✅ Mensaje guardado");}} style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", border: "1px solid rgba(37,211,102,0.3)", padding: "8px 16px", marginTop: 8, fontSize: 12 }}>💾 Guardar mensaje</button>
+                    <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 6, fontWeight: 600 }}>MENSAJE DE WHATSAPP 📱</label>
+                    <p style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}>Usa <strong style={{color:"#25D366"}}>{"{nombre}"}</strong> para el nombre del cliente y <strong style={{color:"#25D366"}}>{"{orden}"}</strong> para el número de orden</p>
+                    <textarea value={waMensaje} onChange={e => setWaMensaje(e.target.value)} style={{ ...inp, height: 90, resize: "vertical", fontSize: 14, lineHeight: 1.5, borderColor: "rgba(37,211,102,0.3)" }} />
+                    <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("waMensaje",waMensaje);}catch{}alert("✅ Mensaje guardado");}} style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", border: "1px solid rgba(37,211,102,0.3)", padding: "8px 16px", marginTop: 8, fontSize: 14 }}>💾 Guardar mensaje</button>
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>SUBTÍTULO (debajo de la dirección)</label>
+                    <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 6, fontWeight: 600 }}>SUBTÍTULO (debajo de la dirección)</label>
                     <div style={{ display: "flex", gap: 8 }}>
                       <input style={{ ...inp, flex: 1 }} value={reciboSubtitulo} onChange={e => setReciboSubtitulo(e.target.value)} placeholder="Ej: PRENDAS EL DIA INDICADO DESPUES DE LAS 5" />
                       <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("reciboSubtitulo",reciboSubtitulo);}catch{}alert("✅ Guardado");}} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", whiteSpace: "nowrap" }}>Guardar</button>
                     </div>
                   </div>
                   <div>
-                    <label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6, fontWeight: 600 }}>TEXTO LEGAL (al final del recibo)</label>
-                    <textarea value={reciboLegal} onChange={e => setReciboLegal(e.target.value)} style={{ ...inp, height: 120, resize: "vertical", fontSize: 12, lineHeight: 1.5 }} />
+                    <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 6, fontWeight: 600 }}>TEXTO LEGAL (al final del recibo)</label>
+                    <textarea value={reciboLegal} onChange={e => setReciboLegal(e.target.value)} style={{ ...inp, height: 120, resize: "vertical", fontSize: 14, lineHeight: 1.5 }} />
                     <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("reciboLegal",reciboLegal);}catch{}alert("✅ Guardado");}} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", marginTop: 8, width: "100%" }}>💾 Guardar texto legal</button>
                   </div>
                 </div>
@@ -4205,18 +4220,18 @@ export default function LavanderiaApp() {
               <div style={{ marginTop: 20, ...card }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#FFD54F" }}>🔑 Clave de Administrador</h3>
-                    <p style={{ margin: 0, fontSize: 13, color: "#8B949E" }}>Cambia la clave que protege las acciones importantes</p>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#FFD54F" }}>🔑 Clave de Administrador</h3>
+                    <p style={{ margin: 0, fontSize: 15, color: "var(--text-muted)" }}>Cambia la clave que protege las acciones importantes</p>
                   </div>
-                  <button onClick={() => setShowCambiarClave(!showCambiarClave)} style={{ ...btn, background: showCambiarClave?"rgba(255,213,79,0.2)":"rgba(255,255,255,0.05)", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "8px 16px", fontSize: 12 }}>
+                  <button onClick={() => setShowCambiarClave(!showCambiarClave)} style={{ ...btn, background: showCambiarClave?"rgba(255,213,79,0.2)":"rgba(255,255,255,0.05)", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "8px 16px", fontSize: 14 }}>
                     {showCambiarClave ? "✕ Cancelar" : "🔑 Cambiar clave"}
                   </button>
                 </div>
                 {showCambiarClave && (
                   <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                    <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>CLAVE ACTUAL</label><input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveActual} onChange={e=>setClaveActual(e.target.value)} /></div>
-                    <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>NUEVA CLAVE</label><input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveNueva} onChange={e=>setClaveNueva(e.target.value)} /></div>
-                    <div><label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>CONFIRMAR NUEVA CLAVE</label><input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveConfirm} onChange={e=>setClaveConfirm(e.target.value)} /></div>
+                    <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CLAVE ACTUAL</label><input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveActual} onChange={e=>setClaveActual(e.target.value)} /></div>
+                    <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NUEVA CLAVE</label><input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveNueva} onChange={e=>setClaveNueva(e.target.value)} /></div>
+                    <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CONFIRMAR NUEVA CLAVE</label><input type="password" style={{ ...inp, maxWidth: 300 }} placeholder="••••" value={claveConfirm} onChange={e=>setClaveConfirm(e.target.value)} /></div>
                     <button onClick={async()=>{
                       if(claveNueva.length<4){alert("❌ La nueva clave debe tener al menos 4 caracteres");return;}
                       if(claveNueva!==claveConfirm){alert("❌ Las claves nuevas no coinciden");return;}
@@ -4231,23 +4246,23 @@ export default function LavanderiaApp() {
               </div>
               {isAdmin && (
                 <div style={{ marginTop: 20, ...card, border: "1px solid rgba(79,195,247,0.4)" }}>
-                  <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#4FC3F7" }}>🗂 Orden Manual / Histórica</h3>
-                  <p style={{ margin: "0 0 16px", fontSize: 13, color: "#8B949E" }}>Para casos especiales: un recibo viejo que se escapó de la migración, un cliente que llega con un ticket del sistema anterior, etc. Escribes tú el número de recibo y la fecha real — no se genera automático.</p>
+                  <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#4FC3F7" }}>🗂 Orden Manual / Histórica</h3>
+                  <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Para casos especiales: un recibo viejo que se escapó de la migración, un cliente que llega con un ticket del sistema anterior, etc. Escribes tú el número de recibo y la fecha real — no se genera automático.</p>
                   <button onClick={() => { setShowManualOrder(true); setTimeout(() => { manualOrderNumberRef.current?.focus(); }, 50); }} style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", border: "1px solid rgba(79,195,247,0.4)", padding: "10px 18px", fontWeight: 700 }}>+ Crear orden manual</button>
                 </div>
               )}
               <div style={{ marginTop: 20, ...card, border: "1px solid rgba(239,83,80,0.4)" }}>
-                <h3 style={{ margin: "0 0 6px", fontSize: 16, color: "#EF5350" }}>⚠️ Zona de Peligro</h3>
-                <p style={{ margin: "0 0 20px", fontSize: 13, color: "#8B949E" }}>Acciones irreversibles. Se requiere clave para ejecutar.</p>
+                <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#EF5350" }}>⚠️ Zona de Peligro</h3>
+                <p style={{ margin: "0 0 20px", fontSize: 15, color: "var(--text-muted)" }}>Acciones irreversibles. Se requiere clave para ejecutar.</p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16 }}>
-                  <div style={{ background:"#0D1117",borderRadius:12,padding:20,border:"1px solid #21262D" }}>
-                    <div style={{ fontSize:32,marginBottom:8 }}>🔢</div>
-                    <div style={{ fontWeight:700,fontSize:15,marginBottom:6 }}>Consecutivo de recibos</div>
-                    <div style={{ fontSize:13,color:"#8B949E",marginBottom:12 }}>Elige desde qué número quieres que empiece el consecutivo. Las órdenes existentes no se borran.</div>
+                  <div style={{ background:"var(--bg-app)",borderRadius:12,padding:20,border:"1px solid var(--bg-surface)" }}>
+                    <div style={{ fontSize:37,marginBottom:8 }}>🔢</div>
+                    <div style={{ fontWeight:700,fontSize:17,marginBottom:6 }}>Consecutivo de recibos</div>
+                    <div style={{ fontSize:15,color:"var(--text-muted)",marginBottom:12 }}>Elige desde qué número quieres que empiece el consecutivo. Las órdenes existentes no se borran.</div>
                     <div style={{ marginBottom:10 }}>
-                      <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>NÚMERO DE INICIO (ej: 68957)</label>
-                      <input type="number" min={1} placeholder="Ej: 68957" value={nuevoConsecutivo} onChange={e => setNuevoConsecutivo(e.target.value)} style={{ ...inp, fontSize:15, fontWeight:700, borderColor:"rgba(239,83,80,0.3)" }} />
-                      {nuevoConsecutivo && <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>La próxima orden será: <strong style={{ color:"#4FC3F7" }}>S{String(Number(nuevoConsecutivo)).padStart(6,"0")}</strong></div>}
+                      <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NÚMERO DE INICIO (ej: 68957)</label>
+                      <input type="number" min={1} placeholder="Ej: 68957" value={nuevoConsecutivo} onChange={e => setNuevoConsecutivo(e.target.value)} style={{ ...inp, fontSize:17, fontWeight:700, borderColor:"rgba(239,83,80,0.3)" }} />
+                      {nuevoConsecutivo && <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:4 }}>La próxima orden será: <strong style={{ color:"#4FC3F7" }}>S{String(Number(nuevoConsecutivo)).padStart(6,"0")}</strong></div>}
                     </div>
                     <button onClick={async () => {
                       if (!nuevoConsecutivo || Number(nuevoConsecutivo) < 1) { alert("Ingresa un número válido"); return; }
@@ -4271,24 +4286,24 @@ export default function LavanderiaApp() {
                       }
                       alert(`✅ Consecutivo actualizado. La próxima orden será S${String(Number(nuevoConsecutivo)).padStart(6,"0")}.`);
                       setNuevoConsecutivo("");
-                    }} disabled={!nuevoConsecutivo} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:13,opacity:!nuevoConsecutivo?0.5:1 }}>
+                    }} disabled={!nuevoConsecutivo} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:15,opacity:!nuevoConsecutivo?0.5:1 }}>
                       🔢 Aplicar consecutivo
                     </button>
-                    <button onClick={resetOrderCounter} style={{ ...btn,background:"transparent",color:"#484F58",border:"1px solid #21262D",width:"100%",padding:8,fontSize:12,marginTop:8 }}>
+                    <button onClick={resetOrderCounter} style={{ ...btn,background:"transparent",color:"var(--text-dim)",border:"1px solid var(--bg-surface)",width:"100%",padding:8,fontSize:14,marginTop:8 }}>
                       Reiniciar desde S0001
                     </button>
                   </div>
-                  <div style={{ background:"#0D1117",borderRadius:12,padding:20,border:"1px solid #21262D" }}>
-                    <div style={{ fontSize:32,marginBottom:8 }}>👤</div>
-                    <div style={{ fontWeight:700,fontSize:15,marginBottom:6 }}>Eliminar todos los clientes</div>
-                    <div style={{ fontSize:13,color:"#8B949E",marginBottom:16 }}>Borra toda la base de datos de clientes. Las órdenes no se eliminan.</div>
-                    <button onClick={deleteAllClients} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:13 }}>🗑 Eliminar todos los clientes</button>
+                  <div style={{ background:"var(--bg-app)",borderRadius:12,padding:20,border:"1px solid var(--bg-surface)" }}>
+                    <div style={{ fontSize:37,marginBottom:8 }}>👤</div>
+                    <div style={{ fontWeight:700,fontSize:17,marginBottom:6 }}>Eliminar todos los clientes</div>
+                    <div style={{ fontSize:15,color:"var(--text-muted)",marginBottom:16 }}>Borra toda la base de datos de clientes. Las órdenes no se eliminan.</div>
+                    <button onClick={deleteAllClients} style={{ ...btn,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.3)",width:"100%",padding:10,fontSize:15 }}>🗑 Eliminar todos los clientes</button>
                   </div>
-                  <div style={{ background:"#0D1117",borderRadius:12,padding:20,border:"2px solid #EF5350" }}>
-                    <div style={{ fontSize:32,marginBottom:8 }}>💣</div>
-                    <div style={{ fontWeight:700,fontSize:15,marginBottom:6,color:"#EF5350" }}>Reiniciar app a cero (Cero KM)</div>
-                    <div style={{ fontSize:13,color:"#8B949E",marginBottom:16 }}>Borra TODAS las órdenes, prendas, abonos, entregas parciales, gastos, adelantos, clientes, agencias, domiciliarios y base de caja. Mantiene empleados, servicios, tipos de prenda, colores e información del negocio. Ideal antes de empezar a operar en serio.</div>
-                    <button onClick={resetAppToZero} style={{ ...btn,background:"linear-gradient(135deg,#EF5350,#B71C1C)",color:"#fff",width:"100%",padding:12,fontSize:13,fontWeight:800 }}>💣 Reiniciar TODA la app</button>
+                  <div style={{ background:"var(--bg-app)",borderRadius:12,padding:20,border:"2px solid #EF5350" }}>
+                    <div style={{ fontSize:37,marginBottom:8 }}>💣</div>
+                    <div style={{ fontWeight:700,fontSize:17,marginBottom:6,color:"#EF5350" }}>Reiniciar app a cero (Cero KM)</div>
+                    <div style={{ fontSize:15,color:"var(--text-muted)",marginBottom:16 }}>Borra TODAS las órdenes, prendas, abonos, entregas parciales, gastos, adelantos, clientes, agencias, domiciliarios y base de caja. Mantiene empleados, servicios, tipos de prenda, colores e información del negocio. Ideal antes de empezar a operar en serio.</div>
+                    <button onClick={resetAppToZero} style={{ ...btn,background:"linear-gradient(135deg,#EF5350,#B71C1C)",color:"#fff",width:"100%",padding:12,fontSize:15,fontWeight:800 }}>💣 Reiniciar TODA la app</button>
                   </div>
                 </div>
               </div>
@@ -4301,21 +4316,21 @@ export default function LavanderiaApp() {
       {/* MODALS */}
       {modal && (
         <div onClick={() => setModal(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,width:460,maxWidth:"92vw",border:"1px solid #30363D",maxHeight:"90vh", ...(modal==="newOrder" ? { padding:0, overflowY:"hidden", display:"flex", flexDirection:"column" } : { padding:28, overflowY:"auto" }) }}>
+          <div onClick={e => e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,width: modal==="newOrder" ? 680 : 460,maxWidth:"92vw",border:"1px solid var(--border)",maxHeight:"90vh", ...(modal==="newOrder" ? { padding:0, overflowY:"hidden", display:"flex", flexDirection:"column" } : { padding:28, overflowY:"auto" }) }}>
 
             {modal === "newOrder" && (
               <>
                 <div style={{ padding:"28px 28px 16px", overflowY:"auto", flex:1, minHeight:0 }}>
-                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>➕ Nueva Orden</h3>
-                {newOrder.agencia_id && (() => { const ag = agencies.find(a=>a.id===newOrder.agencia_id); const pct = Number(ag?.discount_percent)||0; return <div style={{ background:"rgba(255,138,101,0.1)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#FF8A65",display:"flex",alignItems:"center",gap:6 }}>🏢 Orden para agencia: <b>{newOrder.client_name}</b>{pct > 0 && <span style={{ marginLeft:"auto",color:"#66BB6A",fontWeight:700 }}>🏷️ {pct}% descuento aplicado</span>}</div>; })()}
-                {newOrder.domiciliario_id && <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:13,color:"#66BB6A",display:"flex",alignItems:"center",gap:6 }}>🛵 Orden para domiciliario: <b>{newOrder.client_name}</b></div>}
+                <h3 style={{ margin:"0 0 20px",fontSize:21 }}>➕ Nueva Orden</h3>
+                {newOrder.agencia_id && (() => { const ag = agencies.find(a=>a.id===newOrder.agencia_id); const pct = Number(ag?.discount_percent)||0; return <div style={{ background:"rgba(255,138,101,0.1)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:15,color:"#FF8A65",display:"flex",alignItems:"center",gap:6 }}>🏢 Orden para agencia: <b>{newOrder.client_name}</b>{pct > 0 && <span style={{ marginLeft:"auto",color:"#66BB6A",fontWeight:700 }}>🏷️ {pct}% descuento aplicado</span>}</div>; })()}
+                {newOrder.domiciliario_id && <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:15,color:"#66BB6A",display:"flex",alignItems:"center",gap:6 }}>🛵 Orden para domiciliario: <b>{newOrder.client_name}</b></div>}
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div style={{ position:"relative" }}>
-                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label>
+                    <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TELÉFONO</label>
                     {(() => {
                       const phoneMatches = newOrder.phone.length>=3 ? clients.filter(c=>c.phone.includes(newOrder.phone)&&c.phone!==newOrder.phone).slice(0,4) : [];
                       return <>
-                        <input ref={phoneInputRef} style={{ ...inp,borderColor:clients.find(c=>c.phone===newOrder.phone)?"#66BB6A":"#30363D" }} placeholder="Escribe el teléfono..." value={newOrder.phone} onChange={e=>{setNewOrder(p=>({...p,phone:e.target.value,client_name:""}));setPhoneSuggestIdx(-1);}} onKeyDown={e=>{
+                        <input ref={phoneInputRef} style={{ ...inp,borderColor:clients.find(c=>c.phone===newOrder.phone)?"#66BB6A":"var(--border)" }} placeholder="Escribe el teléfono..." value={newOrder.phone} onChange={e=>{setNewOrder(p=>({...p,phone:e.target.value,client_name:""}));setPhoneSuggestIdx(-1);}} onKeyDown={e=>{
                           if(e.key==="ArrowDown"&&phoneMatches.length>0){ e.preventDefault(); setPhoneSuggestIdx(i=>Math.min(i+1,phoneMatches.length-1)); }
                           else if(e.key==="ArrowUp"&&phoneMatches.length>0){ e.preventDefault(); setPhoneSuggestIdx(i=>Math.max(i-1,0)); }
                           else if(e.key==="Enter"){
@@ -4325,28 +4340,28 @@ export default function LavanderiaApp() {
                           }
                           else if(e.key==="Escape"){ setPhoneSuggestIdx(-1); }
                         }} />
-                        {phoneMatches.length>0&&<div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#1C2128",border:"1px solid #30363D",borderRadius:8,zIndex:50,overflow:"hidden",marginTop:2 }}>{phoneMatches.map((c,i)=><div key={c.id} onClick={()=>{setNewOrder(p=>({...p,phone:c.phone,client_name:c.name}));setPhoneSuggestIdx(-1);setTimeout(()=>{firstGarmentInputRef.current?.focus();firstGarmentInputRef.current?.select();},50);}} style={{ padding:"10px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",borderBottom:"1px solid #21262D",background:i===phoneSuggestIdx?"rgba(79,195,247,0.25)":"transparent",borderLeft:i===phoneSuggestIdx?"3px solid #4FC3F7":"3px solid transparent" }} onMouseEnter={()=>setPhoneSuggestIdx(i)}><span style={{ fontWeight:i===phoneSuggestIdx?800:600, color:i===phoneSuggestIdx?"#4FC3F7":"#E6EDF3" }}>{c.name}</span><span style={{ color:i===phoneSuggestIdx?"#4FC3F7":"#8B949E",fontSize:12,fontWeight:i===phoneSuggestIdx?700:400 }}>{c.phone}</span></div>)}</div>}
+                        {phoneMatches.length>0&&<div style={{ position:"absolute",top:"100%",left:0,right:0,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,zIndex:50,overflow:"hidden",marginTop:2 }}>{phoneMatches.map((c,i)=><div key={c.id} onClick={()=>{setNewOrder(p=>({...p,phone:c.phone,client_name:c.name}));setPhoneSuggestIdx(-1);setTimeout(()=>{firstGarmentInputRef.current?.focus();firstGarmentInputRef.current?.select();},50);}} style={{ padding:"10px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",borderBottom:"1px solid var(--bg-surface)",background:i===phoneSuggestIdx?"rgba(79,195,247,0.25)":"transparent",borderLeft:i===phoneSuggestIdx?"3px solid #4FC3F7":"3px solid transparent" }} onMouseEnter={()=>setPhoneSuggestIdx(i)}><span style={{ fontWeight:i===phoneSuggestIdx?800:600, color:i===phoneSuggestIdx?"#4FC3F7":"var(--text-primary)" }}>{c.name}</span><span style={{ color:i===phoneSuggestIdx?"#4FC3F7":"var(--text-muted)",fontSize:14,fontWeight:i===phoneSuggestIdx?700:400 }}>{c.phone}</span></div>)}</div>}
                       </>;
                     })()}
-                    {clients.find(c=>c.phone===newOrder.phone)&&!newOrder.client_name&&<div style={{ marginTop:6,background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ fontSize:13 }}>👤 {clients.find(c=>c.phone===newOrder.phone)?.name}</span><button onClick={()=>setNewOrder(p=>({...p,client_name:clients.find(c=>c.phone===p.phone)?.name||""}))} style={{ ...btn,background:"#66BB6A",color:"#fff",padding:"4px 10px",fontSize:12 }}>↵ Seleccionar</button></div>}
+                    {clients.find(c=>c.phone===newOrder.phone)&&!newOrder.client_name&&<div style={{ marginTop:6,background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ fontSize:15 }}>👤 {clients.find(c=>c.phone===newOrder.phone)?.name}</span><button onClick={()=>setNewOrder(p=>({...p,client_name:clients.find(c=>c.phone===p.phone)?.name||""}))} style={{ ...btn,background:"#66BB6A",color:"#fff",padding:"4px 10px",fontSize:14 }}>↵ Seleccionar</button></div>}
                   </div>
                   <div>
-                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE DEL CLIENTE</label>
-                    <input style={{ ...inp,background:newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)?"rgba(102,187,106,0.08)":"#0D1117",borderColor:newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)?"#66BB6A":"#30363D" }} placeholder={newOrder.phone&&!clients.find(c=>c.phone===newOrder.phone)?"Cliente nuevo — escribe el nombre":"Nombre del cliente"} value={newOrder.client_name} onChange={e=>setNewOrder(p=>({...p,client_name:e.target.value}))} />
-                    {newOrder.phone&&!clients.find(c=>c.phone===newOrder.phone)&&newOrder.client_name&&<div style={{ fontSize:11,color:"#FFD54F",marginTop:4 }}>⚡ Cliente nuevo — se creará automáticamente</div>}
-                    {newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)&&<div style={{ fontSize:11,color:"#66BB6A",marginTop:4 }}>✅ Cliente existente</div>}
+                    <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE DEL CLIENTE</label>
+                    <input style={{ ...inp,background:newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)?"rgba(102,187,106,0.08)":"var(--bg-app)",borderColor:newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)?"#66BB6A":"var(--border)" }} placeholder={newOrder.phone&&!clients.find(c=>c.phone===newOrder.phone)?"Cliente nuevo — escribe el nombre":"Nombre del cliente"} value={newOrder.client_name} onChange={e=>setNewOrder(p=>({...p,client_name:e.target.value}))} />
+                    {newOrder.phone&&!clients.find(c=>c.phone===newOrder.phone)&&newOrder.client_name&&<div style={{ fontSize:13,color:"#FFD54F",marginTop:4 }}>⚡ Cliente nuevo — se creará automáticamente</div>}
+                    {newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)&&<div style={{ fontSize:13,color:"#66BB6A",marginTop:4 }}>✅ Cliente existente</div>}
                   </div>
-                  {(()=>{ const pendientes=orders.filter(o=>o.phone===newOrder.phone&&(o.status==="listo"||o.status==="en_proceso"||o.status==="recibido")); return pendientes.length>0?<div style={{ background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.4)",borderRadius:10,padding:"12px 14px" }}><div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:8 }}><span style={{ fontSize:16 }}>⚠️</span><span style={{ fontWeight:700,color:"#FFD54F",fontSize:13 }}>Tiene {pendientes.length} orden{pendientes.length>1?"es":""} pendiente{pendientes.length>1?"s":""} por recoger</span></div>{pendientes.map(p=><div key={p.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid rgba(255,213,79,0.15)" }}><div><span style={{ fontWeight:700,color:"#4FC3F7",fontSize:13 }}>{p.order_number||"—"}</span><span style={{ color:"#8B949E",fontSize:12 }}> · {getServiceLabel(p.service)} · {p.garments} prendas</span></div><div style={{ display:"flex",alignItems:"center",gap:8 }}><span style={{ fontWeight:700,color:"#66BB6A",fontSize:13 }}>${Math.round(Number(p.price))}</span><span style={{ fontSize:11,background:STATUS_LABELS[p.status]?.color+"22",color:STATUS_LABELS[p.status]?.color,padding:"2px 8px",borderRadius:20 }}>{STATUS_LABELS[p.status]?.label}</span></div></div>)}<div style={{ display:"flex",justifyContent:"space-between",marginTop:8 }}><span style={{ fontSize:12,color:"#8B949E" }}>Total pendiente</span><span style={{ fontWeight:800,color:"#FFD54F",fontSize:15 }}>${Math.round(pendientes.reduce((s,p)=>s+Number(p.price),0))}</span></div></div>:null; })()}
+                  {(()=>{ const pendientes=orders.filter(o=>o.phone===newOrder.phone&&(o.status==="listo"||o.status==="en_proceso"||o.status==="recibido")); return pendientes.length>0?<div style={{ background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.4)",borderRadius:10,padding:"12px 14px" }}><div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:8 }}><span style={{ fontSize:18 }}>⚠️</span><span style={{ fontWeight:700,color:"#FFD54F",fontSize:15 }}>Tiene {pendientes.length} orden{pendientes.length>1?"es":""} pendiente{pendientes.length>1?"s":""} por recoger</span></div>{pendientes.map(p=><div key={p.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid rgba(255,213,79,0.15)" }}><div><span style={{ fontWeight:700,color:"#4FC3F7",fontSize:15 }}>{p.order_number||"—"}</span><span style={{ color:"var(--text-muted)",fontSize:14 }}> · {getServiceLabel(p.service)} · {p.garments} prendas</span></div><div style={{ display:"flex",alignItems:"center",gap:8 }}><span style={{ fontWeight:700,color:"#66BB6A",fontSize:15 }}>${Math.round(Number(p.price))}</span><span style={{ fontSize:13,background:STATUS_LABELS[p.status]?.color+"22",color:STATUS_LABELS[p.status]?.color,padding:"2px 8px",borderRadius:20 }}>{STATUS_LABELS[p.status]?.label}</span></div></div>)}<div style={{ display:"flex",justifyContent:"space-between",marginTop:8 }}><span style={{ fontSize:14,color:"var(--text-muted)" }}>Total pendiente</span><span style={{ fontWeight:800,color:"#FFD54F",fontSize:17 }}>${Math.round(pendientes.reduce((s,p)=>s+Number(p.price),0))}</span></div></div>:null; })()}
                   <div>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
-                      <label style={{ fontSize:12,color:"#8B949E",fontWeight:600 }}>PRENDAS</label>
-                      <span style={{ fontSize:11,color:"#484F58" }}>El botón "+ Agregar" está debajo de la primera prenda</span>
+                      <label style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600 }}>PRENDAS</label>
+                      <span style={{ fontSize:13,color:"var(--text-dim)" }}>El botón "+ Agregar" está debajo de la primera prenda</span>
                     </div>
-                    <div className="lv-item-grid lv-item-header" style={{ marginBottom:4 }}>{["Tipo de prenda","Cant.","Precio c/u","Colores",""].map((h,i)=><div key={i} style={{ fontSize:10,color:"#484F58",fontWeight:600 }}>{h}</div>)}</div>
+                    <div className="lv-item-grid lv-item-header" style={{ marginBottom:4 }}>{["Tipo de prenda","Cant.","Precio c/u","Colores",""].map((h,i)=><div key={i} style={{ fontSize:12,color:"var(--text-dim)",fontWeight:600 }}>{h}</div>)}</div>
                     {items.map((item,i) => (
                       <div key={i}>
-                      <div style={{ marginBottom:10,background:"rgba(255,255,255,0.02)",borderRadius:10,padding:10,border:"1px solid #21262D" }}>
-                        <div style={{ display:"flex",gap:4,marginBottom:8 }}>{services.map(sv=>{ const sel=item.service===sv.id; return <label key={sv.id} onClick={()=>updateItem(i,"service",sv.id)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:3,cursor:"pointer",fontSize:10,fontWeight:600,background:sel?sv.color+"22":"rgba(255,255,255,0.03)",border:`1.5px solid ${sel?sv.color:"#30363D"}`,borderRadius:6,padding:"4px 2px",color:sel?sv.color:"#484F58",userSelect:"none" }}>{sv.icon} {sv.label}</label>; })}</div>
+                      <div style={{ marginBottom:10,background:"rgba(255,255,255,0.02)",borderRadius:10,padding:10,border:"1px solid var(--bg-surface)" }}>
+                        <div style={{ display:"flex",gap:4,marginBottom:8 }}>{services.map(sv=>{ const sel=item.service===sv.id; return <label key={sv.id} onClick={()=>updateItem(i,"service",sv.id)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:3,cursor:"pointer",fontSize:12,fontWeight:600,background:sel?sv.color+"22":"rgba(255,255,255,0.03)",border:`1.5px solid ${sel?sv.color:"var(--border)"}`,borderRadius:6,padding:"4px 2px",color:sel?sv.color:"var(--text-dim)",userSelect:"none" }}>{sv.icon} {sv.label}</label>; })}</div>
                         <div className="lv-item-grid" style={{ alignItems:"center",marginBottom:8 }}>
                           <div style={{ position:"relative" }}>
                             <input type="text" ref={i===0 ? firstGarmentInputRef : null} placeholder="Prenda..." value={item.garment_type} onChange={e=>{updateItem(i,"garment_type",e.target.value);setGarmentSuggestIdx(-1);}} onFocus={()=>{setGarmentFocusIdx(i);setGarmentSuggestIdx(-1);}} onBlur={()=>setTimeout(()=>setGarmentFocusIdx(null),150)} onKeyDown={e=>{
@@ -4362,18 +4377,18 @@ export default function LavanderiaApp() {
                             }} style={{ ...inp,padding:"8px 10px" }} autoComplete="off" />
                             {garmentFocusIdx===i && (() => {
                               const matches = garmentTypes.filter(g=>g.toLowerCase().includes((item.garment_type||"").toLowerCase()));
-                              return matches.length>0 ? <div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#1C2128",border:"1px solid #30363D",borderRadius:8,zIndex:60,overflow:"hidden",marginTop:2,maxHeight:180,overflowY:"auto" }}>
-                                {matches.map((g,idx)=><div key={g} onMouseDown={()=>{ updateItem(i,"garment_type",g); setGarmentFocusIdx(null); setGarmentSuggestIdx(-1); }} onMouseEnter={()=>setGarmentSuggestIdx(idx)} style={{ padding:"7px 12px",cursor:"pointer",fontSize:12,borderBottom:"1px solid #21262D",background:idx===garmentSuggestIdx?"rgba(79,195,247,0.25)":"transparent",borderLeft:idx===garmentSuggestIdx?"3px solid #4FC3F7":"3px solid transparent",fontWeight:idx===garmentSuggestIdx?800:400,color:idx===garmentSuggestIdx?"#4FC3F7":"#E6EDF3" }}>{GARMENT_ICONS[g]||"👕"} {g}</div>)}
+                              return matches.length>0 ? <div style={{ position:"absolute",top:"100%",left:0,right:0,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,zIndex:60,overflow:"hidden",marginTop:2,maxHeight:180,overflowY:"auto" }}>
+                                {matches.map((g,idx)=><div key={g} onMouseDown={()=>{ updateItem(i,"garment_type",g); setGarmentFocusIdx(null); setGarmentSuggestIdx(-1); }} onMouseEnter={()=>setGarmentSuggestIdx(idx)} style={{ padding:"7px 12px",cursor:"pointer",fontSize:14,borderBottom:"1px solid var(--bg-surface)",background:idx===garmentSuggestIdx?"rgba(79,195,247,0.25)":"transparent",borderLeft:idx===garmentSuggestIdx?"3px solid #4FC3F7":"3px solid transparent",fontWeight:idx===garmentSuggestIdx?800:400,color:idx===garmentSuggestIdx?"#4FC3F7":"var(--text-primary)" }}>{GARMENT_ICONS[g]||"👕"} {g}</div>)}
                               </div> : null;
                             })()}
                           </div>
                           <input type="number" min={1} placeholder="Cant." value={item.quantity} onChange={e=>updateItem(i,"quantity",e.target.value)} onWheel={e=>e.target.blur()} style={{ ...inp,padding:"8px 6px",textAlign:"center" }} />
                           <input type="number" min={0} placeholder="0" value={item.price} onChange={e=>updateItem(i,"price",e.target.value)} onWheel={e=>e.target.blur()} style={{ ...inp,padding:"8px 6px" }} />
                           <div style={{ position:"relative" }}>
-                            {(item.colors||[]).length>0&&<div style={{ display:"flex",flexWrap:"wrap",gap:3,marginBottom:3 }}>{(item.colors||[]).map((c,ci)=><span key={ci} style={{ fontSize:10,background:"rgba(199,146,234,0.2)",color:"#C792EA",border:"1px solid rgba(199,146,234,0.4)",borderRadius:10,padding:"1px 6px",display:"flex",alignItems:"center",gap:2 }}>{c}<span onMouseDown={()=>updateItem(i,"colors",(item.colors||[]).filter((_,idx)=>idx!==ci))} style={{ cursor:"pointer",color:"#EF5350",fontWeight:700 }}>×</span></span>)}</div>}
-                            {(item.colors||[]).length>0&&(item.colors||[]).length<Number(item.quantity)&&<div style={{ fontSize:10,color:"#FFD54F",marginBottom:2 }}>⚠️ Faltan {Number(item.quantity)-(item.colors||[]).length} color{Number(item.quantity)-(item.colors||[]).length>1?"es":""}</div>}
+                            {(item.colors||[]).length>0&&<div style={{ display:"flex",flexWrap:"wrap",gap:3,marginBottom:3 }}>{(item.colors||[]).map((c,ci)=><span key={ci} style={{ fontSize:12,background:"rgba(199,146,234,0.2)",color:"#C792EA",border:"1px solid rgba(199,146,234,0.4)",borderRadius:10,padding:"1px 6px",display:"flex",alignItems:"center",gap:2 }}>{c}<span onMouseDown={()=>updateItem(i,"colors",(item.colors||[]).filter((_,idx)=>idx!==ci))} style={{ cursor:"pointer",color:"#EF5350",fontWeight:700 }}>×</span></span>)}</div>}
+                            {(item.colors||[]).length>0&&(item.colors||[]).length<Number(item.quantity)&&<div style={{ fontSize:12,color:"#FFD54F",marginBottom:2 }}>⚠️ Faltan {Number(item.quantity)-(item.colors||[]).length} color{Number(item.quantity)-(item.colors||[]).length>1?"es":""}</div>}
                             {(item.colors||[]).length>=Number(item.quantity)&&Number(item.quantity)>0
-                              ?<div style={{ fontSize:10,color:"#66BB6A" }}>✅ {item.quantity} color{Number(item.quantity)>1?"es":""} asignado{Number(item.quantity)>1?"s":""}</div>
+                              ?<div style={{ fontSize:12,color:"#66BB6A" }}>✅ {item.quantity} color{Number(item.quantity)>1?"es":""} asignado{Number(item.quantity)>1?"s":""}</div>
                               :(() => {
                                   const val = item.colorInput||"";
                                   const colorMatches = colorFocusIdx===i ? (val.length>=1?colors.filter(c=>c.toLowerCase().includes(val.toLowerCase())):colors) : [];
@@ -4387,79 +4402,79 @@ export default function LavanderiaApp() {
                                         if(chosen){ updateItem(i,"colors",[...(item.colors||[]),chosen]); updateItem(i,"colorInput",""); setColorSuggestIdx(-1); }
                                       }
                                       else if(e.key==="Escape"){ setColorSuggestIdx(-1); }
-                                    }} style={{ ...inp,padding:"6px 8px",fontSize:12 }} autoComplete="off" />
-                                    {colorMatches.length>0&&<div style={{ position:"absolute",top:"100%",left:0,right:0,background:"#1C2128",border:"1px solid #30363D",borderRadius:8,zIndex:99,overflow:"hidden",marginTop:2,maxHeight:160,overflowY:"auto" }}>{colorMatches.map((c,idx)=><div key={c} onMouseDown={()=>{ updateItem(i,"colors",[...(item.colors||[]),c]); updateItem(i,"colorInput",""); setColorSuggestIdx(-1); }} onMouseEnter={()=>setColorSuggestIdx(idx)} style={{ padding:"7px 12px",cursor:"pointer",fontSize:12,borderBottom:"1px solid #21262D",background:idx===colorSuggestIdx?"rgba(79,195,247,0.25)":"transparent",borderLeft:idx===colorSuggestIdx?"3px solid #4FC3F7":"3px solid transparent",fontWeight:idx===colorSuggestIdx?800:400,color:idx===colorSuggestIdx?"#4FC3F7":"#E6EDF3" }}>🎨 {c}</div>)}</div>}
+                                    }} style={{ ...inp,padding:"6px 8px",fontSize:14 }} autoComplete="off" />
+                                    {colorMatches.length>0&&<div style={{ position:"absolute",top:"100%",left:0,right:0,background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:8,zIndex:99,overflow:"hidden",marginTop:2,maxHeight:160,overflowY:"auto" }}>{colorMatches.map((c,idx)=><div key={c} onMouseDown={()=>{ updateItem(i,"colors",[...(item.colors||[]),c]); updateItem(i,"colorInput",""); setColorSuggestIdx(-1); }} onMouseEnter={()=>setColorSuggestIdx(idx)} style={{ padding:"7px 12px",cursor:"pointer",fontSize:14,borderBottom:"1px solid var(--bg-surface)",background:idx===colorSuggestIdx?"rgba(79,195,247,0.25)":"transparent",borderLeft:idx===colorSuggestIdx?"3px solid #4FC3F7":"3px solid transparent",fontWeight:idx===colorSuggestIdx?800:400,color:idx===colorSuggestIdx?"#4FC3F7":"var(--text-primary)" }}>🎨 {c}</div>)}</div>}
                                   </>;
                                 })()
                             }
                           </div>
-                          {items.length>1?<button onClick={()=>removeItem(i)} style={{ background:"rgba(239,83,80,0.2)",color:"#EF5350",border:"none",borderRadius:6,padding:"6px 8px",cursor:"pointer",fontSize:12 }}>✕</button>:<div/>}
+                          {items.length>1?<button onClick={()=>removeItem(i)} style={{ background:"rgba(239,83,80,0.2)",color:"#EF5350",border:"none",borderRadius:6,padding:"6px 8px",cursor:"pointer",fontSize:14 }}>✕</button>:<div/>}
                         </div>
                         <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>{conditions.map((condLabel,ci) => {
                           const condKey=condLabel.toLowerCase().replace(/\s+/g,"_");
                           const colorsArr=["#FFD54F","#EF5350","#FF8A65","#C792EA","#4FC3F7","#66BB6A","#F06292","#FFB74D"];
                           const color=colorsArr[ci%colorsArr.length];
-                          return <label key={condKey} style={{ display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:11,background:item[condKey]?color+"22":"rgba(255,255,255,0.04)",border:`1px solid ${item[condKey]?color:"#30363D"}`,borderRadius:20,padding:"3px 10px",userSelect:"none" }}><input type="checkbox" checked={!!item[condKey]} onChange={e=>updateItem(i,condKey,e.target.checked)} style={{ accentColor:color,cursor:"pointer" }} /><span style={{ color:item[condKey]?color:"#8B949E" }}>{condLabel}</span></label>;
+                          return <label key={condKey} style={{ display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:13,background:item[condKey]?color+"22":"rgba(255,255,255,0.04)",border:`1px solid ${item[condKey]?color:"var(--border)"}`,borderRadius:20,padding:"3px 10px",userSelect:"none" }}><input type="checkbox" checked={!!item[condKey]} onChange={e=>updateItem(i,condKey,e.target.checked)} style={{ accentColor:color,cursor:"pointer" }} /><span style={{ color:item[condKey]?color:"var(--text-muted)" }}>{condLabel}</span></label>;
                         })}</div>
                       </div>
-                      {i===0 && <button onClick={addItem} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"6px 12px",fontSize:12,marginTop:6,marginBottom:10 }}>+ Agregar</button>}
+                      {i===0 && <button onClick={addItem} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"6px 12px",fontSize:14,marginTop:6,marginBottom:10 }}>+ Agregar</button>}
                       </div>
                     ))}
                     <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",marginTop:8 }}>
-                      <span style={{ fontSize:13,color:"#8B949E" }}>Total · {totalGarments(items)} prendas</span>
+                      <span style={{ fontSize:15,color:"var(--text-muted)" }}>Total · {totalGarments(items)} prendas</span>
                       {(() => {
                         const pct = getAgencyDiscountPctFor(newOrder.agencia_id);
                         const raw = totalPrice(items);
                         const final = pct ? Math.round(raw*(1-pct/100)) : raw;
                         return pct > 0 ? (
                           <span style={{ textAlign:"right" }}>
-                            <span style={{ fontSize:12,color:"#8B949E",textDecoration:"line-through",marginRight:8 }}>${Math.round(raw)}</span>
-                            <span style={{ fontWeight:800,color:"#66BB6A",fontSize:16 }}>${final}</span>
-                            <div style={{ fontSize:10,color:"#66BB6A" }}>🏷️ {pct}% descuento agencia</div>
+                            <span style={{ fontSize:14,color:"var(--text-muted)",textDecoration:"line-through",marginRight:8 }}>${Math.round(raw)}</span>
+                            <span style={{ fontWeight:800,color:"#66BB6A",fontSize:18 }}>${final}</span>
+                            <div style={{ fontSize:11,color:"#66BB6A" }}>🏷️ {pct}% descuento agencia</div>
                           </span>
-                        ) : <span style={{ fontWeight:800,color:"#66BB6A",fontSize:16 }}>${Math.round(raw)}</span>;
+                        ) : <span style={{ fontWeight:800,color:"#66BB6A",fontSize:18 }}>${Math.round(raw)}</span>;
                       })()}
                     </div>
                   </div>
                   <div>
-                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOTAS <span style={{ color:"#484F58",fontWeight:400 }}>(se llena automáticamente)</span></label>
-                    <textarea style={{ ...inp,height:60,resize:"none",borderColor:newOrder.notes?"rgba(255,213,79,0.4)":"#30363D" }} placeholder="Marca condiciones arriba para llenar automáticamente..." value={newOrder.notes} onChange={e=>setNewOrder(p=>({...p,notes:e.target.value}))} />
+                    <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOTAS <span style={{ color:"var(--text-dim)",fontWeight:400 }}>(se llena automáticamente)</span></label>
+                    <textarea style={{ ...inp,height:60,resize:"none",borderColor:newOrder.notes?"rgba(255,213,79,0.4)":"var(--border)" }} placeholder="Marca condiciones arriba para llenar automáticamente..." value={newOrder.notes} onChange={e=>setNewOrder(p=>({...p,notes:e.target.value}))} />
                   </div>
                   <div>
-                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>📅 FECHA DE ENTREGA</label>
+                    <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>📅 FECHA DE ENTREGA</label>
                     <input type="date" style={{ ...inp,colorScheme:"dark",borderColor:"#FFD54F44" }} value={newOrder.delivery_date} onChange={e=>setNewOrder(p=>({...p,delivery_date:e.target.value}))} />
-                    <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>Por defecto: 2 días después de hoy. Puedes cambiarla.</div>
+                    <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:4 }}>Por defecto: 2 días después de hoy. Puedes cambiarla.</div>
                   </div>
                   {!newOrder.agencia_id && !newOrder.domiciliario_id && (
-                    <label onClick={()=>setNewOrder(p=>({...p,a_domicilio:!p.a_domicilio}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newOrder.a_domicilio?"rgba(102,187,106,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newOrder.a_domicilio?"#66BB6A":"#30363D"}`,borderRadius:10,padding:"10px 14px" }}>
+                    <label onClick={()=>setNewOrder(p=>({...p,a_domicilio:!p.a_domicilio}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newOrder.a_domicilio?"rgba(102,187,106,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newOrder.a_domicilio?"#66BB6A":"var(--border)"}`,borderRadius:10,padding:"10px 14px" }}>
                       <input type="checkbox" checked={!!newOrder.a_domicilio} onChange={e=>setNewOrder(p=>({...p,a_domicilio:e.target.checked}))} style={{ width:18,height:18,accentColor:"#66BB6A" }} />
-                      <div><div style={{ fontWeight:600,color:newOrder.a_domicilio?"#66BB6A":"#8B949E" }}>🛵 Recibido a domicilio</div><div style={{ fontSize:11,color:"#484F58" }}>Marca esto si fuiste tú (o tu empleado) a recoger la ropa donde el cliente</div></div>
+                      <div><div style={{ fontWeight:600,color:newOrder.a_domicilio?"#66BB6A":"var(--text-muted)" }}>🛵 Recibido a domicilio</div><div style={{ fontSize:13,color:"var(--text-dim)" }}>Marca esto si fuiste tú (o tu empleado) a recoger la ropa donde el cliente</div></div>
                     </label>
                   )}
                   {newOrder.a_domicilio && (
                     <div>
-                      <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>📍 DIRECCIÓN DEL CLIENTE</label>
+                      <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>📍 DIRECCIÓN DEL CLIENTE</label>
                       <input style={{ ...inp,borderColor:"rgba(102,187,106,0.4)" }} placeholder="Ej: Calle 45 # 20-10, apto 302" value={newOrder.address} onChange={e=>setNewOrder(p=>({...p,address:e.target.value}))} />
                     </div>
                   )}
-                  <label onClick={()=>setNewOrder(p=>({...p,paid_at_intake:!p.paid_at_intake,payment_method:!p.paid_at_intake?(p.payment_method||"efectivo"):null}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newOrder.paid_at_intake?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newOrder.paid_at_intake?"#FFD54F":"#30363D"}`,borderRadius:10,padding:"10px 14px" }}>
+                  <label onClick={()=>setNewOrder(p=>({...p,paid_at_intake:!p.paid_at_intake,payment_method:!p.paid_at_intake?(p.payment_method||"efectivo"):null}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newOrder.paid_at_intake?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newOrder.paid_at_intake?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"10px 14px" }}>
                     <input type="checkbox" checked={!!newOrder.paid_at_intake} onChange={e=>setNewOrder(p=>({...p,paid_at_intake:e.target.checked,payment_method:e.target.checked?(p.payment_method||"efectivo"):null}))} style={{ width:18,height:18,accentColor:"#FFD54F" }} />
-                    <div><div style={{ fontWeight:600,color:newOrder.paid_at_intake?"#FFD54F":"#8B949E" }}>💰 Pagado al recibir la ropa</div><div style={{ fontSize:11,color:"#484F58" }}>Marca esto si el cliente ya pagó hoy, aunque venga a recogerla después</div></div>
+                    <div><div style={{ fontWeight:600,color:newOrder.paid_at_intake?"#FFD54F":"var(--text-muted)" }}>💰 Pagado al recibir la ropa</div><div style={{ fontSize:13,color:"var(--text-dim)" }}>Marca esto si el cliente ya pagó hoy, aunque venga a recogerla después</div></div>
                   </label>
                   {newOrder.paid_at_intake && (
                     <div>
-                      <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label>
+                      <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label>
                       <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                         {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
-                          <label key={opt.value} onClick={()=>setNewOrder(p=>({...p,payment_method:opt.value}))} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:newOrder.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newOrder.payment_method===opt.value?"#FFD54F":"#30363D"}`,borderRadius:10,padding:"8px 4px",color:newOrder.payment_method===opt.value?"#FFD54F":"#8B949E" }}>{opt.label}</label>
+                          <label key={opt.value} onClick={()=>setNewOrder(p=>({...p,payment_method:opt.value}))} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:newOrder.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newOrder.payment_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"8px 4px",color:newOrder.payment_method===opt.value?"#FFD54F":"var(--text-muted)" }}>{opt.label}</label>
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
                 </div>
-                <div style={{ padding:"14px 28px 28px", borderTop:"1px solid #21262D", display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:12,fontSize:13,opacity:saving||!newOrder.client_name?0.6:1 }}>
+                <div style={{ padding:"14px 28px 28px", borderTop:"1px solid var(--bg-surface)", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:12,fontSize:15,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"💾 Solo Guardar"}
                     </button>
                     <button onClick={async () => {
@@ -4493,7 +4508,7 @@ export default function LavanderiaApp() {
                       setItems([{...emptyItem,price:precioDefaults[emptyItem.garment_type]||""}]);
                       setSaving(false);
                       setTimeout(()=>{phoneInputRef.current?.focus();},50);
-                    }} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,fontSize:13,fontWeight:800,opacity:saving||!newOrder.client_name?0.6:1 }}>
+                    }} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,fontSize:15,fontWeight:800,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"🖨️ Guardar e Imprimir"}
                     </button>
                   </div>
@@ -4502,13 +4517,13 @@ export default function LavanderiaApp() {
 
             {modal === "newExpense" && (
               <>
-                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>💰 Nuevo Gasto</h3>
+                <h3 style={{ margin:"0 0 20px",fontSize:21 }}>💰 Nuevo Gasto</h3>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>CONCEPTO</label><input style={inp} placeholder="Ej: Detergente" value={newExpense.concept} onChange={e=>setNewExpense(p=>({...p,concept:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>CATEGORÍA</label><select style={inp} value={newExpense.category} onChange={e=>setNewExpense(p=>({...p,category:e.target.value}))}>{["insumos","servicios","mantenimiento","otros"].map(c=><option key={c} value={c} style={{ background:"#1a1a2e" }}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}</select></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=><label key={opt.value} onClick={()=>setNewExpense(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:newExpense.payment_method===opt.value?"rgba(79,195,247,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newExpense.payment_method===opt.value?"#4FC3F7":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newExpense.payment_method===opt.value?"#4FC3F7":"#8B949E" }}>{opt.label}</label>)}</div></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newExpense.amount} onChange={e=>setNewExpense(p=>({...p,amount:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newExpense.date} onChange={e=>setNewExpense(p=>({...p,date:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CONCEPTO</label><input style={inp} placeholder="Ej: Detergente" value={newExpense.concept} onChange={e=>setNewExpense(p=>({...p,concept:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CATEGORÍA</label><select style={inp} value={newExpense.category} onChange={e=>setNewExpense(p=>({...p,category:e.target.value}))}>{["insumos","servicios","mantenimiento","otros"].map(c=><option key={c} value={c} style={{ background:"#1a1a2e" }}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}</select></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=><label key={opt.value} onClick={()=>setNewExpense(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:newExpense.payment_method===opt.value?"rgba(79,195,247,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newExpense.payment_method===opt.value?"#4FC3F7":"var(--border)"}`,borderRadius:10,padding:"10px 6px",color:newExpense.payment_method===opt.value?"#4FC3F7":"var(--text-muted)" }}>{opt.label}</label>)}</div></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newExpense.amount} onChange={e=>setNewExpense(p=>({...p,amount:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newExpense.date} onChange={e=>setNewExpense(p=>({...p,date:e.target.value}))} /></div>
                   <button onClick={addExpense} disabled={saving} style={{ ...btn,background:"linear-gradient(135deg,#EF5350,#B71C1C)",color:"#fff",padding:12,opacity:saving?0.7:1 }}>{saving?"Guardando...":"Guardar Gasto"}</button>
                 </div>
               </>
@@ -4516,19 +4531,19 @@ export default function LavanderiaApp() {
 
             {modal === "newAdvance" && (
               <>
-                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>💸 Registrar Adelanto</h3>
+                <h3 style={{ margin:"0 0 20px",fontSize:21 }}>💸 Registrar Adelanto</h3>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div>
-                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>EMPLEADO</label>
+                    <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>EMPLEADO</label>
                     <select style={inp} value={newAdvance.employee_id} onChange={e=>setNewAdvance(p=>({...p,employee_id:e.target.value}))}>
                       <option value="" style={{ background:"#1a1a2e" }}>Selecciona un empleado...</option>
                       {employees.map(emp => <option key={emp.id} value={emp.id} style={{ background:"#1a1a2e" }}>{emp.name}</option>)}
                     </select>
                   </div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newAdvance.amount} onChange={e=>setNewAdvance(p=>({...p,amount:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=><label key={opt.value} onClick={()=>setNewAdvance(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12,fontWeight:600,background:newAdvance.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAdvance.payment_method===opt.value?"#FFD54F":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newAdvance.payment_method===opt.value?"#FFD54F":"#8B949E" }}>{opt.label}</label>)}</div></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newAdvance.date} onChange={e=>setNewAdvance(p=>({...p,date:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOTA (opcional)</label><input style={inp} placeholder="Ej: Adelanto para transporte" value={newAdvance.note} onChange={e=>setNewAdvance(p=>({...p,note:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newAdvance.amount} onChange={e=>setNewAdvance(p=>({...p,amount:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=><label key={opt.value} onClick={()=>setNewAdvance(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:newAdvance.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAdvance.payment_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"10px 6px",color:newAdvance.payment_method===opt.value?"#FFD54F":"var(--text-muted)" }}>{opt.label}</label>)}</div></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newAdvance.date} onChange={e=>setNewAdvance(p=>({...p,date:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOTA (opcional)</label><input style={inp} placeholder="Ej: Adelanto para transporte" value={newAdvance.note} onChange={e=>setNewAdvance(p=>({...p,note:e.target.value}))} /></div>
                   <button onClick={addAdvance} disabled={saving||!newAdvance.employee_id||!newAdvance.amount} style={{ ...btn,background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",padding:12,opacity:(saving||!newAdvance.employee_id||!newAdvance.amount)?0.5:1 }}>{saving?"Guardando...":"Guardar Adelanto"}</button>
                 </div>
               </>
@@ -4536,29 +4551,29 @@ export default function LavanderiaApp() {
 
             {modal === "newDonationLoss" && (
               <>
-                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>🎁 Registrar Donación o Pérdida</h3>
+                <h3 style={{ margin:"0 0 20px",fontSize:21 }}>🎁 Registrar Donación o Pérdida</h3>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div>
-                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:8 }}>TIPO</label>
+                    <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:8 }}>TIPO</label>
                     <div style={{ display:"flex",gap:10 }}>
-                      <label onClick={()=>setNewDonationLoss(p=>({...p,type:"donacion"}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:newDonationLoss.type==="donacion"?"rgba(199,146,234,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newDonationLoss.type==="donacion"?"#C792EA":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newDonationLoss.type==="donacion"?"#C792EA":"#8B949E" }}>🎁 Donación</label>
-                      <label onClick={()=>setNewDonationLoss(p=>({...p,type:"perdida"}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:newDonationLoss.type==="perdida"?"rgba(239,83,80,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newDonationLoss.type==="perdida"?"#EF5350":"#30363D"}`,borderRadius:10,padding:"10px 6px",color:newDonationLoss.type==="perdida"?"#EF5350":"#8B949E" }}>⚠️ Pérdida</label>
+                      <label onClick={()=>setNewDonationLoss(p=>({...p,type:"donacion"}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:15,fontWeight:600,background:newDonationLoss.type==="donacion"?"rgba(199,146,234,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newDonationLoss.type==="donacion"?"#C792EA":"var(--border)"}`,borderRadius:10,padding:"10px 6px",color:newDonationLoss.type==="donacion"?"#C792EA":"var(--text-muted)" }}>🎁 Donación</label>
+                      <label onClick={()=>setNewDonationLoss(p=>({...p,type:"perdida"}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:15,fontWeight:600,background:newDonationLoss.type==="perdida"?"rgba(239,83,80,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newDonationLoss.type==="perdida"?"#EF5350":"var(--border)"}`,borderRadius:10,padding:"10px 6px",color:newDonationLoss.type==="perdida"?"#EF5350":"var(--text-muted)" }}>⚠️ Pérdida</label>
                     </div>
                   </div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DESCRIPCIÓN</label><input style={inp} placeholder="Ej: Bolsa de ropa vieja sin reclamar" value={newDonationLoss.description} onChange={e=>setNewDonationLoss(p=>({...p,description:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>CANTIDAD DE PRENDAS</label><input style={inp} type="number" min={0} placeholder="0" value={newDonationLoss.quantity} onChange={e=>setNewDonationLoss(p=>({...p,quantity:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>VALOR ESTIMADO ($)</label><input style={inp} type="number" min={0} placeholder="0" value={newDonationLoss.estimated_value} onChange={e=>setNewDonationLoss(p=>({...p,estimated_value:e.target.value}))} /></div>
-                  {newDonationLoss.type==="donacion" && <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FUNDACIÓN (opcional)</label><input style={inp} placeholder="Nombre de la fundación" value={newDonationLoss.foundation_name} onChange={e=>setNewDonationLoss(p=>({...p,foundation_name:e.target.value}))} /></div>}
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>DESCRIPCIÓN</label><input style={inp} placeholder="Ej: Bolsa de ropa vieja sin reclamar" value={newDonationLoss.description} onChange={e=>setNewDonationLoss(p=>({...p,description:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CANTIDAD DE PRENDAS</label><input style={inp} type="number" min={0} placeholder="0" value={newDonationLoss.quantity} onChange={e=>setNewDonationLoss(p=>({...p,quantity:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>VALOR ESTIMADO ($)</label><input style={inp} type="number" min={0} placeholder="0" value={newDonationLoss.estimated_value} onChange={e=>setNewDonationLoss(p=>({...p,estimated_value:e.target.value}))} /></div>
+                  {newDonationLoss.type==="donacion" && <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>FUNDACIÓN (opcional)</label><input style={inp} placeholder="Nombre de la fundación" value={newDonationLoss.foundation_name} onChange={e=>setNewDonationLoss(p=>({...p,foundation_name:e.target.value}))} /></div>}
                   <div>
-                    <label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}># DE ORDEN (opcional)</label>
+                    <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}># DE ORDEN (opcional)</label>
                     <input style={inp} placeholder="Ej: S069018" value={newDonationLoss.order_number} onChange={e=>setNewDonationLoss(p=>({...p,order_number:e.target.value}))} onBlur={e=>{
                       const found = orders.find(o => o.order_number?.toLowerCase() === e.target.value.trim().toLowerCase());
                       if (found && !newDonationLoss.client_name) setNewDonationLoss(p=>({...p,client_name:found.client_name}));
                     }} />
                   </div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>CLIENTE (opcional)</label><input style={inp} placeholder="Nombre del cliente" value={newDonationLoss.client_name} onChange={e=>setNewDonationLoss(p=>({...p,client_name:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newDonationLoss.date} onChange={e=>setNewDonationLoss(p=>({...p,date:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOTAS (opcional)</label><input style={inp} placeholder="Detalles adicionales" value={newDonationLoss.notes} onChange={e=>setNewDonationLoss(p=>({...p,notes:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CLIENTE (opcional)</label><input style={inp} placeholder="Nombre del cliente" value={newDonationLoss.client_name} onChange={e=>setNewDonationLoss(p=>({...p,client_name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newDonationLoss.date} onChange={e=>setNewDonationLoss(p=>({...p,date:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOTAS (opcional)</label><input style={inp} placeholder="Detalles adicionales" value={newDonationLoss.notes} onChange={e=>setNewDonationLoss(p=>({...p,notes:e.target.value}))} /></div>
                   <button onClick={addDonationLoss} disabled={saving||!newDonationLoss.description} style={{ ...btn,background:"linear-gradient(135deg,#C792EA,#9B59B6)",color:"#fff",padding:12,opacity:(saving||!newDonationLoss.description)?0.5:1 }}>{saving?"Guardando...":"Guardar Registro"}</button>
                 </div>
               </>
@@ -4567,21 +4582,21 @@ export default function LavanderiaApp() {
             {modal === "reciboOpciones" && savedOrder && (
               <>
                 <div style={{ textAlign:"center",marginBottom:24 }}>
-                  <div style={{ fontSize:48,marginBottom:8 }}>✅</div>
-                  <h3 style={{ margin:"0 0 4px",fontSize:20,fontWeight:800,color:"#66BB6A" }}>¡Orden guardada!</h3>
-                  <div style={{ fontSize:13,color:"#8B949E",marginTop:4 }}>
+                  <div style={{ fontSize:55,marginBottom:8 }}>✅</div>
+                  <h3 style={{ margin:"0 0 4px",fontSize:23,fontWeight:800,color:"#66BB6A" }}>¡Orden guardada!</h3>
+                  <div style={{ fontSize:15,color:"var(--text-muted)",marginTop:4 }}>
                     <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{savedOrder.order?.order_number||"—"}</span>
                     {" · "}{savedOrder.order?.client_name}
                   </div>
-                  <div style={{ fontSize:14,color:"#66BB6A",fontWeight:700,marginTop:6 }}>${Math.round(Number(savedOrder.order?.price||0))}</div>
+                  <div style={{ fontSize:16,color:"#66BB6A",fontWeight:700,marginTop:6 }}>${Math.round(Number(savedOrder.order?.price||0))}</div>
                 </div>
-                <p style={{ fontSize:13,color:"#8B949E",textAlign:"center",marginBottom:20 }}>¿Cómo quieres entregar el comprobante al cliente?</p>
+                <p style={{ fontSize:15,color:"var(--text-muted)",textAlign:"center",marginBottom:20 }}>¿Cómo quieres entregar el comprobante al cliente?</p>
                 <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                   <button onClick={async () => {
                     printOrderQZ(savedOrder.order, savedOrder.itemsMap, 1);
                     await db.patch("orders", savedOrder.order.id, { recibo_enviado: "impreso" });
                     setOrders(prev => prev.map(o => o.id === savedOrder.order.id ? { ...o, recibo_enviado: "impreso" } : o));
-                  }} style={{ ...btn,background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
+                  }} style={{ ...btn,background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",padding:14,fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
                     🖨️ Imprimir recibo físico
                   </button>
                   <button onClick={async () => {
@@ -4593,10 +4608,10 @@ export default function LavanderiaApp() {
                     window.open(getWhatsAppUrl(negocioPais + phone, msg), "lavagest_whatsapp");
                     await db.patch("orders", o.id, { recibo_enviado: "whatsapp" });
                     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, recibo_enviado: "whatsapp" } : ord));
-                  }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:14,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
+                  }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:14,fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
                     📱 Generar imagen y abrir WhatsApp
                   </button>
-                  <button onClick={() => { setModal(null); setSavedOrder(null); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"#8B949E",padding:12,fontSize:13 }}>
+                  <button onClick={() => { setModal(null); setSavedOrder(null); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",padding:12,fontSize:15 }}>
                     📋 Sin recibo por ahora
                   </button>
                 </div>
@@ -4605,11 +4620,11 @@ export default function LavanderiaApp() {
 
             {modal === "newClient" && (
               <>
-                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>👤 Nuevo Cliente</h3>
+                <h3 style={{ margin:"0 0 20px",fontSize:21 }}>👤 Nuevo Cliente</h3>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={inp} placeholder="Nombre completo" value={newClient.name} onChange={e=>setNewClient(p=>({...p,name:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newClient.phone} onChange={e=>setNewClient(p=>({...p,phone:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>EMAIL</label><input style={inp} type="email" placeholder="correo@email.com" value={newClient.email} onChange={e=>setNewClient(p=>({...p,email:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE</label><input style={inp} placeholder="Nombre completo" value={newClient.name} onChange={e=>setNewClient(p=>({...p,name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newClient.phone} onChange={e=>setNewClient(p=>({...p,phone:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>EMAIL</label><input style={inp} type="email" placeholder="correo@email.com" value={newClient.email} onChange={e=>setNewClient(p=>({...p,email:e.target.value}))} /></div>
                   <button onClick={addClient} disabled={saving} style={{ ...btn,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,opacity:saving?0.7:1 }}>{saving?"Guardando...":"Guardar Cliente"}</button>
                 </div>
               </>
@@ -4617,13 +4632,13 @@ export default function LavanderiaApp() {
 
             {modal === "newAgency" && (
               <>
-                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>🏢 Nueva Agencia</h3>
+                <h3 style={{ margin:"0 0 20px",fontSize:21 }}>🏢 Nueva Agencia</h3>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE DE LA AGENCIA</label><input style={inp} placeholder="Ej: Lavandería El Rápido" value={newAgency.name} onChange={e=>setNewAgency(p=>({...p,name:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={inp} placeholder="Nombre del contacto" value={newAgency.contact_name} onChange={e=>setNewAgency(p=>({...p,contact_name:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newAgency.phone} onChange={e=>setNewAgency(p=>({...p,phone:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={inp} placeholder="Dirección de la agencia" value={newAgency.address} onChange={e=>setNewAgency(p=>({...p,address:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>% DE DESCUENTO (opcional)</label><input style={inp} type="number" min={0} max={100} placeholder="Ej: 15" value={newAgency.discount_percent} onChange={e=>setNewAgency(p=>({...p,discount_percent:e.target.value}))} /><span style={{ fontSize:11,color:"#484F58" }}>El precio de sus órdenes se calcula automático con este descuento aplicado.</span></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE DE LA AGENCIA</label><input style={inp} placeholder="Ej: Lavandería El Rápido" value={newAgency.name} onChange={e=>setNewAgency(p=>({...p,name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={inp} placeholder="Nombre del contacto" value={newAgency.contact_name} onChange={e=>setNewAgency(p=>({...p,contact_name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newAgency.phone} onChange={e=>setNewAgency(p=>({...p,phone:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={inp} placeholder="Dirección de la agencia" value={newAgency.address} onChange={e=>setNewAgency(p=>({...p,address:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>% DE DESCUENTO (opcional)</label><input style={inp} type="number" min={0} max={100} placeholder="Ej: 15" value={newAgency.discount_percent} onChange={e=>setNewAgency(p=>({...p,discount_percent:e.target.value}))} /><span style={{ fontSize:13,color:"var(--text-dim)" }}>El precio de sus órdenes se calcula automático con este descuento aplicado.</span></div>
                   <button onClick={addAgency} disabled={saving||!newAgency.name} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",padding:12,opacity:(saving||!newAgency.name)?0.6:1 }}>{saving?"Guardando...":"Guardar Agencia"}</button>
                 </div>
               </>
@@ -4631,12 +4646,12 @@ export default function LavanderiaApp() {
 
             {modal === "newDomiciliario" && (
               <>
-                <h3 style={{ margin:"0 0 20px",fontSize:18 }}>🛵 Nuevo Domiciliario</h3>
+                <h3 style={{ margin:"0 0 20px",fontSize:21 }}>🛵 Nuevo Domiciliario</h3>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={inp} placeholder="Nombre del domiciliario" value={newDomiciliario.name} onChange={e=>setNewDomiciliario(p=>({...p,name:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={inp} placeholder="Si aplica" value={newDomiciliario.contact_name} onChange={e=>setNewDomiciliario(p=>({...p,contact_name:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newDomiciliario.phone} onChange={e=>setNewDomiciliario(p=>({...p,phone:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={inp} placeholder="Si aplica" value={newDomiciliario.address} onChange={e=>setNewDomiciliario(p=>({...p,address:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE</label><input style={inp} placeholder="Nombre del domiciliario" value={newDomiciliario.name} onChange={e=>setNewDomiciliario(p=>({...p,name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={inp} placeholder="Si aplica" value={newDomiciliario.contact_name} onChange={e=>setNewDomiciliario(p=>({...p,contact_name:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={inp} placeholder="555-0000" value={newDomiciliario.phone} onChange={e=>setNewDomiciliario(p=>({...p,phone:e.target.value}))} /></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={inp} placeholder="Si aplica" value={newDomiciliario.address} onChange={e=>setNewDomiciliario(p=>({...p,address:e.target.value}))} /></div>
                   <button onClick={addDomiciliario} disabled={saving||!newDomiciliario.name} style={{ ...btn,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:12,opacity:(saving||!newDomiciliario.name)?0.6:1 }}>{saving?"Guardando...":"Guardar Domiciliario"}</button>
                 </div>
               </>
@@ -4648,28 +4663,28 @@ export default function LavanderiaApp() {
       {/* ABONO MODAL */}
       {abonoModal && (
         <div onClick={() => setAbonoModal(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #FFD54F",fontFamily:"'Segoe UI',sans-serif" }}>
-            <h3 style={{ margin:"0 0 4px",fontSize:18,color:"#E6EDF3" }}>💰 Registrar Abono</h3>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #FFD54F",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 4px",fontSize:21,color:"var(--text-primary)" }}>💰 Registrar Abono</h3>
             <div style={{ marginBottom:16 }}>
               <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}>
                 <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{abonoModal.order_number}</span>
                 <span style={{ fontWeight:600 }}>{abonoModal.client_name}</span>
               </div>
-              <div style={{ display:"flex",gap:16,background:"#0D1117",borderRadius:8,padding:"10px 14px",fontSize:13 }}>
-                <div><div style={{ color:"#8B949E",fontSize:11 }}>TOTAL ORDEN</div><div style={{ fontWeight:800,color:"#E6EDF3" }}>${Math.round(Number(abonoModal.price)).toLocaleString()}</div></div>
-                <div><div style={{ color:"#8B949E",fontSize:11 }}>ABONADO</div><div style={{ fontWeight:800,color:"#66BB6A" }}>${Math.round(getAbonado(abonoModal.id)).toLocaleString()}</div></div>
-                <div><div style={{ color:"#8B949E",fontSize:11 }}>SALDO</div><div style={{ fontWeight:800,color:"#FFD54F" }}>${Math.round(getSaldo(abonoModal)).toLocaleString()}</div></div>
+              <div style={{ display:"flex",gap:16,background:"var(--bg-app)",borderRadius:8,padding:"10px 14px",fontSize:15 }}>
+                <div><div style={{ color:"var(--text-muted)",fontSize:13 }}>TOTAL ORDEN</div><div style={{ fontWeight:800,color:"var(--text-primary)" }}>${Math.round(Number(abonoModal.price)).toLocaleString()}</div></div>
+                <div><div style={{ color:"var(--text-muted)",fontSize:13 }}>ABONADO</div><div style={{ fontWeight:800,color:"#66BB6A" }}>${Math.round(getAbonado(abonoModal.id)).toLocaleString()}</div></div>
+                <div><div style={{ color:"var(--text-muted)",fontSize:13 }}>SALDO</div><div style={{ fontWeight:800,color:"#FFD54F" }}>${Math.round(getSaldo(abonoModal)).toLocaleString()}</div></div>
               </div>
             </div>
             {abonos.filter(a=>a.order_id===abonoModal.id).length > 0 && (
               <div style={{ marginBottom:16 }}>
-                <div style={{ fontSize:11,color:"#8B949E",fontWeight:600,marginBottom:6 }}>ABONOS ANTERIORES</div>
+                <div style={{ fontSize:13,color:"var(--text-muted)",fontWeight:600,marginBottom:6 }}>ABONOS ANTERIORES</div>
                 {abonos.filter(a=>a.order_id===abonoModal.id).map(a=>(
-                  <div key={a.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"#0D1117",borderRadius:8,marginBottom:4,fontSize:12 }}>
-                    <span style={{ color:"#8B949E" }}>{a.date} · {a.employee}</span>
+                  <div key={a.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"var(--bg-app)",borderRadius:8,marginBottom:4,fontSize:14 }}>
+                    <span style={{ color:"var(--text-muted)" }}>{a.date} · {a.employee}</span>
                     <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                       <span style={{ fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(a.amount)).toLocaleString()}</span>
-                      <button onClick={()=>deleteAbono(a)} title="Eliminar abono" style={{ background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"none",borderRadius:6,padding:"3px 7px",fontSize:11,cursor:"pointer" }}>🗑</button>
+                      <button onClick={()=>deleteAbono(a)} title="Eliminar abono" style={{ background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"none",borderRadius:6,padding:"3px 7px",fontSize:13,cursor:"pointer" }}>🗑</button>
                     </div>
                   </div>
                 ))}
@@ -4677,25 +4692,25 @@ export default function LavanderiaApp() {
             )}
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>MONTO DEL ABONO</label>
-                <input type="number" style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #FFD54F",background:"#0D1117",color:"#E6EDF3",fontSize:16,fontWeight:700,width:"100%",boxSizing:"border-box" }} placeholder="0" value={newAbono.amount} onChange={e=>setNewAbono(p=>({...p,amount:e.target.value}))} autoFocus />
-                {newAbono.amount && Number(newAbono.amount) > 0 && <div style={{ fontSize:11,color:"#8B949E",marginTop:4 }}>Saldo restante: <strong style={{ color:"#FFD54F" }}>${Math.max(0,Math.round(getSaldo(abonoModal)-Number(newAbono.amount))).toLocaleString()}</strong></div>}
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>MONTO DEL ABONO</label>
+                <input type="number" style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #FFD54F",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:18,fontWeight:700,width:"100%",boxSizing:"border-box" }} placeholder="0" value={newAbono.amount} onChange={e=>setNewAbono(p=>({...p,amount:e.target.value}))} autoFocus />
+                {newAbono.amount && Number(newAbono.amount) > 0 && <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:4 }}>Saldo restante: <strong style={{ color:"#FFD54F" }}>${Math.max(0,Math.round(getSaldo(abonoModal)-Number(newAbono.amount))).toLocaleString()}</strong></div>}
               </div>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:6 }}>FECHA DEL ABONO</label>
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:6 }}>FECHA DEL ABONO</label>
                 <input type="date" value={newAbono.date||today} onChange={e=>setNewAbono(p=>({...p,date:e.target.value}))} style={{ ...inp,colorScheme:"dark",width:"100%" }} />
-                <div style={{ fontSize:11,color:"#484F58",marginTop:4 }}>Si este pago ya se hizo antes de hoy (ej: recibo antiguo que ya traía un abono), pon la fecha real — así no infla el cuadre de caja de hoy.</div>
+                <div style={{ fontSize:13,color:"var(--text-dim)",marginTop:4 }}>Si este pago ya se hizo antes de hoy (ej: recibo antiguo que ya traía un abono), pon la fecha real — así no infla el cuadre de caja de hoy.</div>
               </div>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:6 }}>MÉTODO DE PAGO</label>
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:6 }}>MÉTODO DE PAGO</label>
                 <div style={{ display:"flex",gap:8 }}>
                   {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=>(
-                    <label key={opt.value} onClick={()=>setNewAbono(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,fontWeight:600,background:newAbono.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAbono.payment_method===opt.value?"#FFD54F":"#30363D"}`,borderRadius:8,padding:"8px 4px",color:newAbono.payment_method===opt.value?"#FFD54F":"#8B949E" }}>{opt.label}</label>
+                    <label key={opt.value} onClick={()=>setNewAbono(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:newAbono.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAbono.payment_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:8,padding:"8px 4px",color:newAbono.payment_method===opt.value?"#FFD54F":"var(--text-muted)" }}>{opt.label}</label>
                   ))}
                 </div>
               </div>
               <div style={{ display:"flex",gap:10,marginTop:4 }}>
-                <button onClick={()=>setAbonoModal(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
+                <button onClick={()=>setAbonoModal(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
                 <button onClick={async () => {
                   if (!newAbono.amount || Number(newAbono.amount) <= 0) { alert("Ingresa un monto válido"); return; }
                   const abono = { order_id: abonoModal.id, amount: Number(newAbono.amount), payment_method: newAbono.payment_method, date: newAbono.date||today, employee: user.name };
@@ -4705,7 +4720,7 @@ export default function LavanderiaApp() {
                     setNewAbono({ amount:"", payment_method:"efectivo", date: today });
                     alert("✅ Abono registrado correctamente");
                   }
-                }} disabled={!newAbono.amount||Number(newAbono.amount)<=0} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:13,opacity:!newAbono.amount||Number(newAbono.amount)<=0?0.5:1 }}>
+                }} disabled={!newAbono.amount||Number(newAbono.amount)<=0} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:15,opacity:!newAbono.amount||Number(newAbono.amount)<=0?0.5:1 }}>
                   💰 Guardar Abono
                 </button>
               </div>
@@ -4717,8 +4732,8 @@ export default function LavanderiaApp() {
       {/* PASSWORD PROMPT MODAL (masked) */}
       {passwordPrompt && (
         <div onClick={() => { passwordPrompt.resolve(null); setPasswordPrompt(null); }} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,padding:16 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:340,maxWidth:"90vw",border:"1px solid #EF5350" }}>
-            <h3 style={{ margin:"0 0 16px",fontSize:16,color:"#E6EDF3" }}>🔒 {passwordPrompt.message}</h3>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,padding:28,width:340,maxWidth:"90vw",border:"1px solid #EF5350" }}>
+            <h3 style={{ margin:"0 0 16px",fontSize:18,color:"var(--text-primary)" }}>🔒 {passwordPrompt.message}</h3>
             <input
               type="password"
               autoFocus
@@ -4728,11 +4743,11 @@ export default function LavanderiaApp() {
                 if(e.key==="Enter"){ passwordPrompt.resolve(passwordPromptValue); setPasswordPrompt(null); }
                 if(e.key==="Escape"){ passwordPrompt.resolve(null); setPasswordPrompt(null); }
               }}
-              style={{ width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:16,boxSizing:"border-box",marginBottom:16 }}
+              style={{ width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:18,boxSizing:"border-box",marginBottom:16 }}
             />
             <div style={{ display:"flex",gap:10 }}>
-              <button onClick={()=>{ passwordPrompt.resolve(null); setPasswordPrompt(null); }} style={{ flex:1,padding:10,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
-              <button onClick={()=>{ passwordPrompt.resolve(passwordPromptValue); setPasswordPrompt(null); }} style={{ flex:2,padding:10,borderRadius:8,border:"none",background:"linear-gradient(135deg,#EF5350,#B71C1C)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:13 }}>Confirmar</button>
+              <button onClick={()=>{ passwordPrompt.resolve(null); setPasswordPrompt(null); }} style={{ flex:1,padding:10,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
+              <button onClick={()=>{ passwordPrompt.resolve(passwordPromptValue); setPasswordPrompt(null); }} style={{ flex:2,padding:10,borderRadius:8,border:"none",background:"linear-gradient(135deg,#EF5350,#B71C1C)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:15 }}>Confirmar</button>
             </div>
           </div>
         </div>
@@ -4741,27 +4756,27 @@ export default function LavanderiaApp() {
       {/* MARK PAID AT INTAKE MODAL */}
       {markPaidModal && (
         <div onClick={() => setMarkPaidModal(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #66BB6A",fontFamily:"'Segoe UI',sans-serif" }}>
-            <h3 style={{ margin:"0 0 4px",fontSize:18,color:"#E6EDF3" }}>✅💰 Marcar como Pagada al Recibir</h3>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #66BB6A",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 4px",fontSize:21,color:"var(--text-primary)" }}>✅💰 Marcar como Pagada al Recibir</h3>
             <div style={{ marginBottom:16 }}>
               <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
                 <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{markPaidModal.order_number}</span>
                 <span style={{ fontWeight:600 }}>{markPaidModal.client_name}</span>
               </div>
-              <p style={{ fontSize:13,color:"#8B949E",margin:0 }}>El cliente pagó ${Math.round(Number(markPaidModal.price)).toLocaleString()} al dejar la ropa (hoy). Esto va a contar la plata el día de hoy, aunque venga a recoger después.</p>
+              <p style={{ fontSize:15,color:"var(--text-muted)",margin:0 }}>El cliente pagó ${Math.round(Number(markPaidModal.price)).toLocaleString()} al dejar la ropa (hoy). Esto va a contar la plata el día de hoy, aunque venga a recoger después.</p>
             </div>
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:6 }}>MÉTODO DE PAGO</label>
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:6 }}>MÉTODO DE PAGO</label>
                 <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                   {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=>(
-                    <label key={opt.value} onClick={()=>setMarkPaidMethod(opt.value)} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,fontWeight:600,background:markPaidMethod===opt.value?"rgba(102,187,106,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${markPaidMethod===opt.value?"#66BB6A":"#30363D"}`,borderRadius:8,padding:"8px 4px",color:markPaidMethod===opt.value?"#66BB6A":"#8B949E" }}>{opt.label}</label>
+                    <label key={opt.value} onClick={()=>setMarkPaidMethod(opt.value)} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:markPaidMethod===opt.value?"rgba(102,187,106,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${markPaidMethod===opt.value?"#66BB6A":"var(--border)"}`,borderRadius:8,padding:"8px 4px",color:markPaidMethod===opt.value?"#66BB6A":"var(--text-muted)" }}>{opt.label}</label>
                   ))}
                 </div>
               </div>
               <div style={{ display:"flex",gap:10,marginTop:4 }}>
-                <button onClick={()=>setMarkPaidModal(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
-                <button onClick={confirmarMarcarPagada} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:13 }}>✅ Confirmar Pago</button>
+                <button onClick={()=>setMarkPaidModal(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
+                <button onClick={confirmarMarcarPagada} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:15 }}>✅ Confirmar Pago</button>
               </div>
             </div>
           </div>
@@ -4771,55 +4786,55 @@ export default function LavanderiaApp() {
       {/* MANUAL / HISTORIC ORDER MODAL */}
       {showManualOrder && (
         <div onClick={() => setShowManualOrder(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:440,maxWidth:"92vw",maxHeight:"88vh",overflowY:"auto",border:"1px solid #4FC3F7",fontFamily:"'Segoe UI',sans-serif" }}>
-            <h3 style={{ margin:"0 0 4px",fontSize:18,color:"#E6EDF3" }}>🗂 Crear Orden Manual / Histórica</h3>
-            <p style={{ fontSize:12,color:"#8B949E",margin:"0 0 16px" }}>Para recibos viejos que no quedaron en la migración. Escribe el número y la fecha exacta del recibo físico.</p>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,padding:28,width:640,maxWidth:"92vw",maxHeight:"88vh",overflowY:"auto",border:"1px solid #4FC3F7",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 4px",fontSize:21,color:"var(--text-primary)" }}>🗂 Crear Orden Manual / Histórica</h3>
+            <p style={{ fontSize:14,color:"var(--text-muted)",margin:"0 0 16px" }}>Para recibos viejos que no quedaron en la migración. Escribe el número y la fecha exacta del recibo físico.</p>
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}># DE RECIBO (ej: S054210)</label>
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}># DE RECIBO (ej: S054210)</label>
                 <input ref={manualOrderNumberRef} style={inp} placeholder="S000000" value={newManualOrder.order_number} onChange={e=>setNewManualOrder(p=>({...p,order_number:e.target.value}))} />
               </div>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>CLIENTE</label>
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CLIENTE</label>
                 <input style={inp} placeholder="Nombre del cliente" value={newManualOrder.client_name} onChange={e=>setNewManualOrder(p=>({...p,client_name:e.target.value}))} />
               </div>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO (opcional)</label>
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TELÉFONO (opcional)</label>
                 <input style={inp} placeholder="3001234567" value={newManualOrder.phone} onChange={e=>setNewManualOrder(p=>({...p,phone:e.target.value}))} />
               </div>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>DESCRIPCIÓN DE LA PRENDA (opcional)</label>
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>DESCRIPCIÓN DE LA PRENDA (opcional)</label>
                 <input style={inp} placeholder="Ej: 2 camisas, 1 pantalón" value={newManualOrder.garment_desc} onChange={e=>setNewManualOrder(p=>({...p,garment_desc:e.target.value}))} />
               </div>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>PRECIO TOTAL</label>
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>PRECIO TOTAL</label>
                 <input style={inp} type="number" min={0} placeholder="0" value={newManualOrder.price} onChange={e=>setNewManualOrder(p=>({...p,price:e.target.value}))} />
               </div>
               <div>
-                <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA DE INGRESO (la del recibo)</label>
+                <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>FECHA DE INGRESO (la del recibo)</label>
                 <input type="date" style={{ ...inp,colorScheme:"dark" }} value={newManualOrder.date} onChange={e=>setNewManualOrder(p=>({...p,date:e.target.value}))} />
               </div>
-              <label onClick={()=>setNewManualOrder(p=>({...p,already_delivered:!p.already_delivered}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newManualOrder.already_delivered?"rgba(102,187,106,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newManualOrder.already_delivered?"#66BB6A":"#30363D"}`,borderRadius:10,padding:"10px 14px" }}>
+              <label onClick={()=>setNewManualOrder(p=>({...p,already_delivered:!p.already_delivered}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newManualOrder.already_delivered?"rgba(102,187,106,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newManualOrder.already_delivered?"#66BB6A":"var(--border)"}`,borderRadius:10,padding:"10px 14px" }}>
                 <input type="checkbox" checked={newManualOrder.already_delivered} onChange={e=>setNewManualOrder(p=>({...p,already_delivered:e.target.checked}))} style={{ width:18,height:18,accentColor:"#66BB6A" }} />
-                <div><div style={{ fontWeight:600,color:newManualOrder.already_delivered?"#66BB6A":"#8B949E" }}>✅ Ya fue entregada / el cliente ya se la llevó</div><div style={{ fontSize:11,color:"#484F58" }}>Como tu caso: la ropa ya salió y ya te pagaron.</div></div>
+                <div><div style={{ fontWeight:600,color:newManualOrder.already_delivered?"#66BB6A":"var(--text-muted)" }}>✅ Ya fue entregada / el cliente ya se la llevó</div><div style={{ fontSize:13,color:"var(--text-dim)" }}>Como tu caso: la ropa ya salió y ya te pagaron.</div></div>
               </label>
               {newManualOrder.already_delivered && <>
                 <div>
-                  <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:4 }}>FECHA DE ENTREGA</label>
+                  <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>FECHA DE ENTREGA</label>
                   <input type="date" style={{ ...inp,colorScheme:"dark" }} value={newManualOrder.delivered_at} onChange={e=>setNewManualOrder(p=>({...p,delivered_at:e.target.value}))} />
                 </div>
                 <div>
-                  <label style={{ fontSize:11,color:"#8B949E",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label>
+                  <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label>
                   <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                     {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=>(
-                      <label key={opt.value} onClick={()=>setNewManualOrder(p=>({...p,payment_method:opt.value}))} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,fontWeight:600,background:newManualOrder.payment_method===opt.value?"rgba(102,187,106,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newManualOrder.payment_method===opt.value?"#66BB6A":"#30363D"}`,borderRadius:8,padding:"8px 4px",color:newManualOrder.payment_method===opt.value?"#66BB6A":"#8B949E" }}>{opt.label}</label>
+                      <label key={opt.value} onClick={()=>setNewManualOrder(p=>({...p,payment_method:opt.value}))} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:newManualOrder.payment_method===opt.value?"rgba(102,187,106,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newManualOrder.payment_method===opt.value?"#66BB6A":"var(--border)"}`,borderRadius:8,padding:"8px 4px",color:newManualOrder.payment_method===opt.value?"#66BB6A":"var(--text-muted)" }}>{opt.label}</label>
                     ))}
                   </div>
                 </div>
               </>}
               <div style={{ display:"flex",gap:10,marginTop:4 }}>
-                <button onClick={()=>setShowManualOrder(false)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
-                <button onClick={addManualOrder} disabled={savingManualOrder} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:13,opacity:savingManualOrder?0.7:1 }}>{savingManualOrder?"Creando...":"🗂 Crear Orden"}</button>
+                <button onClick={()=>setShowManualOrder(false)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
+                <button onClick={addManualOrder} disabled={savingManualOrder} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:15,opacity:savingManualOrder?0.7:1 }}>{savingManualOrder?"Creando...":"🗂 Crear Orden"}</button>
               </div>
             </div>
           </div>
@@ -4829,16 +4844,16 @@ export default function LavanderiaApp() {
       {/* EDIT EMPLOYEE MODAL */}
       {editingEmployee && (
         <div onClick={() => setEditingEmployee(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #FFD54F",fontFamily:"'Segoe UI',sans-serif" }}>
-            <h3 style={{ margin:"0 0 20px",fontSize:18,color:"#E6EDF3" }}>✏️ Editar Usuario</h3>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #FFD54F",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 20px",fontSize:21,color:"var(--text-primary)" }}>✏️ Editar Usuario</h3>
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingEmployee.name} onChange={e=>setEditingEmployee(p=>({...p,name:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PIN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} type="password" maxLength={6} value={editingEmployee.pin} onChange={e=>setEditingEmployee(p=>({...p,pin:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>ROL</label><select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingEmployee.role} onChange={e=>setEditingEmployee(p=>({...p,role:e.target.value}))}><option value="employee" style={{ background:"#1a1a2e" }}>👤 Empleado</option><option value="admin" style={{ background:"#1a1a2e" }}>👑 Administrador</option></select></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TURNO</label><select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingEmployee.turno||"mañana"} onChange={e=>setEditingEmployee(p=>({...p,turno:e.target.value}))}><option value="mañana" style={{ background:"#1a1a2e" }}>🌅 Mañana</option><option value="tarde" style={{ background:"#1a1a2e" }}>🌆 Tarde</option><option value="noche" style={{ background:"#1a1a2e" }}>🌙 Noche</option><option value="completo" style={{ background:"#1a1a2e" }}>⏰ Día completo</option></select></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingEmployee.name} onChange={e=>setEditingEmployee(p=>({...p,name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>PIN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} type="password" maxLength={6} value={editingEmployee.pin} onChange={e=>setEditingEmployee(p=>({...p,pin:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>ROL</label><select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingEmployee.role} onChange={e=>setEditingEmployee(p=>({...p,role:e.target.value}))}><option value="employee" style={{ background:"#1a1a2e" }}>👤 Empleado</option><option value="admin" style={{ background:"#1a1a2e" }}>👑 Administrador</option></select></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TURNO</label><select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingEmployee.turno||"mañana"} onChange={e=>setEditingEmployee(p=>({...p,turno:e.target.value}))}><option value="mañana" style={{ background:"#1a1a2e" }}>🌅 Mañana</option><option value="tarde" style={{ background:"#1a1a2e" }}>🌆 Tarde</option><option value="noche" style={{ background:"#1a1a2e" }}>🌙 Noche</option><option value="completo" style={{ background:"#1a1a2e" }}>⏰ Día completo</option></select></div>
               <div style={{ display:"flex",gap:10,marginTop:8 }}>
-                <button onClick={()=>setEditingEmployee(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
-                <button onClick={updateEmployee} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
+                <button onClick={()=>setEditingEmployee(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
+                <button onClick={updateEmployee} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:15 }}>💾 Guardar cambios</button>
               </div>
             </div>
           </div>
@@ -4848,25 +4863,25 @@ export default function LavanderiaApp() {
       {/* TOTAL PRENDAS MODAL */}
       {showTotalPrendas && (
         <div onClick={() => setShowTotalPrendas(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:250 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:20,padding:32,width:360,maxWidth:"92vw",border:"1px solid rgba(255,213,79,0.4)",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",fontFamily:"'Segoe UI',sans-serif" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:20,padding:32,width:360,maxWidth:"92vw",border:"1px solid rgba(255,213,79,0.4)",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",fontFamily:"'Segoe UI',sans-serif" }}>
             <div style={{ textAlign:"center",marginBottom:24 }}>
-              <div style={{ fontSize:48,marginBottom:8 }}>👕</div>
-              <h2 style={{ margin:0,fontSize:20,fontWeight:800,color:"#E6EDF3" }}>Total de Prendas del Día</h2>
-              <p style={{ margin:"6px 0 0",fontSize:13,color:"#8B949E" }}>{filterDate}</p>
+              <div style={{ fontSize:55,marginBottom:8 }}>👕</div>
+              <h2 style={{ margin:0,fontSize:23,fontWeight:800,color:"var(--text-primary)" }}>Total de Prendas del Día</h2>
+              <p style={{ margin:"6px 0 0",fontSize:15,color:"var(--text-muted)" }}>{filterDate}</p>
             </div>
-            <div style={{ background:"#0D1117",borderRadius:14,padding:20,marginBottom:20 }}>
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:12,borderBottom:"1px solid #21262D" }}><span style={{ color:"#8B949E",fontSize:13 }}>Ingresos del día</span><span style={{ fontWeight:700,color:"#66BB6A",fontSize:16 }}>${Math.round(todayRevenue)}</span></div>
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:12,borderBottom:"1px solid #21262D" }}><span style={{ color:"#8B949E",fontSize:13 }}>Precio por prenda</span><span style={{ fontWeight:700,color:"#FFD54F",fontSize:16 }}>${precioPrend.toLocaleString()}</span></div>
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ color:"#8B949E",fontSize:13 }}>Total prendas estimado</span><span style={{ fontWeight:800,color:"#4FC3F7",fontSize:28 }}>{precioPrend>0?Math.round(todayRevenue/precioPrend):0}</span></div>
+            <div style={{ background:"var(--bg-app)",borderRadius:14,padding:20,marginBottom:20 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:12,borderBottom:"1px solid var(--bg-surface)" }}><span style={{ color:"var(--text-muted)",fontSize:15 }}>Ingresos del día</span><span style={{ fontWeight:700,color:"#66BB6A",fontSize:18 }}>${Math.round(todayRevenue)}</span></div>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:12,borderBottom:"1px solid var(--bg-surface)" }}><span style={{ color:"var(--text-muted)",fontSize:15 }}>Precio por prenda</span><span style={{ fontWeight:700,color:"#FFD54F",fontSize:18 }}>${precioPrend.toLocaleString()}</span></div>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ color:"var(--text-muted)",fontSize:15 }}>Total prendas estimado</span><span style={{ fontWeight:800,color:"#4FC3F7",fontSize:32 }}>{precioPrend>0?Math.round(todayRevenue/precioPrend):0}</span></div>
             </div>
-            <div style={{ background:"rgba(79,195,247,0.06)",border:"1px solid rgba(79,195,247,0.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,textAlign:"center",fontSize:13,color:"#8B949E" }}>
+            <div style={{ background:"rgba(79,195,247,0.06)",border:"1px solid rgba(79,195,247,0.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,textAlign:"center",fontSize:15,color:"var(--text-muted)" }}>
               ${Math.round(todayRevenue)} ÷ ${precioPrend.toLocaleString()} = <strong style={{ color:"#4FC3F7" }}>{precioPrend>0?Math.round(todayRevenue/precioPrend):0} prendas</strong>
             </div>
             {!editingPrecio
-              ?<button onClick={()=>{setEditingPrecio(true);setTempPrecio(String(precioPrend));}} style={{ width:"100%",padding:"10px",borderRadius:10,border:"1px solid #30363D",background:"transparent",color:"#8B949E",cursor:"pointer",fontSize:13,marginBottom:12 }}>✏️ Cambiar precio por prenda (actual: ${precioPrend.toLocaleString()})</button>
-              :<div style={{ marginBottom:12 }}><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:6 }}>NUEVO PRECIO POR PRENDA</label><div style={{ display:"flex",gap:8 }}><input type="number" value={tempPrecio} onChange={e=>setTempPrecio(e.target.value)} style={{ flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #FFD54F",background:"#0D1117",color:"#E6EDF3",fontSize:16,fontWeight:700 }} autoFocus /><button onClick={()=>{const val=Number(tempPrecio);if(val>0){setPrecioPrend(val);try{localStorage.setItem("precioPrend",String(val));}catch{}}setEditingPrecio(false);}} style={{ padding:"10px 16px",borderRadius:8,border:"none",background:"#FFD54F",color:"#000",fontWeight:800,cursor:"pointer" }}>Guardar</button><button onClick={()=>setEditingPrecio(false)} style={{ padding:"10px 12px",borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",cursor:"pointer" }}>✕</button></div></div>
+              ?<button onClick={()=>{setEditingPrecio(true);setTempPrecio(String(precioPrend));}} style={{ width:"100%",padding:"10px",borderRadius:10,border:"1px solid var(--border)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:15,marginBottom:12 }}>✏️ Cambiar precio por prenda (actual: ${precioPrend.toLocaleString()})</button>
+              :<div style={{ marginBottom:12 }}><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:6 }}>NUEVO PRECIO POR PRENDA</label><div style={{ display:"flex",gap:8 }}><input type="number" value={tempPrecio} onChange={e=>setTempPrecio(e.target.value)} style={{ flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #FFD54F",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:18,fontWeight:700 }} autoFocus /><button onClick={()=>{const val=Number(tempPrecio);if(val>0){setPrecioPrend(val);try{localStorage.setItem("precioPrend",String(val));}catch{}}setEditingPrecio(false);}} style={{ padding:"10px 16px",borderRadius:8,border:"none",background:"#FFD54F",color:"#000",fontWeight:800,cursor:"pointer" }}>Guardar</button><button onClick={()=>setEditingPrecio(false)} style={{ padding:"10px 12px",borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",cursor:"pointer" }}>✕</button></div></div>
             }
-            <button onClick={()=>setShowTotalPrendas(false)} style={{ width:"100%",padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:14 }}>Cerrar</button>
+            <button onClick={()=>setShowTotalPrendas(false)} style={{ width:"100%",padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:16 }}>Cerrar</button>
           </div>
         </div>
       )}
@@ -4875,16 +4890,16 @@ export default function LavanderiaApp() {
       {/* INFORME DIARIO MODAL */}
       {showInformeDiario && (
         <div onClick={() => setShowInformeDiario(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,fontFamily:"'Segoe UI',sans-serif" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:20,padding:"clamp(14px,4vw,28px)",width:420,maxWidth:"92vw",maxHeight:"88vh",overflowY:"auto",border:"1px solid rgba(199,146,234,0.4)",boxShadow:"0 8px 40px rgba(0,0,0,0.8)" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:20,padding:"clamp(14px,4vw,28px)",width:420,maxWidth:"92vw",maxHeight:"88vh",overflowY:"auto",border:"1px solid rgba(199,146,234,0.4)",boxShadow:"0 8px 40px rgba(0,0,0,0.8)" }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
-              <h2 style={{ margin:0,fontSize:20,fontWeight:800,color:"#C792EA" }}>💳 Informe Diario</h2>
-              <button onClick={()=>setShowInformeDiario(false)} style={{ background:"none",border:"none",color:"#8B949E",fontSize:24,cursor:"pointer" }}>✕</button>
+              <h2 style={{ margin:0,fontSize:23,fontWeight:800,color:"#C792EA" }}>💳 Informe Diario</h2>
+              <button onClick={()=>setShowInformeDiario(false)} style={{ background:"none",border:"none",color:"var(--text-muted)",fontSize:28,cursor:"pointer" }}>✕</button>
             </div>
             <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:20 }}>
-              <button onClick={()=>{ const d=new Date(filterDate+"T00:00:00"); d.setDate(d.getDate()-1); setFilterDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`); }} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"8px 12px",fontSize:14 }}>‹</button>
-              <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} style={{ ...inp,colorScheme:"dark",flex:1,fontSize:13,textAlign:"center" }} />
-              <button onClick={()=>{ const d=new Date(filterDate+"T00:00:00"); d.setDate(d.getDate()+1); setFilterDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`); }} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"8px 12px",fontSize:14 }}>›</button>
-              {filterDate !== today && <button onClick={()=>setFilterDate(today)} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"8px 12px",fontSize:12 }}>Hoy</button>}
+              <button onClick={()=>{ const d=new Date(filterDate+"T00:00:00"); d.setDate(d.getDate()-1); setFilterDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`); }} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"8px 12px",fontSize:16 }}>‹</button>
+              <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} style={{ ...inp,colorScheme:"dark",flex:1,fontSize:15,textAlign:"center" }} />
+              <button onClick={()=>{ const d=new Date(filterDate+"T00:00:00"); d.setDate(d.getDate()+1); setFilterDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`); }} style={{ ...btn,background:"rgba(199,146,234,0.15)",color:"#C792EA",padding:"8px 12px",fontSize:16 }}>›</button>
+              {filterDate !== today && <button onClick={()=>setFilterDate(today)} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"8px 12px",fontSize:14 }}>Hoy</button>}
             </div>
 
             {(() => {
@@ -4919,31 +4934,31 @@ export default function LavanderiaApp() {
               return <>
                 {/* Base de caja */}
                 <div style={{ background:"rgba(102,187,106,0.06)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:10,padding:"14px 16px",marginBottom:16 }}>
-                  <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:8 }}>💵 BASE DE CAJA (lo que le dejaste al empleado)</div>
+                  <div style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600,marginBottom:8 }}>💵 BASE DE CAJA (lo que le dejaste al empleado)</div>
                   {isAdmin ? (
                     <div style={{ display:"flex",gap:8 }}>
-                      <input type="number" placeholder="0" value={cajaBaseInput} onChange={e=>setCajaBaseInput(e.target.value)} style={{ flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #66BB6A",background:"#0D1117",color:"#E6EDF3",fontSize:16,fontWeight:700 }} />
+                      <input type="number" placeholder="0" value={cajaBaseInput} onChange={e=>setCajaBaseInput(e.target.value)} style={{ flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #66BB6A",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:18,fontWeight:700 }} />
                       <button onClick={()=>saveCajaBase(filterDate, cajaBaseInput||0)} disabled={savingBase} style={{ ...btn,background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:"10px 18px",opacity:savingBase?0.7:1 }}>{savingBase?"Guardando...":"💾 Guardar"}</button>
                     </div>
                   ) : (
-                    <div style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#66BB6A",fontSize:16,fontWeight:700 }}>${Math.round(Number(cajaBaseInput)||0).toLocaleString()}</div>
+                    <div style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"#66BB6A",fontSize:18,fontWeight:700 }}>${Math.round(Number(cajaBaseInput)||0).toLocaleString()}</div>
                   )}
                 </div>
 
                 {/* Cuadre de caja (solo efectivo) */}
                 <div style={{ background:"rgba(255,213,79,0.06)",border:"1px solid rgba(255,213,79,0.3)",borderRadius:10,padding:"14px 16px",marginBottom:16 }}>
-                  <div style={{ fontSize:12,color:"#8B949E",fontWeight:600,marginBottom:10 }}>🧮 CUADRE DE CAJA (solo efectivo)</div>
-                  <div style={{ display:"flex",flexDirection:"column",gap:4,fontSize:13 }}>
-                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>Base inicial</span><span>${Math.round(baseHoy).toLocaleString()}</span></div>
-                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>+ Entregas en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoEntregas).toLocaleString()}</span></div>
-                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>+ Abonos en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoAbonos).toLocaleString()}</span></div>
-                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>+ Entregas parciales en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoParciales).toLocaleString()}</span></div>
-                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>− Gastos en efectivo</span><span style={{ color:"#EF5350" }}>${Math.round(efectivoGastos).toLocaleString()}</span></div>
-                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"#8B949E" }}>− Adelantos en efectivo</span><span style={{ color:"#EF5350" }}>${Math.round(efectivoAdelantos).toLocaleString()}</span></div>
+                  <div style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600,marginBottom:10 }}>🧮 CUADRE DE CAJA (solo efectivo)</div>
+                  <div style={{ display:"flex",flexDirection:"column",gap:4,fontSize:15 }}>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"var(--text-muted)" }}>Base inicial</span><span>${Math.round(baseHoy).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"var(--text-muted)" }}>+ Entregas en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoEntregas).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"var(--text-muted)" }}>+ Abonos en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoAbonos).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"var(--text-muted)" }}>+ Entregas parciales en efectivo</span><span style={{ color:"#66BB6A" }}>${Math.round(efectivoParciales).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"var(--text-muted)" }}>− Gastos en efectivo</span><span style={{ color:"#EF5350" }}>${Math.round(efectivoGastos).toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"var(--text-muted)" }}>− Adelantos en efectivo</span><span style={{ color:"#EF5350" }}>${Math.round(efectivoAdelantos).toLocaleString()}</span></div>
                   </div>
                   <div style={{ borderTop:"1px solid rgba(255,213,79,0.3)",marginTop:10,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                     <span style={{ fontWeight:700,color:"#FFD54F" }}>Total que debe haber en caja</span>
-                    <span style={{ fontWeight:800,fontSize:22,color:"#FFD54F" }}>${Math.round(totalEnCaja).toLocaleString()}</span>
+                    <span style={{ fontWeight:800,fontSize:25,color:"#FFD54F" }}>${Math.round(totalEnCaja).toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -4953,12 +4968,12 @@ export default function LavanderiaApp() {
                   return aperturasHoy.length > 0 && (
                     <div style={{ background:"rgba(79,195,247,0.06)",border:"1px solid rgba(79,195,247,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:16 }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:aperturasHoy.length?8:0 }}>
-                        <span style={{ fontSize:12,color:"#8B949E",fontWeight:600 }}>🗄️ CAJÓN MONEDERO</span>
-                        <span style={{ fontWeight:800,fontSize:16,color:"#4FC3F7" }}>{aperturasHoy.length} apertura{aperturasHoy.length!==1?"s":""} hoy</span>
+                        <span style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600 }}>🗄️ CAJÓN MONEDERO</span>
+                        <span style={{ fontWeight:800,fontSize:18,color:"#4FC3F7" }}>{aperturasHoy.length} apertura{aperturasHoy.length!==1?"s":""} hoy</span>
                       </div>
                       <div style={{ display:"flex",flexDirection:"column",gap:3,maxHeight:120,overflowY:"auto" }}>
                         {aperturasHoy.map((l,i) => (
-                          <div key={l.id||i} style={{ fontSize:11,color:"#8B949E",display:"flex",justifyContent:"space-between" }}>
+                          <div key={l.id||i} style={{ fontSize:13,color:"var(--text-muted)",display:"flex",justifyContent:"space-between" }}>
                             <span>{l.time} · {l.reason==="entrega"?"Entrega":l.reason==="entrega_multiple"?"Entregas varias":l.reason==="entrega_parcial"?"Entrega parcial":l.reason==="gasto"?"Gasto":"Otro"} {l.detail?`(${l.detail})`:""}</span>
                             <span>{l.employee}</span>
                           </div>
@@ -4969,7 +4984,7 @@ export default function LavanderiaApp() {
                 })()}
 
                 {/* Totales por método */}
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:16 }}>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:16 }}>
                   {metodos.map(m => {
                     const ordenesMetodo = entregadasHoy.filter(o => (o.payment_method||"efectivo") === m.key);
                     const total = ordenesMetodo.reduce((s,o) => s+montoCobradoEnEntrega(o), 0);
@@ -4978,15 +4993,13 @@ export default function LavanderiaApp() {
                     const parcialesMetodo = parcialesHoy.filter(p => (p.payment_method||"efectivo") === m.key).reduce((s,p) => s+Number(p.amount), 0);
                     const advancesMetodo = advancesHoy.filter(a => (a.payment_method||"efectivo") === m.key).reduce((s,a) => s+Number(a.amount), 0);
                     return (
-                      <div key={m.key} style={{ background:"#0D1117",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${m.color}` }}>
-                        <div style={{ fontSize:13,color:"#8B949E",marginBottom:4 }}>{m.label}</div>
-                        <div style={{ fontWeight:800,fontSize:18,color:m.color }}>${Math.round(total+abonosMetodo+parcialesMetodo-advancesMetodo).toLocaleString()}</div>
-                        <div style={{ fontSize:11,color:"#484F58",marginTop:2 }}>{count} entrega{count!==1?"s":""}{abonosMetodo>0?` + $${Math.round(abonosMetodo).toLocaleString()} abono`:""}{parcialesMetodo>0?` + $${Math.round(parcialesMetodo).toLocaleString()} parcial`:""}{advancesMetodo>0?` − $${Math.round(advancesMetodo).toLocaleString()} adelanto`:""}</div>
+                      <div key={m.key} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${m.color}` }}>
+                        <div style={{ fontSize:15,color:"var(--text-muted)",marginBottom:4 }}>{m.label}</div>
+                        <div style={{ fontWeight:800,fontSize:21,color:m.color }}>${Math.round(total+abonosMetodo+parcialesMetodo-advancesMetodo).toLocaleString()}</div>
+                        <div style={{ fontSize:13,color:"var(--text-dim)",marginTop:2 }}>{count} entrega{count!==1?"s":""}{abonosMetodo>0?` + $${Math.round(abonosMetodo).toLocaleString()} abono`:""}{parcialesMetodo>0?` + $${Math.round(parcialesMetodo).toLocaleString()} parcial`:""}{advancesMetodo>0?` − $${Math.round(advancesMetodo).toLocaleString()} adelanto`:""}</div>
                         {ordenesMetodo.length > 0 && (
-                          <div style={{ display:"flex",flexWrap:"wrap",gap:4,marginTop:8 }}>
-                            {ordenesMetodo.map(o => (
-                              <span key={o.id} title={o.client_name} style={{ fontSize:10,fontWeight:700,color:m.color,background:`${m.color}22`,border:`1px solid ${m.color}55`,borderRadius:6,padding:"2px 6px" }}>{o.order_number}</span>
-                            ))}
+                          <div style={{ fontSize:12,color:m.color,marginTop:4,lineHeight:1.5,wordBreak:"break-word" }}>
+                            {ordenesMetodo.map(o => o.order_number).join(", ")}
                           </div>
                         )}
                       </div>
@@ -4998,38 +5011,38 @@ export default function LavanderiaApp() {
                 <div style={{ background:"rgba(199,146,234,0.08)",border:"1px solid rgba(199,146,234,0.3)",borderRadius:10,padding:"14px 16px",marginBottom:16 }}>
                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                     <div>
-                      <div style={{ fontSize:13,color:"#8B949E" }}>Neto en caja (después de adelantos)</div>
-                      <div style={{ fontSize:11,color:"#484F58" }}>{entregadasHoy.length} entregas · {abonos.filter(a=>a.date===filterDate).length} abonos · {parcialesHoy.length} parcial{parcialesHoy.length!==1?"es":""} · {advancesHoy.length} adelanto{advancesHoy.length!==1?"s":""}</div>
+                      <div style={{ fontSize:15,color:"var(--text-muted)" }}>Neto en caja (después de adelantos)</div>
+                      <div style={{ fontSize:13,color:"var(--text-dim)" }}>{entregadasHoy.length} entregas · {abonos.filter(a=>a.date===filterDate).length} abonos · {parcialesHoy.length} parcial{parcialesHoy.length!==1?"es":""} · {advancesHoy.length} adelanto{advancesHoy.length!==1?"s":""}</div>
                     </div>
-                    <div style={{ fontWeight:800,fontSize:24,color:"#C792EA" }}>${Math.round(netoCaja).toLocaleString()}</div>
+                    <div style={{ fontWeight:800,fontSize:28,color:"#C792EA" }}>${Math.round(netoCaja).toLocaleString()}</div>
                   </div>
                 </div>
 
                 {/* Desglose entregas vs abonos vs parciales vs adelantos */}
                 <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:16 }}>
-                  <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #66BB6A" }}>
-                    <div style={{ fontSize:11,color:"#8B949E" }}>Entregas</div>
+                  <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #66BB6A" }}>
+                    <div style={{ fontSize:13,color:"var(--text-muted)" }}>Entregas</div>
                     <div style={{ fontWeight:800,color:"#66BB6A" }}>${Math.round(totalGeneral).toLocaleString()}</div>
                   </div>
-                  <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #FFD54F" }}>
-                    <div style={{ fontSize:11,color:"#8B949E" }}>Abonos</div>
+                  <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #FFD54F" }}>
+                    <div style={{ fontSize:13,color:"var(--text-muted)" }}>Abonos</div>
                     <div style={{ fontWeight:800,color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</div>
                   </div>
-                  <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #FF8A65" }}>
-                    <div style={{ fontSize:11,color:"#8B949E" }}>Parciales</div>
+                  <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #FF8A65" }}>
+                    <div style={{ fontSize:13,color:"var(--text-muted)" }}>Parciales</div>
                     <div style={{ fontWeight:800,color:"#FF8A65" }}>${Math.round(totalParcialesHoy).toLocaleString()}</div>
                   </div>
-                  <div style={{ background:"#0D1117",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #EF5350" }}>
-                    <div style={{ fontSize:11,color:"#8B949E" }}>Adelantos</div>
+                  <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #EF5350" }}>
+                    <div style={{ fontSize:13,color:"var(--text-muted)" }}>Adelantos</div>
                     <div style={{ fontWeight:800,color:"#EF5350" }}>− ${Math.round(totalAdvancesHoy).toLocaleString()}</div>
                   </div>
                 </div>
 
                 {entregadasHoy.length === 0 && totalAbonos === 0 && totalParcialesHoy === 0 && totalAdvancesHoy === 0 && (
-                  <p style={{ textAlign:"center",color:"#484F58",fontSize:13 }}>No hay entregas, abonos ni adelantos hoy</p>
+                  <p style={{ textAlign:"center",color:"var(--text-dim)",fontSize:15 }}>No hay entregas, abonos ni adelantos hoy</p>
                 )}
 
-                <button onClick={()=>setShowInformeDiario(false)} style={{ width:"100%",padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#C792EA,#9B59B6)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:14 }}>Cerrar</button>
+                <button onClick={()=>setShowInformeDiario(false)} style={{ width:"100%",padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#C792EA,#9B59B6)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:16 }}>Cerrar</button>
               </>;
             })()}
           </div>
@@ -5039,15 +5052,15 @@ export default function LavanderiaApp() {
       {/* AYUDA MODAL */}
       {showAyuda && (
         <div onClick={() => setShowAyuda(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,fontFamily:"'Segoe UI',sans-serif" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:20,width:"90%",maxWidth:780,maxHeight:"88vh",border:"1px solid #30363D",display:"flex",flexDirection:"column",overflow:"hidden" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:20,width:"90%",maxWidth:780,maxHeight:"88vh",border:"1px solid var(--border)",display:"flex",flexDirection:"column",overflow:"hidden" }}>
             {/* Header */}
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px",borderBottom:"1px solid #30363D",flexShrink:0 }}>
-              <div><h2 style={{ margin:0,fontSize:20,fontWeight:800,color:"#4FC3F7" }}>❓ Manual de Usuario</h2><p style={{ margin:0,fontSize:12,color:"#8B949E" }}>Guía de uso de Lavanderías App</p></div>
-              <button onClick={()=>setShowAyuda(false)} style={{ background:"none",border:"none",color:"#8B949E",fontSize:24,cursor:"pointer" }}>✕</button>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 24px",borderBottom:"1px solid var(--border)",flexShrink:0 }}>
+              <div><h2 style={{ margin:0,fontSize:23,fontWeight:800,color:"#4FC3F7" }}>❓ Manual de Usuario</h2><p style={{ margin:0,fontSize:14,color:"var(--text-muted)" }}>Guía de uso de Lavanderías App</p></div>
+              <button onClick={()=>setShowAyuda(false)} style={{ background:"none",border:"none",color:"var(--text-muted)",fontSize:28,cursor:"pointer" }}>✕</button>
             </div>
             <div style={{ display:"flex",flex:1,overflow:"hidden" }}>
               {/* Sidebar nav */}
-              <div style={{ width:180,borderRight:"1px solid #30363D",padding:"16px 12px",flexShrink:0,overflowY:"auto" }}>
+              <div style={{ width:180,borderRight:"1px solid var(--border)",padding:"16px 12px",flexShrink:0,overflowY:"auto" }}>
                 {[
                   {id:"login",icon:"🔐",label:"Inicio de Sesión"},
                   {id:"dashboard",icon:"📊",label:"Dashboard"},
@@ -5063,11 +5076,11 @@ export default function LavanderiaApp() {
                   {id:"qz",icon:"🖨️",label:"Impresora QZ Tray"},
                   {id:"informe",icon:"💳",label:"Informe Diario"},
                 ].map(s => (
-                  <button key={s.id} onClick={()=>setAyudaSeccion(s.id)} style={{ width:"100%",textAlign:"left",padding:"8px 10px",borderRadius:8,border:"none",background:ayudaSeccion===s.id?"rgba(79,195,247,0.15)":"transparent",color:ayudaSeccion===s.id?"#4FC3F7":"#8B949E",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:6,marginBottom:2 }}>{s.icon} {s.label}</button>
+                  <button key={s.id} onClick={()=>setAyudaSeccion(s.id)} style={{ width:"100%",textAlign:"left",padding:"8px 10px",borderRadius:8,border:"none",background:ayudaSeccion===s.id?"rgba(79,195,247,0.15)":"transparent",color:ayudaSeccion===s.id?"#4FC3F7":"var(--text-muted)",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",gap:6,marginBottom:2 }}>{s.icon} {s.label}</button>
                 ))}
               </div>
               {/* Content */}
-              <div style={{ flex:1,padding:"20px 24px",overflowY:"auto",fontSize:13,lineHeight:1.7,color:"#E6EDF3" }}>
+              <div style={{ flex:1,padding:"20px 24px",overflowY:"auto",fontSize:15,lineHeight:1.7,color:"var(--text-primary)" }}>
                 {ayudaSeccion==="login" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>🔐 Inicio de Sesión</h3>
                   <p>Al abrir la app aparece la pantalla de inicio de sesión.</p>
@@ -5076,7 +5089,7 @@ export default function LavanderiaApp() {
                     <li>Escribe tu PIN (4 a 6 dígitos) y presiona Enter.</li>
                     <li>Si el PIN es incorrecto aparecerá un mensaje en rojo.</li>
                   </ul>
-                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ El administrador puede crear usuarios desde ⚙️ Configuración → Usuarios y Turnos.</div>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:14,color:"#66BB6A" }}>✅ El administrador puede crear usuarios desde ⚙️ Configuración → Usuarios y Turnos.</div>
                 </div>}
                 {ayudaSeccion==="dashboard" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>📊 Dashboard</h3>
@@ -5089,11 +5102,11 @@ export default function LavanderiaApp() {
                     <li><strong>Órdenes recientes:</strong> últimas 5 órdenes.</li>
                     <li><strong>Servicios:</strong> gráfico de distribución por servicio.</li>
                   </ul>
-                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ Puedes cambiar la fecha con el selector en la esquina superior derecha.</div>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:14,color:"#66BB6A" }}>✅ Puedes cambiar la fecha con el selector en la esquina superior derecha.</div>
                 </div>}
                 {ayudaSeccion==="orders" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>👕 Órdenes</h3>
-                  <h4 style={{ color:"#8B949E" }}>Crear nueva orden</h4>
+                  <h4 style={{ color:"var(--text-muted)" }}>Crear nueva orden</h4>
                   <ol style={{ paddingLeft:20,color:"#C9D1D9" }}>
                     <li>Clic en <strong>+ Nueva Orden</strong>.</li>
                     <li>Escribe el teléfono — si el cliente existe aparece autocompletado.</li>
@@ -5102,20 +5115,20 @@ export default function LavanderiaApp() {
                     <li>Ajusta la fecha de entrega (por defecto 2 días).</li>
                     <li>Elige 💾 Solo Guardar o 🖨️ Guardar e Imprimir (imprime 2 copias).</li>
                   </ol>
-                  <h4 style={{ color:"#8B949E" }}>Comprobante</h4>
+                  <h4 style={{ color:"var(--text-muted)" }}>Comprobante</h4>
                   <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
                     <li>🖨️ Imprimir recibo físico — al crear imprime 2 copias, al reimprimir 1 copia</li>
                     <li>📱 Generar imagen PNG y abrir WhatsApp</li>
                     <li>📋 Sin recibo por ahora</li>
                   </ul>
-                  <h4 style={{ color:"#8B949E" }}>Registrar abono 💰</h4>
+                  <h4 style={{ color:"var(--text-muted)" }}>Registrar abono 💰</h4>
                   <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
                     <li>Clic en 💰 en la fila de la orden.</li>
                     <li>Ingresa el monto y método de pago (Efectivo, Nequi, Daviplata, Bre-b, Tarjeta).</li>
                     <li>El saldo pendiente se actualiza automáticamente.</li>
                     <li>Al entregar, el sistema muestra cuánto abonó y cuánto falta.</li>
                   </ul>
-                  <div style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#EF5350" }}>⚠️ Eliminar una orden requiere clave de administrador.</div>
+                  <div style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:14,color:"#EF5350" }}>⚠️ Eliminar una orden requiere clave de administrador.</div>
                 </div>}
                 {ayudaSeccion==="entregas" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>📦 Entregas</h3>
@@ -5127,7 +5140,7 @@ export default function LavanderiaApp() {
                     <li>Marca "Sin recibo" si el cliente no presentó el recibo físico.</li>
                     <li>Clic en ✅ Confirmar Entrega.</li>
                   </ol>
-                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ Si el cliente tiene abonos, el sistema muestra automáticamente el saldo pendiente.</div>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:14,color:"#66BB6A" }}>✅ Si el cliente tiene abonos, el sistema muestra automáticamente el saldo pendiente.</div>
                 </div>}
                 {ayudaSeccion==="clients" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>👤 Clientes</h3>
@@ -5137,7 +5150,7 @@ export default function LavanderiaApp() {
                     <li>🗑 Eliminar cliente (requiere clave admin).</li>
                     <li>📥 Exportar lista en Excel (solo administrador).</li>
                   </ul>
-                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ Los clientes se crean automáticamente al crear una orden nueva.</div>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:14,color:"#66BB6A" }}>✅ Los clientes se crean automáticamente al crear una orden nueva.</div>
                 </div>}
                 {ayudaSeccion==="expenses" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>💰 Gastos</h3>
@@ -5147,7 +5160,7 @@ export default function LavanderiaApp() {
                     <li>🗑 Eliminar (no se borra, pasa a eliminados).</li>
                     <li>🗑 Ver eliminados → ↩️ Restaurar si fue por error.</li>
                   </ul>
-                  <p style={{ color:"#8B949E" }}>Categorías: Insumos, Servicios, Mantenimiento, Otros.</p>
+                  <p style={{ color:"var(--text-muted)" }}>Categorías: Insumos, Servicios, Mantenimiento, Otros.</p>
                 </div>}
                 {ayudaSeccion==="report" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>📋 Informes</h3>
@@ -5169,11 +5182,11 @@ export default function LavanderiaApp() {
                     <li>Orden entregada → ↩️ Reversar la devuelve a estado "Listo".</li>
                     <li>Orden no entregada → 🗑 Eliminar orden.</li>
                   </ul>
-                  <div style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#EF5350" }}>⚠️ Requiere clave de administrador. Las reversas quedan registradas en Informes.</div>
+                  <div style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:14,color:"#EF5350" }}>⚠️ Requiere clave de administrador. Las reversas quedan registradas en Informes.</div>
                 </div>}
                 {ayudaSeccion==="config" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>⚙️ Configuración</h3>
-                  <p style={{ color:"#8B949E" }}>Solo para administradores.</p>
+                  <p style={{ color:"var(--text-muted)" }}>Solo para administradores.</p>
                   {[
                     ["🏪 Información del Negocio","Nombre, dirección, teléfono, código de país WA y logo."],
                     ["👕 Tipos de Prenda","Agregar, eliminar o restaurar tipos de prenda."],
@@ -5185,18 +5198,18 @@ export default function LavanderiaApp() {
                     ["🖨️ Texto del Recibo","Personalizar mensaje WA, subtítulo y texto legal del recibo."],
                     ["🔑 Clave Administrador","Cambiar la clave de acceso administrativo."],
                     ["⚠️ Zona de Peligro","Cambiar el consecutivo de órdenes o reiniciarlo desde S000001."],
-                  ].map(([t,d]) => <div key={t} style={{ marginBottom:10,background:"#0D1117",borderRadius:8,padding:"10px 14px" }}><div style={{ fontWeight:700,color:"#E6EDF3",marginBottom:3 }}>{t}</div><div style={{ fontSize:12,color:"#8B949E" }}>{d}</div></div>)}
+                  ].map(([t,d]) => <div key={t} style={{ marginBottom:10,background:"var(--bg-app)",borderRadius:8,padding:"10px 14px" }}><div style={{ fontWeight:700,color:"var(--text-primary)",marginBottom:3 }}>{t}</div><div style={{ fontSize:14,color:"var(--text-muted)" }}>{d}</div></div>)}
                 </div>}
                 {ayudaSeccion==="calc" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>🧮 Calculadora y Total Prendas</h3>
-                  <h4 style={{ color:"#8B949E" }}>Calculadora</h4>
+                  <h4 style={{ color:"var(--text-muted)" }}>Calculadora</h4>
                   <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
                     <li>Clic en el botón 🧮 flotante (esquina inferior derecha).</li>
                     <li>Puedes usar el teclado cuando está abierta.</li>
                     <li>Operaciones: + - × ÷ %</li>
                     <li>Escape para cerrar, C para borrar.</li>
                   </ul>
-                  <h4 style={{ color:"#8B949E" }}>👕 Total Prendas</h4>
+                  <h4 style={{ color:"var(--text-muted)" }}>👕 Total Prendas</h4>
                   <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
                     <li>Estima cuántas prendas entran según los ingresos del día.</li>
                     <li>Configura el precio promedio por prenda.</li>
@@ -5204,26 +5217,26 @@ export default function LavanderiaApp() {
                 </div>}
                 {ayudaSeccion==="qz" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>🖨️ Impresión con QZ Tray</h3>
-                  <p style={{ color:"#8B949E",fontSize:12 }}>QZ Tray permite imprimir recibos nítidos directamente en la impresora térmica.</p>
-                  <h4 style={{ color:"#8B949E" }}>Instalación (una sola vez)</h4>
+                  <p style={{ color:"var(--text-muted)",fontSize:14 }}>QZ Tray permite imprimir recibos nítidos directamente en la impresora térmica.</p>
+                  <h4 style={{ color:"var(--text-muted)" }}>Instalación (una sola vez)</h4>
                   <ol style={{ paddingLeft:20,color:"#C9D1D9" }}>
                     <li>Descarga QZ Tray en <strong>qz.io/download</strong> e instálalo.</li>
                     <li>Queda corriendo en la bandeja del sistema (ícono azul).</li>
                     <li>La primera vez que imprimas, QZ pide permiso — clic en <strong>Allow</strong>.</li>
                   </ol>
-                  <h4 style={{ color:"#8B949E" }}>Configurar nombre de impresora</h4>
+                  <h4 style={{ color:"var(--text-muted)" }}>Configurar nombre de impresora</h4>
                   <ol style={{ paddingLeft:20,color:"#C9D1D9" }}>
                     <li>Panel de Control → Dispositivos e impresoras.</li>
                     <li>Copia el nombre exacto de tu impresora.</li>
                     <li>⚙️ Configuración → Información del Negocio → 🖨️ Nombre de la Impresora → pegar y guardar.</li>
                   </ol>
-                  <h4 style={{ color:"#8B949E" }}>Copias</h4>
+                  <h4 style={{ color:"var(--text-muted)" }}>Copias</h4>
                   <ul style={{ paddingLeft:20,color:"#C9D1D9" }}>
                     <li>🖨️ <strong>Guardar e Imprimir</strong> → 2 copias (cliente + lavandería)</li>
                     <li>🖨️ <strong>Botón imprimir en Órdenes</strong> → 1 copia</li>
                     <li>🖨️ <strong>Imprimir en Entregas</strong> → 1 copia</li>
                   </ul>
-                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:12,color:"#66BB6A" }}>✅ Compatible con cualquier impresora térmica ESC/POS de 80mm. Usa Chrome o Edge.</div>
+                  <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:14,color:"#66BB6A" }}>✅ Compatible con cualquier impresora térmica ESC/POS de 80mm. Usa Chrome o Edge.</div>
                 </div>}
                 {ayudaSeccion==="informe" && <div>
                   <h3 style={{ color:"#4FC3F7",marginTop:0 }}>💳 Informe Diario</h3>
@@ -5248,9 +5261,9 @@ export default function LavanderiaApp() {
                     ["¿Cómo configuro la impresora?","⚙️ Configuración → Información del Negocio → 🖨️ Nombre de la Impresora."],
                     ["¿Qué pasa si QZ Tray no está instalado?","La app usa la impresión del navegador automáticamente."],
                     ["¿Cómo veo cuánto se cobró por Nequi hoy?","Clic en 💳 Informe Diario en el sidebar."],
-                  ].map(([q,a]) => <div key={q} style={{ marginBottom:14,borderBottom:"1px solid #21262D",paddingBottom:12 }}>
+                  ].map(([q,a]) => <div key={q} style={{ marginBottom:14,borderBottom:"1px solid var(--bg-surface)",paddingBottom:12 }}>
                     <div style={{ fontWeight:700,color:"#4FC3F7",marginBottom:4 }}>▶ {q}</div>
-                    <div style={{ fontSize:12,color:"#C9D1D9" }}>{a}</div>
+                    <div style={{ fontSize:14,color:"#C9D1D9" }}>{a}</div>
                   </div>)}
                 </div>}
               </div>
@@ -5260,31 +5273,31 @@ export default function LavanderiaApp() {
       )}
 
       {/* FLOATING CALCULATOR */}
-      <button onClick={() => setShowCalc(!showCalc)} title="Calculadora" style={{ position:"fixed",bottom:28,right:28,zIndex:300,width:56,height:56,borderRadius:"50%",border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontSize:22,cursor:"pointer",boxShadow:"0 4px 20px rgba(79,195,247,0.4)",display:"flex",alignItems:"center",justifyContent:"center" }}>🧮</button>
+      <button onClick={() => setShowCalc(!showCalc)} title="Calculadora" style={{ position:"fixed",bottom:28,right:28,zIndex:300,width:56,height:56,borderRadius:"50%",border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontSize:25,cursor:"pointer",boxShadow:"0 4px 20px rgba(79,195,247,0.4)",display:"flex",alignItems:"center",justifyContent:"center" }}>🧮</button>
 
       {showCalc && (
-        <div style={{ position:"fixed",bottom:96,right:28,zIndex:300,background:"#1C2128",borderRadius:20,padding:16,border:"1px solid #30363D",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",width:260,fontFamily:"'Segoe UI',sans-serif" }}>
+        <div style={{ position:"fixed",bottom:96,right:28,zIndex:300,background:"var(--bg-card)",borderRadius:20,padding:16,border:"1px solid var(--border)",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",width:260,fontFamily:"'Segoe UI',sans-serif" }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
-            <span style={{ color:"#8B949E",fontSize:13,fontWeight:600 }}>Calculadora</span>
-            <button onClick={() => setShowCalc(false)} style={{ background:"none",border:"none",color:"#8B949E",fontSize:18,cursor:"pointer" }}>✕</button>
+            <span style={{ color:"var(--text-muted)",fontSize:15,fontWeight:600 }}>Calculadora</span>
+            <button onClick={() => setShowCalc(false)} style={{ background:"none",border:"none",color:"var(--text-muted)",fontSize:21,cursor:"pointer" }}>✕</button>
           </div>
           <div style={{ display:"flex",gap:6,marginBottom:10 }}>
-            <button onClick={() => setCalcInputMode("manual")} style={{ flex:1,padding:"6px 0",borderRadius:8,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:calcInputMode==="manual"?"#4FC3F7":"#21262D",color:calcInputMode==="manual"?"#000":"#8B949E" }}>⌨️ Manual</button>
-            <button onClick={() => setCalcInputMode("scan")} style={{ flex:1,padding:"6px 0",borderRadius:8,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:calcInputMode==="scan"?"#66BB6A":"#21262D",color:calcInputMode==="scan"?"#000":"#8B949E" }}>📷 Escaneo</button>
+            <button onClick={() => setCalcInputMode("manual")} style={{ flex:1,padding:"6px 0",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:calcInputMode==="manual"?"#4FC3F7":"var(--bg-surface)",color:calcInputMode==="manual"?"#000":"var(--text-muted)" }}>⌨️ Manual</button>
+            <button onClick={() => setCalcInputMode("scan")} style={{ flex:1,padding:"6px 0",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:calcInputMode==="scan"?"#66BB6A":"var(--bg-surface)",color:calcInputMode==="scan"?"#000":"var(--text-muted)" }}>📷 Escaneo</button>
           </div>
-          <div style={{ fontSize:11,color:calcInputMode==="scan"?"#66BB6A":"#4FC3F7",marginBottom:8,textAlign:"center" }}>{calcInputMode==="scan" ? "📷 Escanea un recibo para sumar su saldo" : "⌨️ Teclado y botones activados"}</div>
+          <div style={{ fontSize:13,color:calcInputMode==="scan"?"#66BB6A":"#4FC3F7",marginBottom:8,textAlign:"center" }}>{calcInputMode==="scan" ? "📷 Escanea un recibo para sumar su saldo" : "⌨️ Teclado y botones activados"}</div>
           {calcLastScan && (
-            <div style={{ background:calcLastScan.amount!==null?"rgba(102,187,106,0.15)":"rgba(239,83,80,0.15)",border:`1px solid ${calcLastScan.amount!==null?"rgba(102,187,106,0.4)":"rgba(239,83,80,0.4)"}`,borderRadius:8,padding:"6px 10px",marginBottom:8,fontSize:11,textAlign:"center",color:calcLastScan.amount!==null?"#66BB6A":"#EF5350" }}>
+            <div style={{ background:calcLastScan.amount!==null?"rgba(102,187,106,0.15)":"rgba(239,83,80,0.15)",border:`1px solid ${calcLastScan.amount!==null?"rgba(102,187,106,0.4)":"rgba(239,83,80,0.4)"}`,borderRadius:8,padding:"6px 10px",marginBottom:8,fontSize:13,textAlign:"center",color:calcLastScan.amount!==null?"#66BB6A":"#EF5350" }}>
               {calcLastScan.amount!==null ? `✅ +$${Math.round(calcLastScan.amount).toLocaleString()} — ${calcLastScan.code} (${calcLastScan.client})` : `❌ No existe la orden ${calcLastScan.code}`}
             </div>
           )}
-          <div style={{ background:"#0D1117",borderRadius:12,padding:"12px 16px",marginBottom:12,textAlign:"right" }}>
-            {calcOp && <div style={{ fontSize:12,color:"#8B949E",marginBottom:2 }}>{calcPrev} {calcOp}</div>}
-            <div style={{ fontSize:32,fontWeight:700,color:"#E6EDF3",overflowX:"auto",whiteSpace:"nowrap" }}>{calcDisplay}</div>
+          <div style={{ background:"var(--bg-app)",borderRadius:12,padding:"12px 16px",marginBottom:12,textAlign:"right" }}>
+            {calcOp && <div style={{ fontSize:14,color:"var(--text-muted)",marginBottom:2 }}>{calcPrev} {calcOp}</div>}
+            <div style={{ fontSize:37,fontWeight:700,color:"var(--text-primary)",overflowX:"auto",whiteSpace:"nowrap" }}>{calcDisplay}</div>
           </div>
-          {[[{l:"AC",fn:calcClear,style:{background:"#EF5350",color:"#fff"}},{l:"+/-",fn:calcToggleSign,style:{background:"#30363D",color:"#E6EDF3"}},{l:"%",fn:calcPercent,style:{background:"#30363D",color:"#E6EDF3"}},{l:"÷",fn:()=>calcOperation("÷"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"7",fn:()=>calcInput("7")},{l:"8",fn:()=>calcInput("8")},{l:"9",fn:()=>calcInput("9")},{l:"×",fn:()=>calcOperation("×"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"4",fn:()=>calcInput("4")},{l:"5",fn:()=>calcInput("5")},{l:"6",fn:()=>calcInput("6")},{l:"-",fn:()=>calcOperation("-"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"1",fn:()=>calcInput("1")},{l:"2",fn:()=>calcInput("2")},{l:"3",fn:()=>calcInput("3")},{l:"+",fn:()=>calcOperation("+"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"⌫",fn:calcBackspace,style:{background:"#30363D",color:"#FFD54F"}},{l:"0",fn:()=>calcInput("0")},{l:".",fn:calcDot},{l:"=",fn:calcEquals,style:{background:"#66BB6A",color:"#fff"}}]].map((row,ri) => (
+          {[[{l:"AC",fn:calcClear,style:{background:"#EF5350",color:"#fff"}},{l:"+/-",fn:calcToggleSign,style:{background:"var(--border)",color:"var(--text-primary)"}},{l:"%",fn:calcPercent,style:{background:"var(--border)",color:"var(--text-primary)"}},{l:"÷",fn:()=>calcOperation("÷"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"7",fn:()=>calcInput("7")},{l:"8",fn:()=>calcInput("8")},{l:"9",fn:()=>calcInput("9")},{l:"×",fn:()=>calcOperation("×"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"4",fn:()=>calcInput("4")},{l:"5",fn:()=>calcInput("5")},{l:"6",fn:()=>calcInput("6")},{l:"-",fn:()=>calcOperation("-"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"1",fn:()=>calcInput("1")},{l:"2",fn:()=>calcInput("2")},{l:"3",fn:()=>calcInput("3")},{l:"+",fn:()=>calcOperation("+"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"⌫",fn:calcBackspace,style:{background:"var(--border)",color:"#FFD54F"}},{l:"0",fn:()=>calcInput("0")},{l:".",fn:calcDot},{l:"=",fn:calcEquals,style:{background:"#66BB6A",color:"#fff"}}]].map((row,ri) => (
             <div key={ri} style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:8 }}>
-              {row.map((b,bi) => <button key={bi} onClick={b.fn} style={{ padding:"14px 0",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:16,background:b.style?.background||"#21262D",color:b.style?.color||"#E6EDF3" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.8"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>{b.l}</button>)}
+              {row.map((b,bi) => <button key={bi} onClick={b.fn} style={{ padding:"14px 0",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:18,background:b.style?.background||"var(--bg-surface)",color:b.style?.color||"var(--text-primary)" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.8"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>{b.l}</button>)}
             </div>
           ))}
         </div>
@@ -5293,15 +5306,15 @@ export default function LavanderiaApp() {
       {/* EDIT CLIENT MODAL */}
       {editingClient && (
         <div onClick={() => setEditingClient(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #4FC3F7",fontFamily:"'Segoe UI',sans-serif" }}>
-            <h3 style={{ margin:"0 0 20px",fontSize:18,color:"#E6EDF3" }}>✏️ Editar Cliente</h3>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #4FC3F7",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 20px",fontSize:21,color:"var(--text-primary)" }}>✏️ Editar Cliente</h3>
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingClient.name} onChange={e=>setEditingClient(p=>({...p,name:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingClient.phone} onChange={e=>setEditingClient(p=>({...p,phone:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>EMAIL</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} type="email" value={editingClient.email||""} onChange={e=>setEditingClient(p=>({...p,email:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingClient.name} onChange={e=>setEditingClient(p=>({...p,name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingClient.phone} onChange={e=>setEditingClient(p=>({...p,phone:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>EMAIL</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} type="email" value={editingClient.email||""} onChange={e=>setEditingClient(p=>({...p,email:e.target.value}))} /></div>
               <div style={{ display:"flex",gap:10,marginTop:8 }}>
-                <button onClick={()=>setEditingClient(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
-                <button onClick={updateClient} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
+                <button onClick={()=>setEditingClient(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
+                <button onClick={updateClient} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#4FC3F7,#0288D1)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:15 }}>💾 Guardar cambios</button>
               </div>
             </div>
           </div>
@@ -5310,17 +5323,17 @@ export default function LavanderiaApp() {
 
       {editingAgency && (
         <div onClick={() => setEditingAgency(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #FF8A65",fontFamily:"'Segoe UI',sans-serif" }}>
-            <h3 style={{ margin:"0 0 20px",fontSize:18,color:"#E6EDF3" }}>✏️ Editar Agencia</h3>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #FF8A65",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 20px",fontSize:21,color:"var(--text-primary)" }}>✏️ Editar Agencia</h3>
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.name} onChange={e=>setEditingAgency(p=>({...p,name:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.contact_name||""} onChange={e=>setEditingAgency(p=>({...p,contact_name:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.phone||""} onChange={e=>setEditingAgency(p=>({...p,phone:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingAgency.address||""} onChange={e=>setEditingAgency(p=>({...p,address:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>% DE DESCUENTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} type="number" min={0} max={100} value={editingAgency.discount_percent||""} onChange={e=>setEditingAgency(p=>({...p,discount_percent:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingAgency.name} onChange={e=>setEditingAgency(p=>({...p,name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingAgency.contact_name||""} onChange={e=>setEditingAgency(p=>({...p,contact_name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingAgency.phone||""} onChange={e=>setEditingAgency(p=>({...p,phone:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingAgency.address||""} onChange={e=>setEditingAgency(p=>({...p,address:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>% DE DESCUENTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} type="number" min={0} max={100} value={editingAgency.discount_percent||""} onChange={e=>setEditingAgency(p=>({...p,discount_percent:e.target.value}))} /></div>
               <div style={{ display:"flex",gap:10,marginTop:8 }}>
-                <button onClick={()=>setEditingAgency(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
-                <button onClick={updateAgency} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
+                <button onClick={()=>setEditingAgency(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
+                <button onClick={updateAgency} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:15 }}>💾 Guardar cambios</button>
               </div>
             </div>
           </div>
@@ -5329,16 +5342,16 @@ export default function LavanderiaApp() {
 
       {editingDomiciliario && (
         <div onClick={() => setEditingDomiciliario(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:"#161B22",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #66BB6A",fontFamily:"'Segoe UI',sans-serif" }}>
-            <h3 style={{ margin:"0 0 20px",fontSize:18,color:"#E6EDF3" }}>✏️ Editar Domiciliario</h3>
+          <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #66BB6A",fontFamily:"'Segoe UI',sans-serif" }}>
+            <h3 style={{ margin:"0 0 20px",fontSize:21,color:"var(--text-primary)" }}>✏️ Editar Domiciliario</h3>
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.name} onChange={e=>setEditingDomiciliario(p=>({...p,name:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.contact_name||""} onChange={e=>setEditingDomiciliario(p=>({...p,contact_name:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.phone||""} onChange={e=>setEditingDomiciliario(p=>({...p,phone:e.target.value}))} /></div>
-              <div><label style={{ fontSize:12,color:"#8B949E",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #30363D",background:"#0D1117",color:"#E6EDF3",fontSize:14,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.address||""} onChange={e=>setEditingDomiciliario(p=>({...p,address:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.name} onChange={e=>setEditingDomiciliario(p=>({...p,name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>PERSONA DE CONTACTO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.contact_name||""} onChange={e=>setEditingDomiciliario(p=>({...p,contact_name:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TELÉFONO</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.phone||""} onChange={e=>setEditingDomiciliario(p=>({...p,phone:e.target.value}))} /></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>DIRECCIÓN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingDomiciliario.address||""} onChange={e=>setEditingDomiciliario(p=>({...p,address:e.target.value}))} /></div>
               <div style={{ display:"flex",gap:10,marginTop:8 }}>
-                <button onClick={()=>setEditingDomiciliario(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"#8B949E",fontWeight:600,cursor:"pointer",fontSize:13 }}>Cancelar</button>
-                <button onClick={updateDomiciliario} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13 }}>💾 Guardar cambios</button>
+                <button onClick={()=>setEditingDomiciliario(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
+                <button onClick={updateDomiciliario} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:15 }}>💾 Guardar cambios</button>
               </div>
             </div>
           </div>
