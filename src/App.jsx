@@ -254,7 +254,7 @@ export default function LavanderiaApp() {
   const [reciboModal, setReciboModal] = useState(false);
   const [newColor, setNewColor] = useState("");
   const [conditions, setConditions] = useState(() => {
-    try { const s = localStorage.getItem("conditions"); return s ? JSON.parse(s) : ["Decolorado","Percudido","Roto","Manchado"]; } catch { return ["Decolorado","Percudido","Roto","Manchado"]; }
+    try { const s = localStorage.getItem("conditions"); return s ? JSON.parse(s) : ["Decolorado","Percudido","Roto","Manchado","Sin etiqueta de cuidado legible"]; } catch { return ["Decolorado","Percudido","Roto","Manchado","Sin etiqueta de cuidado legible"]; }
   });
   const [newCondition, setNewCondition] = useState("");
   const [showCambiarClave, setShowCambiarClave] = useState(false);
@@ -283,7 +283,7 @@ export default function LavanderiaApp() {
   const [negocioDireccion, setNegocioDireccion] = useState(() => { try { return localStorage.getItem("negocioDireccion") || "CARRERA 113 # 75-56"; } catch { return "CARRERA 113 # 75-56"; } });
   const [negocioTelefono, setNegocioTelefono] = useState(() => { try { return localStorage.getItem("negocioTelefono") || ""; } catch { return ""; } });
   const [reciboSubtitulo, setReciboSubtitulo] = useState(() => { try { return localStorage.getItem("reciboSubtitulo") || "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } catch { return "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } });
-  const [reciboLegal, setReciboLegal] = useState(() => { try { return localStorage.getItem("reciboLegal") || "CONTRATO DE SERVICIO ENTRE LA EMPRESA Y EL CLIENTE. Para entregar el trabajo exigimos este recibo. Toda perdida ocasionada por caso fortuito como robo, incendios, etc estan a riesgo del cliente. Pasados 30 dias de la fecha de este recibo cesa la responsabilidad de la empresa. NO respondemos por perdidas de dinero, joyas y demas objetos dejados en los vestidos, ni por las telas, paños y colores debido a la inconsistencia encogimiento ni de coloramiento de las mismas en los procesos de lavado anterior a este servicio. Toda prenda que se perdio o cambio se respondera por diez (10) veces el valor de su lavado anterior a este servicio."; } catch { return ""; } });
+  const [reciboLegal, setReciboLegal] = useState(() => { try { return localStorage.getItem("reciboLegal") || "CONTRATO DE SERVICIO ENTRE LA EMPRESA Y EL CLIENTE. Para entregar el trabajo exigimos este recibo. La empresa no sera responsable por perdida o dano cuando este se deba a fuerza mayor o caso fortuito (robo, incendio, etc), hecho de un tercero, uso indebido de la prenda, o ausencia o inobservancia de instrucciones de cuidado. Pasados 30 dias de la fecha de este recibo cesa la responsabilidad de la empresa sobre las prendas no reclamadas. NO respondemos por objetos como dinero, joyas y demas dejados en los vestidos, ni por telas, panos o colores afectados por procesos anteriores a este servicio (encogimiento, decoloracion previa). En caso de perdida o dano imputable a la lavanderia, se indemnizara el valor razonable de la prenda declarado por el cliente al momento de la entrega, descontando un porcentaje por desgaste segun su antiguedad. Se recomienda declarar el valor de prendas especiales o de alto costo al momento de dejarlas."; } catch { return ""; } });
 
   const getClave = async () => {
     try {
