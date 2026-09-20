@@ -4998,8 +4998,10 @@ export default function LavanderiaApp() {
                         <div style={{ fontWeight:800,fontSize:21,color:m.color }}>${Math.round(total+abonosMetodo+parcialesMetodo-advancesMetodo).toLocaleString()}</div>
                         <div style={{ fontSize:13,color:"var(--text-dim)",marginTop:2 }}>{count} entrega{count!==1?"s":""}{abonosMetodo>0?` + $${Math.round(abonosMetodo).toLocaleString()} abono`:""}{parcialesMetodo>0?` + $${Math.round(parcialesMetodo).toLocaleString()} parcial`:""}{advancesMetodo>0?` − $${Math.round(advancesMetodo).toLocaleString()} adelanto`:""}</div>
                         {ordenesMetodo.length > 0 && (
-                          <div style={{ fontSize:12,color:m.color,marginTop:4,lineHeight:1.5,wordBreak:"break-word" }}>
-                            {ordenesMetodo.map(o => o.order_number).join(", ")}
+                          <div style={{ display:"flex",flexWrap:"wrap",gap:4,marginTop:8 }}>
+                            {ordenesMetodo.map(o => (
+                              <span key={o.id} title={o.client_name} style={{ fontSize:12,fontWeight:700,color:m.color,background:`${m.color}22`,border:`1px solid ${m.color}55`,borderRadius:6,padding:"2px 6px" }}>{o.order_number}</span>
+                            ))}
                           </div>
                         )}
                       </div>
