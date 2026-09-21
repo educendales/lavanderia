@@ -259,7 +259,28 @@ export default function LavanderiaApp() {
   const [newCondition, setNewCondition] = useState("");
   const [showCambiarClave, setShowCambiarClave] = useState(false);
   const [nuevoConsecutivo, setNuevoConsecutivo] = useState("");
-  const [waMensaje, setWaMensaje] = useState(() => { try { return localStorage.getItem("waMensaje") || "Hola {nombre}, le informamos que su(s) prenda(s) en Lavanderías Shaddai ya están listas para retirar. Recuerde que puede recogerlas después de las 5pm. Orden: {orden}. ¡Gracias por preferirnos!"; } catch { return ""; } });
+  const WA_MENSAJES_DEFAULT = [
+    "Hola {nombre}, le informamos que su(s) prenda(s) en Lavanderías Shaddai ya están listas para retirar. Recuerde que puede recogerlas después de las 5pm. Orden: {orden}. ¡Gracias por preferirnos!",
+    "¡Hola {nombre}! Le recordamos que ya puede pasar por su(s) prenda(s) de la orden {orden} en Lavanderías Shaddai. La recepción abre hasta las 5pm. ¡Gracias por confiar en nosotros!",
+    "Buen día {nombre}, su pedido {orden} en Lavanderías Shaddai está listo desde hace unos días. Cuando pueda, ya lo puede recoger. ¡Gracias!",
+    "{nombre}, le comentamos que su ropa de la orden {orden} sigue esperando en Lavanderías Shaddai, ya lista para entregar. Quedamos atentos a su visita. ¡Gracias por su preferencia!",
+    "Hola {nombre}, un recordatorio amable: su(s) prenda(s) (orden {orden}) están listas en Lavanderías Shaddai desde hace un tiempo. Le esperamos para entregárselas. ¡Gracias!",
+  ];
+  const [waMensajes, setWaMensajes] = useState(() => {
+    try {
+      const s = localStorage.getItem("waMensajes");
+      if (s) return JSON.parse(s);
+      const old = localStorage.getItem("waMensaje");
+      return old ? [old] : WA_MENSAJES_DEFAULT;
+    } catch { return WA_MENSAJES_DEFAULT; }
+  });
+  const getRandomWaMensaje = (nombre, orden) => {
+    const list = waMensajes.length ? waMensajes : WA_MENSAJES_DEFAULT;
+    const tpl = list[Math.floor(Math.random() * list.length)];
+    return tpl.replace("{nombre}", nombre).replace("{orden}", orden || "");
+  };
+  const [waSending, setWaSending] = useState(false);
+  const [waSendProgress, setWaSendProgress] = useState({ current: 0, total: 0 });
   const [claveActual, setClaveActual] = useState("");
   const [claveNueva, setClaveNueva] = useState("");
   const [claveConfirm, setClaveConfirm] = useState("");
@@ -280,6 +301,28 @@ export default function LavanderiaApp() {
   const getWhatsAppUrl = (phone, text) => whatsappWebMode
     ? `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`
     : `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  const WA_BULK_MAX = 15;
+  const WA_BULK_INTERVAL_MS = 6000;
+  const sendBulkWhatsApp = (selected) => {
+    if (waSending || selected.length === 0) return;
+    const toSend = selected.slice(0, WA_BULK_MAX);
+    const remaining = selected.length - toSend.length;
+    setWaSending(true);
+    setWaSendProgress({ current: 0, total: toSend.length });
+    toSend.forEach((o, i) => {
+      setTimeout(() => {
+        const msg = getRandomWaMensaje(o.client_name, o.order_number || "");
+        window.open(getWhatsAppUrl(negocioPais + (o.phone||"").replace(/[^0-9]/g,""), msg), "lavagest_whatsapp");
+        setWaSendProgress({ current: i+1, total: toSend.length });
+        if (i === toSend.length - 1) {
+          setTimeout(() => {
+            setWaSending(false);
+            if (remaining > 0) alert(`✅ Se enviaron ${toSend.length} recordatorios.\n\n⏳ Quedaron ${remaining} sin enviar — el límite por tanda es ${WA_BULK_MAX}, para cuidar tu cuenta de WhatsApp. Selecciónalos y dale enviar de nuevo en un rato (no de una vez seguida).`);
+          }, 800);
+        }
+      }, i * WA_BULK_INTERVAL_MS);
+    });
+  };
   const [negocioDireccion, setNegocioDireccion] = useState(() => { try { return localStorage.getItem("negocioDireccion") || "CARRERA 113 # 75-56"; } catch { return "CARRERA 113 # 75-56"; } });
   const [negocioTelefono, setNegocioTelefono] = useState(() => { try { return localStorage.getItem("negocioTelefono") || ""; } catch { return ""; } });
   const [reciboSubtitulo, setReciboSubtitulo] = useState(() => { try { return localStorage.getItem("reciboSubtitulo") || "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } catch { return "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } });
@@ -3628,16 +3671,14 @@ export default function LavanderiaApp() {
                           <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"6px 12px",fontSize:14 }}>✅ Seleccionar todos</button>
                           <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.status==="listo"&&o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 12px",fontSize:14 }}>🟢 Solo "Listo"</button>
                           {selectedInventory.length > 0 && <>
-                            <button onClick={() => setSelectedInventory([])} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",padding:"6px 12px",fontSize:14 }}>✕ Limpiar</button>
+                            <button onClick={() => setSelectedInventory([])} disabled={waSending} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",padding:"6px 12px",fontSize:14,opacity:waSending?0.5:1 }}>✕ Limpiar</button>
                             <button onClick={() => {
                               const selected = pendingOrders.filter(o => selectedInventory.includes(o.id) && o.phone);
-                              selected.forEach(o => {
-                                const msg = waMensaje.replace("{nombre}", o.client_name).replace("{orden}", o.order_number||"");
-                                window.open(getWhatsAppUrl(negocioPais + (o.phone||"").replace(/[^0-9]/g,""), msg), "lavagest_whatsapp");
-                              });
-                            }} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:"6px 14px",fontSize:14,fontWeight:700 }}>
-                              📱 Enviar WA a {selectedInventory.length} seleccionado{selectedInventory.length!==1?"s":""}
+                              sendBulkWhatsApp(selected);
+                            }} disabled={waSending} style={{ ...btn,background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:"6px 14px",fontSize:14,fontWeight:700,opacity:waSending?0.6:1,cursor:waSending?"not-allowed":"pointer" }}>
+                              {waSending ? `📨 Enviando ${waSendProgress.current}/${waSendProgress.total}...` : `📱 Enviar WA a ${selectedInventory.length} seleccionado${selectedInventory.length!==1?"s":""}`}
                             </button>
+                            {waSending && <span style={{ fontSize:13,color:"var(--text-muted)" }}>⏳ Espaciando los envíos automáticamente para proteger tu cuenta de WhatsApp...</span>}
                           </>}
                         </div>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
@@ -3660,7 +3701,7 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.date}</td>
                               <td style={{ padding:"10px 12px",fontSize:14 }}><span style={{ color:isLate?"#EF5350":"#FFD54F",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
                               <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"#FFD54F":"var(--text-muted)",fontSize:15 }}>{daysIn}d</span></td>
-                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), waMensaje.replace("{nombre}",o.client_name).replace("{orden}",o.order_number||""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
+                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), getRandomWaMensaje(o.client_name,o.order_number||""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
                             </tr>;
                           })}</tbody>
                         </table>
@@ -4198,10 +4239,21 @@ export default function LavanderiaApp() {
                 <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Personaliza los textos que aparecen en el recibo impreso</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div>
-                    <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 6, fontWeight: 600 }}>MENSAJE DE WHATSAPP 📱</label>
-                    <p style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}>Usa <strong style={{color:"#25D366"}}>{"{nombre}"}</strong> para el nombre del cliente y <strong style={{color:"#25D366"}}>{"{orden}"}</strong> para el número de orden</p>
-                    <textarea value={waMensaje} onChange={e => setWaMensaje(e.target.value)} style={{ ...inp, height: 90, resize: "vertical", fontSize: 14, lineHeight: 1.5, borderColor: "rgba(37,211,102,0.3)" }} />
-                    <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("waMensaje",waMensaje);}catch{}alert("✅ Mensaje guardado");}} style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", border: "1px solid rgba(37,211,102,0.3)", padding: "8px 16px", marginTop: 8, fontSize: 14 }}>💾 Guardar mensaje</button>
+                    <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 6, fontWeight: 600 }}>MENSAJES DE WHATSAPP 📱 (varios, para no repetir el mismo texto)</label>
+                    <p style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}>Usa <strong style={{color:"#25D366"}}>{"{nombre}"}</strong> para el nombre del cliente y <strong style={{color:"#25D366"}}>{"{orden}"}</strong> para el número de orden. Cada vez que envíes, la app escoge uno al azar de esta lista — así WhatsApp no ve el mismo texto repetido y hay menos riesgo de que bloquee tu cuenta.</p>
+                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                      {waMensajes.map((m, i) => (
+                        <div key={i} style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+                          <span style={{ fontSize:13, color:"var(--text-dim)", padding:"10px 0", minWidth:18 }}>{i+1}.</span>
+                          <textarea value={m} onChange={e => setWaMensajes(prev => prev.map((x,idx)=>idx===i?e.target.value:x))} style={{ ...inp, height: 70, resize: "vertical", fontSize: 14, lineHeight: 1.5, borderColor: "rgba(37,211,102,0.3)", flex:1 }} />
+                          {waMensajes.length > 1 && <button onClick={() => setWaMensajes(prev => prev.filter((_,idx)=>idx!==i))} title="Quitar esta variante" style={{ background:"rgba(239,83,80,0.15)", color:"#EF5350", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:14 }}>🗑</button>}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                      <button onClick={() => setWaMensajes(prev => [...prev, "Hola {nombre}, su orden {orden} ya está lista para retirar. ¡Gracias por su preferencia!"])} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "8px 16px", fontSize: 14 }}>+ Agregar variante</button>
+                      <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("waMensajes",JSON.stringify(waMensajes));}catch{}alert("✅ Mensajes guardados");}} style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", border: "1px solid rgba(37,211,102,0.3)", padding: "8px 16px", fontSize: 14 }}>💾 Guardar mensajes</button>
+                    </div>
                   </div>
                   <div>
                     <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 6, fontWeight: 600 }}>SUBTÍTULO (debajo de la dirección)</label>
