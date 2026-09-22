@@ -2057,7 +2057,7 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px" }}><div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{(o.service||"").split(",").map(sid => { const sv=services.find(s=>s.id===sid.trim()); return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"2px 8px",borderRadius:20,fontSize:13 }}>{sv.icon} {sv.label}</span>:null; })}</div></td>
                         <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A", fontSize: 18 }}>${Math.round(Number(o.price))}</td>
                         <td style={{ padding: "12px 14px", color: "var(--text-muted)", fontSize: 14 }}>{o.date}</td>
-                        <td style={{ padding: "12px 14px" }}><span style={{ fontSize: 14, background: "rgba(255,213,79,0.1)", color: "#FFD54F", padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date||"—"}</span></td>
+                        <td style={{ padding: "12px 14px" }}><span style={{ fontSize: 14, background: "rgba(230,81,0,0.12)", color: "#E65100", fontWeight: 600, padding: "3px 8px", borderRadius: 8 }}>📅 {o.delivery_date||"—"}</span></td>
                         <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                         <td style={{ padding: "12px 14px" }}>
                           {o.recibo_enviado === "whatsapp"
