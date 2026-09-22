@@ -257,6 +257,10 @@ export default function LavanderiaApp() {
     try { const s = localStorage.getItem("conditions"); return s ? JSON.parse(s) : ["Decolorado","Percudido","Roto","Manchado","Sin etiqueta de cuidado legible"]; } catch { return ["Decolorado","Percudido","Roto","Manchado","Sin etiqueta de cuidado legible"]; }
   });
   const [newCondition, setNewCondition] = useState("");
+  const [shoeBrands, setShoeBrands] = useState(() => {
+    try { const s = localStorage.getItem("shoeBrands"); return s ? JSON.parse(s) : ["Nike","Adidas","Puma","Reebok","New Balance","Converse","Vans","Otra"]; } catch { return ["Nike","Adidas","Puma","Reebok","New Balance","Converse","Vans","Otra"]; }
+  });
+  const [newShoeBrand, setNewShoeBrand] = useState("");
   const [showCambiarClave, setShowCambiarClave] = useState(false);
   const [nuevoConsecutivo, setNuevoConsecutivo] = useState("");
   const WA_MENSAJES_DEFAULT = [
@@ -477,6 +481,7 @@ export default function LavanderiaApp() {
 
   const saveServices = (list) => { setServices(list); try { localStorage.setItem("services", JSON.stringify(list)); } catch {} };
   const saveConditions = (list) => { setConditions(list); try { localStorage.setItem("conditions", JSON.stringify(list)); } catch {} };
+  const saveShoeBrands = (list) => { setShoeBrands(list); try { localStorage.setItem("shoeBrands", JSON.stringify(list)); } catch {} };
   const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
   const saveGarmentPieces = (map) => { setGarmentPieces(map); try { localStorage.setItem("garmentPieces", JSON.stringify(map)); } catch {} };
   const getPiecesPerUnit = (garmentType) => Number(garmentPieces[garmentType]) || 1;
@@ -830,7 +835,7 @@ export default function LavanderiaApp() {
   const handleLogin = () => { if (selectedEmp && pin === selectedEmp.pin) { setUser(selectedEmp); setPinError(false); } else { setPinError(true); setPin(""); } };
   const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity) * getPiecesPerUnit(i.garment_type), 0);
   const totalPrice = (its) => its.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0);
-  const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length) return null; const qty = Number(it.quantity)||1; return `${qty>1?qty+" ":""}${it.garment_type}: ${found.join(", ")}`; }).filter(Boolean); return lines.join(" | "); };
+  const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); const brandFound = shoeBrands.filter(b => { const k="marca_"+b.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length && !brandFound.length) return null; const qty = Number(it.quantity)||1; const brandTxt = brandFound.length ? ` (${brandFound.join(", ")})` : ""; return `${qty>1?qty+" ":""}${it.garment_type}${brandTxt}${found.length?": "+found.join(", "):""}`; }).filter(Boolean); return lines.join(" | "); };
 
   const saveOfflineQueue = (q) => { setOfflineQueue(q); try { localStorage.setItem("offlineQueue", JSON.stringify(q)); } catch {} };
   const getNextOfflineNumber = () => {
@@ -978,8 +983,21 @@ export default function LavanderiaApp() {
         const newPrice = priceByService || priceDefault || "";
         if (newPrice) updated = updated.map((it, idx) => idx === i ? { ...it, price: newPrice } : it);
       }
+      if (field === "garment_type" && !String(val).toLowerCase().includes("tenis")) {
+        const brandKeysClear = shoeBrands.map(b => "marca_"+b.toLowerCase().replace(/\s+/g,"_"));
+        updated = updated.map((it, idx) => {
+          if (idx !== i) return it;
+          const clean = { ...it };
+          brandKeysClear.forEach(k => { delete clean[k]; });
+          return clean;
+        });
+      }
       const conditionKeys = conditions.map(c => c.toLowerCase().replace(/\s+/g,"_"));
-      if (conditionKeys.includes(field)) setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
+      const brandKeys = shoeBrands.map(b => "marca_"+b.toLowerCase().replace(/\s+/g,"_"));
+      if (conditionKeys.includes(field) || brandKeys.includes(field)) setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
+      if (field === "garment_type") {
+        setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
+      }
       if (field === "garment_type") {
         const maxExtra = Math.max(0, ...updated.map(it => getExtraDays(it.garment_type)));
         const newDate = addBusinessDaysSkippingHolidays(new Date(), 2 + maxExtra);
@@ -4131,6 +4149,23 @@ export default function LavanderiaApp() {
                 </div>
                 <div style={{ fontSize:13,color:"var(--text-dim)",marginTop:10 }}>● Las condiciones base (Decolorado, Percudido, Roto, Manchado) no se pueden eliminar</div>
               </div>
+              {/* MARCAS DE TENIS */}
+              <div style={{ marginTop: 20, ...card }}>
+                <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#4FC3F7" }}>👟 Marcas de Tenis</h3>
+                <p style={{ margin: "0 0 14px", fontSize: 14, color: "var(--text-muted)" }}>Aparecen como botones para marcar de un clic cuando la prenda se llama "Tenis" (o cualquier tipo que incluya esa palabra), sin tener que escribir la marca.</p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  <input style={{ ...inp, flex: 1 }} placeholder="Nueva marca... ej: Fila" value={newShoeBrand} onChange={e => setNewShoeBrand(e.target.value)} onKeyDown={e => { if(e.key==="Enter"&&newShoeBrand.trim()){saveShoeBrands([...shoeBrands,newShoeBrand.trim()]);setNewShoeBrand("");} }} />
+                  <button onClick={() => { if(newShoeBrand.trim()){saveShoeBrands([...shoeBrands,newShoeBrand.trim()]);setNewShoeBrand("");} }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px" }}>+ Agregar</button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {shoeBrands.map((b,i) => (
+                    <div key={i} style={{ display:"flex",alignItems:"center",gap:6,background:"#4FC3F715",border:"1px solid #4FC3F740",borderRadius:20,padding:"6px 12px" }}>
+                      <span style={{ fontSize:15,color:"#4FC3F7",fontWeight:600 }}>{b}</span>
+                      <button onClick={()=>{if(window.confirm(`¿Eliminar "${b}"?`))saveShoeBrands(shoeBrands.filter((_,idx)=>idx!==i));}} style={{ background:"none",color:"#EF5350",border:"none",cursor:"pointer",fontSize:16,fontWeight:700,padding:"0 2px" }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
               {/* SERVICIOS */}
               <div style={{ marginTop: 20, ...card }}>
                 <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#C792EA" }}>🧺 Servicios</h3>
@@ -4468,6 +4503,15 @@ export default function LavanderiaApp() {
                           const color=colorsArr[ci%colorsArr.length];
                           return <label key={condKey} style={{ display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:13,background:item[condKey]?color+"22":"rgba(255,255,255,0.04)",border:`1px solid ${item[condKey]?color:"var(--border)"}`,borderRadius:20,padding:"3px 10px",userSelect:"none" }}><input type="checkbox" checked={!!item[condKey]} onChange={e=>updateItem(i,condKey,e.target.checked)} style={{ accentColor:color,cursor:"pointer" }} /><span style={{ color:item[condKey]?color:"var(--text-muted)" }}>{condLabel}</span></label>;
                         })}</div>
+                        {String(item.garment_type||"").toLowerCase().includes("tenis") && (
+                          <div style={{ marginTop:8 }}>
+                            <div style={{ fontSize:12,color:"var(--text-dim)",marginBottom:4 }}>👟 MARCA</div>
+                            <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>{shoeBrands.map((brand,bi) => {
+                              const brandKey="marca_"+brand.toLowerCase().replace(/\s+/g,"_");
+                              return <label key={brandKey} style={{ display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontSize:13,background:item[brandKey]?"#4FC3F722":"rgba(255,255,255,0.04)",border:`1px solid ${item[brandKey]?"#4FC3F7":"var(--border)"}`,borderRadius:20,padding:"3px 10px",userSelect:"none" }}><input type="checkbox" checked={!!item[brandKey]} onChange={e=>updateItem(i,brandKey,e.target.checked)} style={{ accentColor:"#4FC3F7",cursor:"pointer" }} /><span style={{ color:item[brandKey]?"#4FC3F7":"var(--text-muted)" }}>{brand}</span></label>;
+                            })}</div>
+                          </div>
+                        )}
                       </div>
                       {i===0 && <button onClick={addItem} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"6px 12px",fontSize:14,marginTop:6,marginBottom:10 }}>+ Agregar</button>}
                       </div>
