@@ -48,14 +48,14 @@ const GARMENT_ICONS = {"Camisa":"👔","Pantalón":"👖","Vestido":"👗","Sáb
 
 const DEFAULT_SERVICES = [
   { id: "lavado_normal", label: "Lavado Normal", color: "#4FC3F7", icon: "💧" },
-  { id: "planchado", label: "Planchado", color: "#FFD54F", icon: "🔥" },
+  { id: "planchado", label: "Planchado", color: "var(--warning-text)", icon: "🔥" },
   { id: "tintura", label: "Tintura", color: "#C792EA", icon: "🎨" },
   { id: "secado", label: "Secado", color: "#66BB6A", icon: "💨" },
 ];
 
 const STATUS_LABELS = {
   recibido: { label: "Recibido", color: "#64B5F6" },
-  en_proceso: { label: "En Proceso", color: "#FFD54F" },
+  en_proceso: { label: "En Proceso", color: "var(--warning-text)" },
   listo: { label: "Listo", color: "#66BB6A" },
   parcial: { label: "Entrega Parcial", color: "#FF8A65" },
   entregado: { label: "Entregado", color: "#9E9E9E" },
@@ -112,8 +112,8 @@ export default function LavanderiaApp() {
     let styleTag = document.getElementById("lavagest-theme-vars");
     if (!styleTag) { styleTag = document.createElement("style"); styleTag.id = "lavagest-theme-vars"; document.head.appendChild(styleTag); }
     const vars = theme === "light"
-      ? { "--bg-app": "#CCE2F7", "--bg-card": "#E4F1FC", "--bg-surface": "#B9D9F2", "--border": "#7FB8E6", "--text-primary": "#1F2328", "--text-muted": "#57606A", "--text-dim": "#8C959F" }
-      : { "--bg-app": "#0D1117", "--bg-card": "#161B22", "--bg-surface": "#21262D", "--border": "#30363D", "--text-primary": "#E6EDF3", "--text-muted": "#8B949E", "--text-dim": "#484F58" };
+      ? { "--bg-app": "#CCE2F7", "--bg-card": "#E4F1FC", "--bg-surface": "#B9D9F2", "--border": "#7FB8E6", "--text-primary": "#1F2328", "--text-muted": "#57606A", "--text-dim": "#8C959F", "--warning-text": "#000000" }
+      : { "--bg-app": "#0D1117", "--bg-card": "#161B22", "--bg-surface": "#21262D", "--border": "#30363D", "--text-primary": "#E6EDF3", "--text-muted": "#8B949E", "--text-dim": "#484F58", "--warning-text": "#FFD54F" };
     styleTag.textContent = `:root { ${Object.entries(vars).map(([k, v]) => `${k}: ${v};`).join(" ")} } body { background: var(--bg-app); }`;
   }, [theme]);
   const [user, setUser] = useState(null);
@@ -1794,7 +1794,7 @@ export default function LavanderiaApp() {
     <div style={{ minHeight: "100vh", background: "var(--bg-app)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif" }}>
       <div style={{ background: "var(--bg-card)", borderRadius: 20, padding: "48px 40px", width: 380, maxWidth: "90vw", border: "1px solid rgba(255,213,79,0.4)", textAlign: "center" }}>
         <div style={{ fontSize: 64, marginBottom: 16 }}>⏰</div>
-        <h2 style={{ color: "#FFD54F", fontSize: 25, fontWeight: 800, margin: "0 0 12px" }}>Período de Prueba Finalizado</h2>
+        <h2 style={{ color: "var(--warning-text)", fontSize: 25, fontWeight: 800, margin: "0 0 12px" }}>Período de Prueba Finalizado</h2>
         <p style={{ color: "var(--text-muted)", fontSize: 16, lineHeight: 1.6, margin: "0 0 20px" }}>El período de prueba de LavaGest para este negocio ya terminó.</p>
         <p style={{ color: "var(--text-dim)", fontSize: 14 }}>Contacta a tu proveedor para continuar usando el sistema.</p>
       </div>
@@ -1812,7 +1812,7 @@ export default function LavanderiaApp() {
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 15, marginTop: 4 }}>Sistema de Gestión Lavanderías by LavaGest</p>
           {trialExpiresAt && today <= trialExpiresAt && (() => {
             const dias = Math.max(0, Math.round((new Date(trialExpiresAt+"T00:00:00") - new Date(today+"T00:00:00")) / 86400000));
-            return <div style={{ marginTop: 10, display: "inline-block", background: "rgba(255,213,79,0.15)", border: "1px solid rgba(255,213,79,0.4)", borderRadius: 20, padding: "4px 12px", fontSize: 13, color: "#FFD54F", fontWeight: 700 }}>⏰ Prueba: {dias === 0 ? "vence hoy" : `${dias} día${dias!==1?"s":""} restante${dias!==1?"s":""}`}</div>;
+            return <div style={{ marginTop: 10, display: "inline-block", background: "rgba(255,213,79,0.15)", border: "1px solid rgba(255,213,79,0.4)", borderRadius: 20, padding: "4px 12px", fontSize: 13, color: "var(--warning-text)", fontWeight: 700 }}>⏰ Prueba: {dias === 0 ? "vence hoy" : `${dias} día${dias!==1?"s":""} restante${dias!==1?"s":""}`}</div>;
           })()}
         </div>
         <div style={{ marginBottom: 16 }}>
@@ -1908,7 +1908,7 @@ export default function LavanderiaApp() {
             ))}
           </div>
           <div style={{ flexShrink: 0, padding: "10px 12px 16px", borderTop: "1px solid var(--border)" }}>
-            <button onClick={() => { setShowTotalPrendas(true); setEditingPrecio(false); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,rgba(255,213,79,0.2),rgba(245,127,23,0.2))", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "10px 14px", marginBottom: 8, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <button onClick={() => { setShowTotalPrendas(true); setEditingPrecio(false); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "linear-gradient(135deg,rgba(255,213,79,0.2),rgba(245,127,23,0.2))", color: "var(--warning-text)", border: "1px solid rgba(255,213,79,0.3)", padding: "10px 14px", marginBottom: 8, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               👕 Total Prendas
             </button>
             <button onClick={() => { setShowInformeDiario(true); setSidebarOpen(false); }} style={{ ...btn, width: "100%", background: "rgba(199,146,234,0.15)", color: "#C792EA", border: "1px solid rgba(199,146,234,0.3)", padding: "8px 14px", marginBottom: 8, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
@@ -1948,11 +1948,11 @@ export default function LavanderiaApp() {
             ))}
             {(!isOnline || offlineQueue.length > 0 || offlineActionQueue.length > 0) && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", background: !isOnline ? "rgba(239,83,80,0.15)" : "rgba(255,213,79,0.15)", border: `1px solid ${!isOnline ? "rgba(239,83,80,0.4)" : "rgba(255,213,79,0.4)"}`, borderRadius: 8, padding: "5px 12px" }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: !isOnline ? "#EF5350" : "#FFD54F" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: !isOnline ? "#EF5350" : "var(--warning-text)" }}>
                   {!isOnline ? "📡 Sin conexión" : syncing ? "🔄 Sincronizando..." : `⏳ ${offlineQueue.length + offlineActionQueue.length} pendiente${(offlineQueue.length+offlineActionQueue.length)!==1?"s":""} por subir`}
                 </span>
                 {isOnline && (offlineQueue.length > 0 || offlineActionQueue.length > 0) && !syncing && (
-                  <button onClick={() => { syncOfflineQueue(); syncOfflineActionQueue(); }} style={{ ...btn, background: "rgba(255,213,79,0.25)", color: "#FFD54F", padding: "3px 10px", fontSize: 13 }}>Sincronizar ahora</button>
+                  <button onClick={() => { syncOfflineQueue(); syncOfflineActionQueue(); }} style={{ ...btn, background: "rgba(255,213,79,0.25)", color: "var(--warning-text)", padding: "3px 10px", fontSize: 13 }}>Sincronizar ahora</button>
                 )}
               </div>
             )}
@@ -1966,7 +1966,7 @@ export default function LavanderiaApp() {
                 <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160 }} />
               </div>
               <div className="lv-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 16, marginBottom: 24 }}>
-                {[{label:"Ingresos del día",value:`$${Math.round(todayRevenue)}`,icon:"💵",color:"#66BB6A"},{label:"Gastos del día",value:`$${Math.round(todayExp)}`,icon:"📤",color:"#EF5350"},{label:"Utilidad",value:`$${Math.round(todayRevenue-todayExp)}`,icon:"📈",color:"#4FC3F7"},{label:"Prendas del día",value:todayGarments,icon:"👕",color:"#FFD54F"}].map((kpi,i) => (
+                {[{label:"Ingresos del día",value:`$${Math.round(todayRevenue)}`,icon:"💵",color:"#66BB6A"},{label:"Gastos del día",value:`$${Math.round(todayExp)}`,icon:"📤",color:"#EF5350"},{label:"Utilidad",value:`$${Math.round(todayRevenue-todayExp)}`,icon:"📈",color:"#4FC3F7"},{label:"Prendas del día",value:todayGarments,icon:"👕",color:"var(--warning-text)"}].map((kpi,i) => (
                   <div key={i} style={{ ...card, borderLeft: `4px solid ${kpi.color}` }}>
                     <div style={{ fontSize: 28, marginBottom: 6 }}>{kpi.icon}</div>
                     <div style={{ fontSize: 25, fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
@@ -2049,7 +2049,7 @@ export default function LavanderiaApp() {
                     {filteredOrders.map(o => (
                       <tr key={o.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
                         <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{o.order_number||"—"}</span></td>
-                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 13, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}{o.paid_at_intake && <span title="Pagado al recibir" style={{ fontSize: 13, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "1px 6px", borderRadius: 10 }}>💰</span>}{o._offline && <span title="Pendiente de sincronizar (guardado sin conexión)" style={{ fontSize: 13, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "1px 6px", borderRadius: 10 }}>⏳</span>}</div><div style={{ fontSize: 13, color: "var(--text-muted)" }}>{o.phone}</div></td>
+                        <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 13, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}{o.paid_at_intake && <span title="Pagado al recibir" style={{ fontSize: 13, background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", padding: "1px 6px", borderRadius: 10 }}>💰</span>}{o._offline && <span title="Pendiente de sincronizar (guardado sin conexión)" style={{ fontSize: 13, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "1px 6px", borderRadius: 10 }}>⏳</span>}</div><div style={{ fontSize: 13, color: "var(--text-muted)" }}>{o.phone}</div></td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ fontWeight: 600 }}>{o.garments} prendas</div>
                           {orderItems[o.id] && <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 3 }}>{orderItems[o.id].map((it,i) => <span key={i} style={{ fontSize: 12, background: "var(--bg-surface)", borderRadius: 8, padding: "3px 7px" }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?sv.icon+" ":""; })()}{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}{it.color&&<span style={{ color: "#C792EA" }}> · {it.color}</span>}<span style={{ color: "#66BB6A", fontWeight: 700 }}> ${Math.round(Number(it.price)*Number(it.quantity))}</span></span>)}</div>}
@@ -2067,11 +2067,11 @@ export default function LavanderiaApp() {
                             : <span style={{ color:"var(--text-dim)",fontSize:13 }}>—</span>}
                         </td>
                         <td style={{ padding: "12px 14px" }}>
-                          {(() => { const abonado=getAbonado(o.id); const saldo=getSaldo(o); return abonado>0?<div style={{ fontSize:13 }}><div style={{ color:"#66BB6A" }}>Abonado: ${Math.round(abonado).toLocaleString()}</div><div style={{ color:saldo>0?"#FFD54F":"#66BB6A",fontWeight:700 }}>Saldo: ${Math.round(saldo).toLocaleString()}</div></div>:null; })()}
+                          {(() => { const abonado=getAbonado(o.id); const saldo=getSaldo(o); return abonado>0?<div style={{ fontSize:13 }}><div style={{ color:"#66BB6A" }}>Abonado: ${Math.round(abonado).toLocaleString()}</div><div style={{ color:saldo>0?"var(--warning-text)":"#66BB6A",fontWeight:700 }}>Saldo: ${Math.round(saldo).toLocaleString()}</div></div>:null; })()}
                         </td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "5px 10px", fontSize: 14 }}>💰</button>
+                            <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", padding: "5px 10px", fontSize: 14 }}>💰</button>
                             {!o.paid_at_intake && <button title="Marcar como pagada al recibir" onClick={() => { setMarkPaidModal(o); setMarkPaidMethod("efectivo"); }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "5px 10px", fontSize: 14 }}>✅💰</button>}
                             <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>
                             <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 14 }}>🗑</button>
@@ -2134,7 +2134,7 @@ export default function LavanderiaApp() {
                       <div style={{ marginBottom: 16 }}>
                         <label onClick={() => setEntregaMultiSinRecibo(!entregaMultiSinRecibo)} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",background:entregaMultiSinRecibo?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${entregaMultiSinRecibo?"#FFD54F":"var(--border)"}`,borderRadius:8,padding:"10px 14px" }}>
                           <input type="checkbox" checked={entregaMultiSinRecibo} onChange={e=>setEntregaMultiSinRecibo(e.target.checked)} style={{ width:16,height:16,accentColor:"#FFD54F" }} />
-                          <span style={{ fontSize:15,color:entregaMultiSinRecibo?"#FFD54F":"var(--text-muted)" }}>📋 Entregado sin recibo</span>
+                          <span style={{ fontSize:15,color:entregaMultiSinRecibo?"var(--warning-text)":"var(--text-muted)" }}>📋 Entregado sin recibo</span>
                         </label>
                       </div>
                       <button onClick={confirmarMultiEntrega} disabled={!entregaMultiPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:17,fontWeight:800,borderRadius:10,opacity:!entregaMultiPayment?0.5:1,cursor:!entregaMultiPayment?"not-allowed":"pointer" }}>
@@ -2188,12 +2188,12 @@ export default function LavanderiaApp() {
                         <div style={{ fontSize: 14, color: "var(--text-muted)" }}>Total orden</div>
                         {getAbonado(entregaResult.id) > 0 && <>
                           <div style={{ fontSize: 15, color: "#4FC3F7", marginTop: 4 }}>Abonado: ${Math.round(getAbonado(entregaResult.id)).toLocaleString()}</div>
-                          <div style={{ fontSize: 17, fontWeight: 800, color: "#FFD54F" }}>Saldo: ${Math.round(getSaldo(entregaResult)).toLocaleString()}</div>
+                          <div style={{ fontSize: 17, fontWeight: 800, color: "var(--warning-text)" }}>Saldo: ${Math.round(getSaldo(entregaResult)).toLocaleString()}</div>
                         </>}
                       </div>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
-                      {[{label:"SERVICIO",value:getServiceLabel(entregaResult.service, services)},{label:"PRENDAS",value:`${entregaResult.garments} prendas`},{label:"FECHA ENTREGA",value:`📅 ${entregaResult.delivery_date||"—"}`,color:"#FFD54F"}].map((item,i) => (
+                      {[{label:"SERVICIO",value:getServiceLabel(entregaResult.service, services)},{label:"PRENDAS",value:`${entregaResult.garments} prendas`},{label:"FECHA ENTREGA",value:`📅 ${entregaResult.delivery_date||"—"}`,color:"var(--warning-text)"}].map((item,i) => (
                         <div key={i} style={{ background: "var(--bg-app)", borderRadius: 8, padding: "10px 14px" }}>
                           <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 2 }}>{item.label}</div>
                           <div style={{ fontWeight: 600, color: item.color||"var(--text-primary)" }}>{item.value}</div>
@@ -2201,8 +2201,8 @@ export default function LavanderiaApp() {
                       ))}
                     </div>
                     {orderItems[entregaResult.id] && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{orderItems[entregaResult.id].map((it,i) => <div key={i} style={{ background: "var(--bg-surface)", borderRadius: 8, padding: "6px 12px", fontSize: 14 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?<span style={{ color:sv.color }}>{sv.icon} </span>:null; })()}<span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>{it.color&&<span style={{ color:"#C792EA" }}> · {it.color}</span>}<span style={{ color:"#66BB6A",fontWeight:700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span></div>)}</div></div>}
-                    {entregaResult.paid_at_intake && <div style={{ background: "rgba(255,213,79,0.1)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 15, color: "#FFD54F", fontWeight: 700 }}>💰 Esta orden ya fue pagada al recibir la ropa el {entregaResult.date} ({entregaResult.payment_method==="nequi"?"Nequi":entregaResult.payment_method==="daviplata"?"Daviplata":entregaResult.payment_method==="breb"?"Bre-b":entregaResult.payment_method==="tarjeta"?"Tarjeta":"Efectivo"}). No hay nada pendiente por cobrar.</div>}
-                    {entregaResult.notes && <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 15, color: "#FFD54F" }}>📝 {entregaResult.notes}</div>}
+                    {entregaResult.paid_at_intake && <div style={{ background: "rgba(255,213,79,0.1)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 15, color: "var(--warning-text)", fontWeight: 700 }}>💰 Esta orden ya fue pagada al recibir la ropa el {entregaResult.date} ({entregaResult.payment_method==="nequi"?"Nequi":entregaResult.payment_method==="daviplata"?"Daviplata":entregaResult.payment_method==="breb"?"Bre-b":entregaResult.payment_method==="tarjeta"?"Tarjeta":"Efectivo"}). No hay nada pendiente por cobrar.</div>}
+                    {entregaResult.notes && <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 15, color: "var(--warning-text)" }}>📝 {entregaResult.notes}</div>}
                     {entregaResult.status !== "entregado" && !entregaConfirmed && !showParcialForm && !parcialConfirmedInfo && (
                       <>
                         <div style={{ marginBottom: 16 }}>
@@ -2220,7 +2220,7 @@ export default function LavanderiaApp() {
                         <div style={{ marginBottom: 20 }}>
                           <label onClick={() => setEntregaSinRecibo(!entregaSinRecibo)} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:entregaSinRecibo?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${entregaSinRecibo?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"12px 16px" }}>
                             <input type="checkbox" checked={entregaSinRecibo} onChange={e=>setEntregaSinRecibo(e.target.checked)} style={{ width:18,height:18,accentColor:"#FFD54F" }} />
-                            <div><div style={{ fontWeight:600,color:entregaSinRecibo?"#FFD54F":"var(--text-muted)" }}>📋 Entregado sin recibo</div><div style={{ fontSize:14,color:"var(--text-dim)" }}>El cliente no presentó recibo físico</div></div>
+                            <div><div style={{ fontWeight:600,color:entregaSinRecibo?"var(--warning-text)":"var(--text-muted)" }}>📋 Entregado sin recibo</div><div style={{ fontSize:14,color:"var(--text-dim)" }}>El cliente no presentó recibo físico</div></div>
                           </label>
                         </div>
                         <button onClick={confirmarEntrega} disabled={!entregaPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:18,fontWeight:800,borderRadius:10,marginBottom:10,opacity:!entregaPayment?0.5:1,cursor:!entregaPayment?"not-allowed":"pointer" }}>{!entregaPayment?"⚠️ Selecciona un método de pago":`✅ Confirmar Entrega Completa · $${Math.round(getSaldo(entregaResult))}`}</button>
@@ -2286,8 +2286,8 @@ export default function LavanderiaApp() {
                         </div>
                         {!parcialConfirmedInfo.fullyDelivered && <div style={{ background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.2)",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
                           <div style={{ fontSize:13,color:"var(--text-muted)",marginBottom:4,fontWeight:600 }}>PENDIENTE POR RECOGER</div>
-                          <div style={{ fontWeight:700,fontSize:16,color:"#FFD54F" }}>{parcialConfirmedInfo.pendientesSummary}</div>
-                          <div style={{ fontSize:15,color:"var(--text-muted)",marginTop:4 }}>Saldo: <b style={{ color:"#FFD54F" }}>${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}</b></div>
+                          <div style={{ fontWeight:700,fontSize:16,color:"var(--warning-text)" }}>{parcialConfirmedInfo.pendientesSummary}</div>
+                          <div style={{ fontSize:15,color:"var(--text-muted)",marginTop:4 }}>Saldo: <b style={{ color:"var(--warning-text)" }}>${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}</b></div>
                         </div>}
                         <div style={{ display:"flex",gap:10 }}>
                           {entregaResult.phone && <button onClick={() => {
@@ -2302,7 +2302,7 @@ export default function LavanderiaApp() {
                       <div style={{ padding: "16px 0" }}>
                         <div style={{ textAlign: "center", marginBottom: 20 }}><div style={{ fontSize: 55, marginBottom: 8 }}>✅</div><div style={{ fontWeight: 800, fontSize: 23, color: "#66BB6A" }}>¡Entrega confirmada!</div></div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginBottom: 16 }}>
-                          {[{label:"📅 FECHA DE ENTREGA",value:entregaResult.delivered_at||today,color:"#66BB6A"},{label:"💳 MÉTODO DE PAGO",value:entregaResult.payment_method==="nequi"?"📱 Nequi":entregaResult.payment_method==="daviplata"?"💜 Daviplata":"💵 Efectivo",color:"#4FC3F7"},{label:"💰 TOTAL COBRADO",value:`$${Math.round(getSaldo(entregaResult))}`,color:"#66BB6A"},{label:"📋 RECIBO",value:entregaResult.sin_recibo?"⚠️ Sin recibo":"✅ Con recibo",color:entregaResult.sin_recibo?"#FFD54F":"#66BB6A"},{label:"👤 ENTREGADO POR",value:entregaResult.delivered_by||"—",color:"#C792EA"}].map((item,i) => (
+                          {[{label:"📅 FECHA DE ENTREGA",value:entregaResult.delivered_at||today,color:"#66BB6A"},{label:"💳 MÉTODO DE PAGO",value:entregaResult.payment_method==="nequi"?"📱 Nequi":entregaResult.payment_method==="daviplata"?"💜 Daviplata":"💵 Efectivo",color:"#4FC3F7"},{label:"💰 TOTAL COBRADO",value:`$${Math.round(getSaldo(entregaResult))}`,color:"#66BB6A"},{label:"📋 RECIBO",value:entregaResult.sin_recibo?"⚠️ Sin recibo":"✅ Con recibo",color:entregaResult.sin_recibo?"var(--warning-text)":"#66BB6A"},{label:"👤 ENTREGADO POR",value:entregaResult.delivered_by||"—",color:"#C792EA"}].map((item,i) => (
                             <div key={i} style={{ background: "var(--bg-app)", borderRadius: 10, padding: "14px 16px" }}>
                               <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 4, fontWeight: 600 }}>{item.label}</div>
                               <div style={{ fontWeight: 800, fontSize: 18, color: item.color }}>{item.value}</div>
@@ -2311,7 +2311,7 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ display: "flex", gap: 10 }}>
                           <button onClick={() => printOrderQZ(entregaResult, null, 1)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
-                          <button onClick={() => marcarSinReciboEImprimir(entregaResult)} title="Imprimir constancia sin recibo" style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", flex: 1, padding: 12 }}>📝 {entregaResult.sin_recibo ? "Reimprimir constancia" : "Marcar sin recibo e imprimir"}</button>
+                          <button onClick={() => marcarSinReciboEImprimir(entregaResult)} title="Imprimir constancia sin recibo" style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", flex: 1, padding: 12 }}>📝 {entregaResult.sin_recibo ? "Reimprimir constancia" : "Marcar sin recibo e imprimir"}</button>
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setEntregaPayment(""); setEntregaSinRecibo(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
                       </div>
@@ -2574,7 +2574,7 @@ export default function LavanderiaApp() {
                   <div style={{ ...card, marginBottom: 16, border: "1px solid rgba(239,83,80,0.4)" }}>
                     <div style={{ display: "flex", gap: 40 }}>
                       <div><div style={{ fontSize: 25, fontWeight: 800, color: "#EF5350" }}>${Math.round(expenses.filter(e=>e.eliminado).reduce((s,e)=>s+Number(e.amount),0))}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>Total eliminado</div></div>
-                      <div><div style={{ fontSize: 25, fontWeight: 800, color: "#FFD54F" }}>{expenses.filter(e=>e.eliminado).length}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>Registros</div></div>
+                      <div><div style={{ fontSize: 25, fontWeight: 800, color: "var(--warning-text)" }}>{expenses.filter(e=>e.eliminado).length}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>Registros</div></div>
                     </div>
                   </div>
                   {expenses.filter(e=>e.eliminado).length === 0
@@ -2584,7 +2584,7 @@ export default function LavanderiaApp() {
                         <tbody>{expenses.filter(e=>e.eliminado).map(e=>(
                           <tr key={e.id} style={{ borderBottom:"1px solid var(--bg-surface)",opacity:0.7 }}>
                             <td style={{ padding:"12px 14px",fontWeight:600 }}>{e.concept}</td>
-                            <td style={{ padding:"12px 14px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"3px 10px",borderRadius:20,fontSize:14 }}>{e.category}</span></td>
+                            <td style={{ padding:"12px 14px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"var(--warning-text)",padding:"3px 10px",borderRadius:20,fontSize:14 }}>{e.category}</span></td>
                             <td style={{ padding:"12px 14px" }}><PayMethod m={e.payment_method} /></td>
                             <td style={{ padding:"12px 14px",fontWeight:700,color:"#EF5350" }}>${e.amount}</td>
                             <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{e.date}</td>
@@ -2600,7 +2600,7 @@ export default function LavanderiaApp() {
                 <div style={{ ...card, marginBottom: 20 }}>
                   <div style={{ display: "flex", gap: 40 }}>
                     <div><div style={{ fontSize: 25, fontWeight: 800, color: "#EF5350" }}>${Math.round(filteredExpenses.reduce((s,e)=>s+Number(e.amount),0))}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>{expenseFilterDate?"Gastos del día":"Total gastos"}</div></div>
-                    <div><div style={{ fontSize: 25, fontWeight: 800, color: "#FFD54F" }}>{filteredExpenses.length}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>Registros</div></div>
+                    <div><div style={{ fontSize: 25, fontWeight: 800, color: "var(--warning-text)" }}>{filteredExpenses.length}</div><div style={{ fontSize: 14, color: "var(--text-muted)" }}>Registros</div></div>
                   </div>
                 </div>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 16 }}>
@@ -2609,7 +2609,7 @@ export default function LavanderiaApp() {
                     {filteredExpenses.map(e => (
                       <tr key={e.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
                         <td style={{ padding:"12px 14px",fontWeight:600 }}>{e.concept}</td>
-                        <td style={{ padding:"12px 14px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"3px 10px",borderRadius:20,fontSize:14 }}>{e.category}</span></td>
+                        <td style={{ padding:"12px 14px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"var(--warning-text)",padding:"3px 10px",borderRadius:20,fontSize:14 }}>{e.category}</span></td>
                         <td style={{ padding:"12px 14px" }}><PayMethod m={e.payment_method} /></td>
                         <td style={{ padding:"12px 14px",fontWeight:700,color:"#EF5350" }}>${e.amount}</td>
                         <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{e.date}</td>
@@ -2641,8 +2641,8 @@ export default function LavanderiaApp() {
                     <input type="date" value={advanceTo} onChange={e => setAdvanceTo(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                   </div>
                   <div style={{ display: "flex", gap: 8, alignSelf: "flex-end" }}>
-                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; setAdvanceFrom(`${ym}-01`); setAdvanceTo(`${ym}-15`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "8px 14px", fontSize: 14 }}>Quincena 1 (1-15)</button>
-                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; const lastDay=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); setAdvanceFrom(`${ym}-16`); setAdvanceTo(`${ym}-${String(lastDay).padStart(2,"0")}`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "#FFD54F", padding: "8px 14px", fontSize: 14 }}>Quincena 2 (16-fin)</button>
+                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; setAdvanceFrom(`${ym}-01`); setAdvanceTo(`${ym}-15`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", padding: "8px 14px", fontSize: 14 }}>Quincena 1 (1-15)</button>
+                    <button onClick={() => { const d=new Date(); const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; const lastDay=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); setAdvanceFrom(`${ym}-16`); setAdvanceTo(`${ym}-${String(lastDay).padStart(2,"0")}`); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", padding: "8px 14px", fontSize: 14 }}>Quincena 2 (16-fin)</button>
                   </div>
                 </div>
               </div>
@@ -2674,7 +2674,7 @@ export default function LavanderiaApp() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 16, marginBottom: 20 }}>
                     <div style={{ ...card, borderLeft: "4px solid #FFD54F" }}>
                       <div style={{ fontSize: 28, marginBottom: 6 }}>💸</div>
-                      <div style={{ fontSize: 25, fontWeight: 800, color: "#FFD54F" }}>${Math.round(totalPeriodo).toLocaleString()}</div>
+                      <div style={{ fontSize: 25, fontWeight: 800, color: "var(--warning-text)" }}>${Math.round(totalPeriodo).toLocaleString()}</div>
                       <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>Total adelantado en el período</div>
                     </div>
                     <div style={{ ...card, borderLeft: "4px solid #4FC3F7" }}>
@@ -2698,7 +2698,7 @@ export default function LavanderiaApp() {
                             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{emp.name}</div>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                               <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{emp.count} adelanto{emp.count!==1?"s":""}</span>
-                              <span style={{ fontWeight: 800, fontSize: 20, color: "#FFD54F" }}>${Math.round(emp.total).toLocaleString()}</span>
+                              <span style={{ fontWeight: 800, fontSize: 20, color: "var(--warning-text)" }}>${Math.round(emp.total).toLocaleString()}</span>
                             </div>
                           </div>
                         ))}
@@ -2720,7 +2720,7 @@ export default function LavanderiaApp() {
                               <tr key={a.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
                                 <td style={{ padding:"12px 14px",fontWeight:600 }}>{a.employee_name}</td>
                                 <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{a.date}</td>
-                                <td style={{ padding:"12px 14px",fontWeight:700,color:"#FFD54F" }}>${Math.round(Number(a.amount)).toLocaleString()}</td>
+                                <td style={{ padding:"12px 14px",fontWeight:700,color:"var(--warning-text)" }}>${Math.round(Number(a.amount)).toLocaleString()}</td>
                                 <td style={{ padding:"12px 14px" }}><PayMethod m={a.payment_method||"efectivo"} /></td>
                                 <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:15 }}>{a.note||"—"}</td>
                                 <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{a.created_by||"—"}</td>
@@ -2861,7 +2861,7 @@ export default function LavanderiaApp() {
                     return sortedDays.length===0 ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p> : (
                       <>
                         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:16 }}>
-                          {[{label:"Total Ingresado",value:`$${Math.round(totalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(totalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:totalOrd,color:"#FFD54F"},{label:"Prendas",value:totalPrend,color:"#FF8A65"}].map((k,i)=>(
+                          {[{label:"Total Ingresado",value:`$${Math.round(totalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(totalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:totalOrd,color:"var(--warning-text)"},{label:"Prendas",value:totalPrend,color:"#FF8A65"}].map((k,i)=>(
                             <div key={i} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}><div style={{ fontWeight:800,fontSize:21,color:k.color }}>{k.value}</div><div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{k.label}</div></div>
                           ))}
                         </div>
@@ -2871,7 +2871,7 @@ export default function LavanderiaApp() {
                             <thead><tr style={{ background:"var(--bg-surface)" }}>{["Fecha","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
                             <tbody>
                               {sortedDays.map(d=>(<tr key={d} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px",fontWeight:600 }}>{d}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].ordenes||0}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].prendas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(days[d].ingresos||0).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{days[d].entregas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(days[d].valorEntregado||0).toLocaleString()}</td></tr>))}
-                              <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(totalEnt).toLocaleString()}</td></tr>
+                              <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"var(--warning-text)" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{totalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedDays.reduce((s,d)=>s+(days[d].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(totalEnt).toLocaleString()}</td></tr>
                             </tbody>
                           </table>
                         </div>
@@ -2891,7 +2891,7 @@ export default function LavanderiaApp() {
                   return sortedMonths.length===0 ? <p style={{ color:"var(--text-dim)",textAlign:"center",padding:32 }}>No hay datos en este rango de fechas</p> : (
                     <>
                       <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:16 }}>
-                        {[{label:"Total Ingresado",value:`$${Math.round(mTotalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(mTotalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:mTotalOrd,color:"#FFD54F"},{label:"Prendas",value:mTotalPrend,color:"#FF8A65"}].map((k,i)=>(
+                        {[{label:"Total Ingresado",value:`$${Math.round(mTotalIng).toLocaleString()}`,color:"#66BB6A"},{label:"Total Entregado",value:`$${Math.round(mTotalEnt).toLocaleString()}`,color:"#4FC3F7"},{label:"Órdenes",value:mTotalOrd,color:"var(--warning-text)"},{label:"Prendas",value:mTotalPrend,color:"#FF8A65"}].map((k,i)=>(
                           <div key={i} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${k.color}` }}><div style={{ fontWeight:800,fontSize:21,color:k.color }}>{k.value}</div><div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{k.label}</div></div>
                         ))}
                       </div>
@@ -2901,7 +2901,7 @@ export default function LavanderiaApp() {
                           <thead><tr style={{ background:"var(--bg-surface)" }}>{["Mes","Órdenes","Prendas","Valor Ingresado","Entregas","Valor Entregado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
                           <tbody>
                             {sortedMonths.map(m=>{const[y,mo]=m.split("-");return<tr key={m} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px",fontWeight:600 }}>{monthNames[mo]} {y}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].ordenes||0}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].prendas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(months[m].ingresos||0).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{months[m].entregas||0}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#4FC3F7" }}>${Math.round(months[m].valorEntregado||0).toLocaleString()}</td></tr>;})}
-                            <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(mTotalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(mTotalEnt).toLocaleString()}</td></tr>
+                            <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}><td style={{ padding:"10px 12px",color:"var(--warning-text)" }}>TOTAL</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalOrd}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{mTotalPrend}</td><td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(mTotalIng).toLocaleString()}</td><td style={{ padding:"10px 12px",textAlign:"center" }}>{sortedMonths.reduce((s,m)=>s+(months[m].entregas||0),0)}</td><td style={{ padding:"10px 12px",color:"#4FC3F7" }}>${Math.round(mTotalEnt).toLocaleString()}</td></tr>
                           </tbody>
                         </table>
                       </div>
@@ -2964,7 +2964,7 @@ export default function LavanderiaApp() {
                             <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total gastos</div>
                           </div>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:23,color:"#FFD54F" }}>{gastosRango.length}</div>
+                            <div style={{ fontWeight:800,fontSize:23,color:"var(--warning-text)" }}>{gastosRango.length}</div>
                             <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Registros</div>
                           </div>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
@@ -3001,13 +3001,13 @@ export default function LavanderiaApp() {
                                 <tr key={e.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
                                   <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{e.date}</td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{e.concept}</td>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"#FFD54F",padding:"2px 8px",borderRadius:20,fontSize:13 }}>{e.category}</span></td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.1)",color:"var(--warning-text)",padding:"2px 8px",borderRadius:20,fontSize:13 }}>{e.category}</span></td>
                                   <td style={{ padding:"10px 12px" }}><PayMethod m={e.payment_method} /></td>
                                   <td style={{ padding:"10px 12px",fontWeight:700,color:"#EF5350" }}>${Math.round(Number(e.amount)).toLocaleString()}</td>
                                 </tr>
                               ))}
                               <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
-                                <td colSpan={4} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td colSpan={4} style={{ padding:"10px 12px",color:"var(--warning-text)" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#EF5350" }}>${Math.round(totalGastosRango).toLocaleString()}</td>
                               </tr>
                             </tbody>
@@ -3019,7 +3019,7 @@ export default function LavanderiaApp() {
 
               {/* ABONOS POR RANGO */}
               <div style={{ ...card, marginTop: 20, marginBottom: 16 }}>
-                <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "#FFD54F" }}>💰 Abonos por Rango de Fechas</h3>
+                <h3 style={{ margin: "0 0 16px", fontSize: 18, color: "var(--warning-text)" }}>💰 Abonos por Rango de Fechas</h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
                   <div>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
@@ -3067,7 +3067,7 @@ export default function LavanderiaApp() {
                         {/* KPIs */}
                         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:16 }}>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:23,color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</div>
+                            <div style={{ fontWeight:800,fontSize:23,color:"var(--warning-text)" }}>${Math.round(totalAbonos).toLocaleString()}</div>
                             <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total abonado</div>
                           </div>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
@@ -3095,7 +3095,7 @@ export default function LavanderiaApp() {
                         </div>
 
                         {isAdmin && <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:10 }}>
-                          <button onClick={exportAbonos} style={{ ...btn,background:"rgba(255,213,79,0.15)",color:"#FFD54F",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
+                          <button onClick={exportAbonos} style={{ ...btn,background:"rgba(255,213,79,0.15)",color:"var(--warning-text)",padding:"6px 14px",fontSize:14 }}>📥 Exportar Excel</button>
                         </div>}
 
                         {/* Tabla detalle */}
@@ -3113,12 +3113,12 @@ export default function LavanderiaApp() {
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{orden?.client_name||"—"}</td>
                                   <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{a.employee||"—"}</td>
                                   <td style={{ padding:"10px 12px" }}><PayMethod m={a.payment_method||"efectivo"} /></td>
-                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"#FFD54F" }}>${Math.round(Number(a.amount)).toLocaleString()}</td>
+                                  <td style={{ padding:"10px 12px",fontWeight:700,color:"var(--warning-text)" }}>${Math.round(Number(a.amount)).toLocaleString()}</td>
                                 </tr>;
                               })}
                               <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
-                                <td colSpan={5} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
-                                <td style={{ padding:"10px 12px",color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</td>
+                                <td colSpan={5} style={{ padding:"10px 12px",color:"var(--warning-text)" }}>TOTAL</td>
+                                <td style={{ padding:"10px 12px",color:"var(--warning-text)" }}>${Math.round(totalAbonos).toLocaleString()}</td>
                               </tr>
                             </tbody>
                           </table>
@@ -3181,7 +3181,7 @@ export default function LavanderiaApp() {
                             <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total facturado</div>
                           </div>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:21,color:"#FFD54F" }}>{rango.length}</div>
+                            <div style={{ fontWeight:800,fontSize:21,color:"var(--warning-text)" }}>{rango.length}</div>
                             <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Órdenes</div>
                           </div>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
@@ -3231,7 +3231,7 @@ export default function LavanderiaApp() {
                                 </tr>
                               ))}
                               <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
-                                <td colSpan={3} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td colSpan={3} style={{ padding:"10px 12px",color:"var(--warning-text)" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
                                 <td colSpan={3}></td>
                               </tr>
@@ -3296,7 +3296,7 @@ export default function LavanderiaApp() {
                             <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total facturado</div>
                           </div>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:21,color:"#FFD54F" }}>{rango.length}</div>
+                            <div style={{ fontWeight:800,fontSize:21,color:"var(--warning-text)" }}>{rango.length}</div>
                             <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Órdenes</div>
                           </div>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #4FC3F7" }}>
@@ -3346,7 +3346,7 @@ export default function LavanderiaApp() {
                                 </tr>
                               ))}
                               <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
-                                <td colSpan={3} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td colSpan={3} style={{ padding:"10px 12px",color:"var(--warning-text)" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
                                 <td colSpan={3}></td>
                               </tr>
@@ -3396,7 +3396,7 @@ export default function LavanderiaApp() {
                             <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Total recaudado</div>
                           </div>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #FFD54F" }}>
-                            <div style={{ fontWeight:800,fontSize:21,color:"#FFD54F" }}>{rango.length}</div>
+                            <div style={{ fontWeight:800,fontSize:21,color:"var(--warning-text)" }}>{rango.length}</div>
                             <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>Órdenes a domicilio</div>
                           </div>
                           <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid #66BB6A" }}>
@@ -3426,7 +3426,7 @@ export default function LavanderiaApp() {
                                 </tr>
                               ))}
                               <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
-                                <td colSpan={5} style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td colSpan={5} style={{ padding:"10px 12px",color:"var(--warning-text)" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalValor).toLocaleString()}</td>
                                 <td colSpan={2}></td>
                               </tr>
@@ -3536,7 +3536,7 @@ export default function LavanderiaApp() {
                                 </tr>
                               ))}
                               <tr style={{ background:"var(--bg-surface)",fontWeight:800 }}>
-                                <td style={{ padding:"10px 12px",color:"#FFD54F" }}>TOTAL</td>
+                                <td style={{ padding:"10px 12px",color:"var(--warning-text)" }}>TOTAL</td>
                                 <td style={{ padding:"10px 12px",color:"#66BB6A" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="efectivo")?.total||0).toLocaleString()}</td>
                                 <td style={{ padding:"10px 12px",color:"#C792EA" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="nequi")?.total||0).toLocaleString()}</td>
                                 <td style={{ padding:"10px 12px",color:"#667EEA" }}>${Math.round(totalesPorMetodo.find(m=>m.key==="daviplata")?.total||0).toLocaleString()}</td>
@@ -3553,7 +3553,7 @@ export default function LavanderiaApp() {
 
               {/* REVERSADAS */}
               <div style={{ ...card, marginTop: 20 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#FFD54F" }}>↩️ Órdenes Reversadas</h3>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "var(--warning-text)" }}>↩️ Órdenes Reversadas</h3>
                 <p style={{ margin: "0 0 14px", fontSize: 15, color: "var(--text-muted)" }}>Órdenes que estuvieron entregadas y fueron reversadas</p>
                 <div style={{ marginBottom: 14, display: "flex", gap: 10 }}>
                   <input style={{ ...inp, maxWidth: 300 }} placeholder="🔍 Buscar por nombre, teléfono o # orden..." value={reversadasSearch} onChange={e => setReversadasSearch(e.target.value)} />
@@ -3565,10 +3565,10 @@ export default function LavanderiaApp() {
                   return reversadas.length===0
                     ?<div style={{ textAlign:"center",padding:32,color:"var(--text-dim)" }}><div style={{ fontSize:37,marginBottom:8 }}>↩️</div><div>{reversadasSearch?"No se encontraron con ese criterio":"No hay órdenes reversadas aún"}</div></div>
                     :<div style={{ overflowX:"auto" }}>
-                        <div style={{ fontSize:15,color:"var(--text-muted)",marginBottom:12 }}><strong style={{ color:"#FFD54F" }}>{reversadas.length}</strong> orden{reversadas.length!==1?"es":""} reversada{reversadas.length!==1?"s":""}</div>
+                        <div style={{ fontSize:15,color:"var(--text-muted)",marginBottom:12 }}><strong style={{ color:"var(--warning-text)" }}>{reversadas.length}</strong> orden{reversadas.length!==1?"es":""} reversada{reversadas.length!==1?"s":""}</div>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
                           <thead><tr style={{ background:"var(--bg-surface)" }}>{["# Orden","Cliente","Teléfono","Servicio","Total","Entregado por","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
-                          <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"#FFD54F",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:13,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:14 }}>👤 {o.delivered_by}</span>:<span style={{ color:"var(--text-dim)",fontSize:14 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:13,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
+                          <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"var(--warning-text)",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:13,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:14 }}>👤 {o.delivered_by}</span>:<span style={{ color:"var(--text-dim)",fontSize:14 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:13,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
                         </table>
                       </div>;
                 })()}
@@ -3675,7 +3675,7 @@ export default function LavanderiaApp() {
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginBottom: 20 }}>
-                  {[{label:"Órdenes pendientes",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#4FC3F7"},{label:"Prendas en local",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.garments),0),color:"#FFD54F"},{label:"Valor en inventario",value:`$${Math.round(orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.price),0))}`,color:"#66BB6A"},{label:"Listas para retiro",value:orders.filter(o=>o.status==="listo"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#FF8A65"}].map((kpi,i)=>(
+                  {[{label:"Órdenes pendientes",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#4FC3F7"},{label:"Prendas en local",value:orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.garments),0),color:"var(--warning-text)"},{label:"Valor en inventario",value:`$${Math.round(orders.filter(o=>o.status!=="entregado"&&(!inventoryFilter||o.date===inventoryFilter)).reduce((s,o)=>s+Number(o.price),0))}`,color:"#66BB6A"},{label:"Listas para retiro",value:orders.filter(o=>o.status==="listo"&&(!inventoryFilter||o.date===inventoryFilter)).length,color:"#FF8A65"}].map((kpi,i)=>(
                     <div key={i} style={{ background:"var(--bg-app)",borderRadius:10,padding:"12px 14px",borderLeft:`3px solid ${kpi.color}` }}><div style={{ fontWeight:800,fontSize:21,color:kpi.color }}>{kpi.value}</div><div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{kpi.label}</div></div>
                   ))}
                 </div>
@@ -3717,8 +3717,8 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td>
                               <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:13,fontWeight:600,whiteSpace:"nowrap" }}>{STATUS_LABELS[o.status]?.label}</span></td>
                               <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.date}</td>
-                              <td style={{ padding:"10px 12px",fontSize:14 }}><span style={{ color:isLate?"#EF5350":"#FFD54F",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
-                              <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"#FFD54F":"var(--text-muted)",fontSize:15 }}>{daysIn}d</span></td>
+                              <td style={{ padding:"10px 12px",fontSize:14 }}><span style={{ color:isLate?"#EF5350":"var(--warning-text)",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
+                              <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"var(--warning-text)":"var(--text-muted)",fontSize:15 }}>{daysIn}d</span></td>
                               <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), getRandomWaMensaje(o.client_name,o.order_number||""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
                             </tr>;
                           })}</tbody>
@@ -3934,7 +3934,7 @@ export default function LavanderiaApp() {
                       <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>⚠️ En sistema, no encontradas físicamente</div>
                     </div>
                     <div style={{ ...card, borderLeft: "4px solid #FFD54F" }}>
-                      <div style={{ fontWeight: 800, fontSize: 23, color: "#FFD54F" }}>{comparisonResult.noEsperadas.length}</div>
+                      <div style={{ fontWeight: 800, fontSize: 23, color: "var(--warning-text)" }}>{comparisonResult.noEsperadas.length}</div>
                       <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 2 }}>⚠️ Escaneadas sin coincidir</div>
                     </div>
                   </div>
@@ -3964,14 +3964,14 @@ export default function LavanderiaApp() {
                   </div>
 
                   <div style={{ ...card }}>
-                    <h3 style={{ margin: "0 0 4px", fontSize: 17, color: "#FFD54F" }}>⚠️ Escaneadas pero no coinciden con lo pendiente</h3>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 17, color: "var(--warning-text)" }}>⚠️ Escaneadas pero no coinciden con lo pendiente</h3>
                     <p style={{ margin: "0 0 14px", fontSize: 14, color: "var(--text-muted)" }}>Encontraste físicamente esta prenda, pero el sistema no la tiene como pendiente — revisa por qué.</p>
                     {comparisonResult.noEsperadas.length === 0
                       ? <p style={{ color: "#66BB6A", fontSize: 15 }}>✅ Ninguna — todo lo escaneado coincide con lo pendiente.</p>
                       : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {comparisonResult.noEsperadas.map((x,i) => (
                             <div key={i} style={{ background: "var(--bg-app)", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ background: "rgba(255,213,79,0.15)", color: "#FFD54F", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{x.code}</span>
+                              <span style={{ background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{x.code}</span>
                               <span style={{ fontSize: 14, color: "var(--text-muted)" }}>
                                 {!x.order ? "No existe esa orden en el sistema (revisa el número)" : `Ya está marcada como Entregada el ${x.order.delivered_at||"—"} por ${x.order.delivered_by||"—"}`}
                               </span>
@@ -4102,7 +4102,7 @@ export default function LavanderiaApp() {
                       <span style={{ flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
                       <div style={{ display:"flex",alignItems:"center",gap:4 }}>
                         <span style={{ fontSize:12,color:"var(--text-muted)" }}>piezas:</span>
-                        <input type="number" min={1} value={garmentPieces[g]||1} onChange={e => { const v = Math.max(1, Number(e.target.value)||1); saveGarmentPieces({ ...garmentPieces, [g]: v }); }} style={{ width:42,padding:"4px 6px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-card)",color:"#FFD54F",fontSize:14,fontWeight:700,textAlign:"center" }} />
+                        <input type="number" min={1} value={garmentPieces[g]||1} onChange={e => { const v = Math.max(1, Number(e.target.value)||1); saveGarmentPieces({ ...garmentPieces, [g]: v }); }} style={{ width:42,padding:"4px 6px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-card)",color:"var(--warning-text)",fontSize:14,fontWeight:700,textAlign:"center" }} />
                       </div>
                       <div style={{ display:"flex",alignItems:"center",gap:4 }}>
                         <span style={{ fontSize:12,color:"var(--text-muted)" }}>días extra:</span>
@@ -4232,7 +4232,7 @@ export default function LavanderiaApp() {
                 )}
               </div>
               <div style={{ marginTop: 20, ...card }}>
-                <h3 style={{ margin: "0 0 20px", fontSize: 18, color: "#FFD54F" }}>👥 Usuarios y Turnos</h3>
+                <h3 style={{ margin: "0 0 20px", fontSize: 18, color: "var(--warning-text)" }}>👥 Usuarios y Turnos</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20 }}>
                   <div>
                     <h4 style={{ margin: "0 0 12px", fontSize: 15, color: "var(--text-muted)", fontWeight: 600 }}>USUARIOS REGISTRADOS</h4>
@@ -4245,7 +4245,7 @@ export default function LavanderiaApp() {
                               {e.id===user.id&&<span style={{ fontSize:12,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"1px 7px",borderRadius:10 }}>Tú</span>}
                             </div>
                             <div style={{ display:"flex",gap:8 }}>
-                              <span style={{ fontSize:13,background:e.role==="admin"?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.05)",color:e.role==="admin"?"#FFD54F":"var(--text-muted)",padding:"2px 8px",borderRadius:10 }}>{e.role==="admin"?"👑 Admin":"👤 Empleado"}</span>
+                              <span style={{ fontSize:13,background:e.role==="admin"?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.05)",color:e.role==="admin"?"var(--warning-text)":"var(--text-muted)",padding:"2px 8px",borderRadius:10 }}>{e.role==="admin"?"👑 Admin":"👤 Empleado"}</span>
                               <span style={{ fontSize:13,background:"rgba(102,187,106,0.1)",color:"#66BB6A",padding:"2px 8px",borderRadius:10 }}>🕐 {e.turno||"mañana"}</span>
                             </div>
                           </div>
@@ -4307,10 +4307,10 @@ export default function LavanderiaApp() {
               <div style={{ marginTop: 20, ...card }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#FFD54F" }}>🔑 Clave de Administrador</h3>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "var(--warning-text)" }}>🔑 Clave de Administrador</h3>
                     <p style={{ margin: 0, fontSize: 15, color: "var(--text-muted)" }}>Cambia la clave que protege las acciones importantes</p>
                   </div>
-                  <button onClick={() => setShowCambiarClave(!showCambiarClave)} style={{ ...btn, background: showCambiarClave?"rgba(255,213,79,0.2)":"rgba(255,255,255,0.05)", color: "#FFD54F", border: "1px solid rgba(255,213,79,0.3)", padding: "8px 16px", fontSize: 14 }}>
+                  <button onClick={() => setShowCambiarClave(!showCambiarClave)} style={{ ...btn, background: showCambiarClave?"rgba(255,213,79,0.2)":"rgba(255,255,255,0.05)", color: "var(--warning-text)", border: "1px solid rgba(255,213,79,0.3)", padding: "8px 16px", fontSize: 14 }}>
                     {showCambiarClave ? "✕ Cancelar" : "🔑 Cambiar clave"}
                   </button>
                 </div>
@@ -4435,10 +4435,10 @@ export default function LavanderiaApp() {
                   <div>
                     <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE DEL CLIENTE</label>
                     <input style={{ ...inp,background:newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)?"rgba(102,187,106,0.08)":"var(--bg-app)",borderColor:newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)?"#66BB6A":"var(--border)" }} placeholder={newOrder.phone&&!clients.find(c=>c.phone===newOrder.phone)?"Cliente nuevo — escribe el nombre":"Nombre del cliente"} value={newOrder.client_name} onChange={e=>setNewOrder(p=>({...p,client_name:e.target.value}))} />
-                    {newOrder.phone&&!clients.find(c=>c.phone===newOrder.phone)&&newOrder.client_name&&<div style={{ fontSize:13,color:"#FFD54F",marginTop:4 }}>⚡ Cliente nuevo — se creará automáticamente</div>}
+                    {newOrder.phone&&!clients.find(c=>c.phone===newOrder.phone)&&newOrder.client_name&&<div style={{ fontSize:13,color:"var(--warning-text)",marginTop:4 }}>⚡ Cliente nuevo — se creará automáticamente</div>}
                     {newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)&&<div style={{ fontSize:13,color:"#66BB6A",marginTop:4 }}>✅ Cliente existente</div>}
                   </div>
-                  {(()=>{ const pendientes=orders.filter(o=>o.phone===newOrder.phone&&(o.status==="listo"||o.status==="en_proceso"||o.status==="recibido")); return pendientes.length>0?<div style={{ background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.4)",borderRadius:10,padding:"12px 14px" }}><div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:8 }}><span style={{ fontSize:18 }}>⚠️</span><span style={{ fontWeight:700,color:"#FFD54F",fontSize:15 }}>Tiene {pendientes.length} orden{pendientes.length>1?"es":""} pendiente{pendientes.length>1?"s":""} por recoger</span></div>{pendientes.map(p=><div key={p.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid rgba(255,213,79,0.15)" }}><div><span style={{ fontWeight:700,color:"#4FC3F7",fontSize:15 }}>{p.order_number||"—"}</span><span style={{ color:"var(--text-muted)",fontSize:14 }}> · {getServiceLabel(p.service)} · {p.garments} prendas</span></div><div style={{ display:"flex",alignItems:"center",gap:8 }}><span style={{ fontWeight:700,color:"#66BB6A",fontSize:15 }}>${Math.round(Number(p.price))}</span><span style={{ fontSize:13,background:STATUS_LABELS[p.status]?.color+"22",color:STATUS_LABELS[p.status]?.color,padding:"2px 8px",borderRadius:20 }}>{STATUS_LABELS[p.status]?.label}</span></div></div>)}<div style={{ display:"flex",justifyContent:"space-between",marginTop:8 }}><span style={{ fontSize:14,color:"var(--text-muted)" }}>Total pendiente</span><span style={{ fontWeight:800,color:"#FFD54F",fontSize:17 }}>${Math.round(pendientes.reduce((s,p)=>s+Number(p.price),0))}</span></div></div>:null; })()}
+                  {(()=>{ const pendientes=orders.filter(o=>o.phone===newOrder.phone&&(o.status==="listo"||o.status==="en_proceso"||o.status==="recibido")); return pendientes.length>0?<div style={{ background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.4)",borderRadius:10,padding:"12px 14px" }}><div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:8 }}><span style={{ fontSize:18 }}>⚠️</span><span style={{ fontWeight:700,color:"var(--warning-text)",fontSize:15 }}>Tiene {pendientes.length} orden{pendientes.length>1?"es":""} pendiente{pendientes.length>1?"s":""} por recoger</span></div>{pendientes.map(p=><div key={p.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid rgba(255,213,79,0.15)" }}><div><span style={{ fontWeight:700,color:"#4FC3F7",fontSize:15 }}>{p.order_number||"—"}</span><span style={{ color:"var(--text-muted)",fontSize:14 }}> · {getServiceLabel(p.service)} · {p.garments} prendas</span></div><div style={{ display:"flex",alignItems:"center",gap:8 }}><span style={{ fontWeight:700,color:"#66BB6A",fontSize:15 }}>${Math.round(Number(p.price))}</span><span style={{ fontSize:13,background:STATUS_LABELS[p.status]?.color+"22",color:STATUS_LABELS[p.status]?.color,padding:"2px 8px",borderRadius:20 }}>{STATUS_LABELS[p.status]?.label}</span></div></div>)}<div style={{ display:"flex",justifyContent:"space-between",marginTop:8 }}><span style={{ fontSize:14,color:"var(--text-muted)" }}>Total pendiente</span><span style={{ fontWeight:800,color:"var(--warning-text)",fontSize:17 }}>${Math.round(pendientes.reduce((s,p)=>s+Number(p.price),0))}</span></div></div>:null; })()}
                   <div>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
                       <label style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600 }}>PRENDAS</label>
@@ -4473,7 +4473,7 @@ export default function LavanderiaApp() {
                           <input type="number" min={0} placeholder="0" value={item.price} onChange={e=>updateItem(i,"price",e.target.value)} onWheel={e=>e.target.blur()} style={{ ...inp,padding:"8px 6px" }} />
                           <div style={{ position:"relative" }}>
                             {(item.colors||[]).length>0&&<div style={{ display:"flex",flexWrap:"wrap",gap:3,marginBottom:3 }}>{(item.colors||[]).map((c,ci)=><span key={ci} style={{ fontSize:12,background:"rgba(199,146,234,0.2)",color:"#C792EA",border:"1px solid rgba(199,146,234,0.4)",borderRadius:10,padding:"1px 6px",display:"flex",alignItems:"center",gap:2 }}>{c}<span onMouseDown={()=>updateItem(i,"colors",(item.colors||[]).filter((_,idx)=>idx!==ci))} style={{ cursor:"pointer",color:"#EF5350",fontWeight:700 }}>×</span></span>)}</div>}
-                            {(item.colors||[]).length>0&&(item.colors||[]).length<Number(item.quantity)&&<div style={{ fontSize:12,color:"#FFD54F",marginBottom:2 }}>⚠️ Faltan {Number(item.quantity)-(item.colors||[]).length} color{Number(item.quantity)-(item.colors||[]).length>1?"es":""}</div>}
+                            {(item.colors||[]).length>0&&(item.colors||[]).length<Number(item.quantity)&&<div style={{ fontSize:12,color:"var(--warning-text)",marginBottom:2 }}>⚠️ Faltan {Number(item.quantity)-(item.colors||[]).length} color{Number(item.quantity)-(item.colors||[]).length>1?"es":""}</div>}
                             {(item.colors||[]).length>=Number(item.quantity)&&Number(item.quantity)>0
                               ?<div style={{ fontSize:12,color:"#66BB6A" }}>✅ {item.quantity} color{Number(item.quantity)>1?"es":""} asignado{Number(item.quantity)>1?"s":""}</div>
                               :(() => {
@@ -4555,14 +4555,14 @@ export default function LavanderiaApp() {
                   )}
                   <label onClick={()=>setNewOrder(p=>({...p,paid_at_intake:!p.paid_at_intake,payment_method:!p.paid_at_intake?(p.payment_method||"efectivo"):null}))} style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:newOrder.paid_at_intake?"rgba(255,213,79,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${newOrder.paid_at_intake?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"10px 14px" }}>
                     <input type="checkbox" checked={!!newOrder.paid_at_intake} onChange={e=>setNewOrder(p=>({...p,paid_at_intake:e.target.checked,payment_method:e.target.checked?(p.payment_method||"efectivo"):null}))} style={{ width:18,height:18,accentColor:"#FFD54F" }} />
-                    <div><div style={{ fontWeight:600,color:newOrder.paid_at_intake?"#FFD54F":"var(--text-muted)" }}>💰 Pagado al recibir la ropa</div><div style={{ fontSize:13,color:"var(--text-dim)" }}>Marca esto si el cliente ya pagó hoy, aunque venga a recogerla después</div></div>
+                    <div><div style={{ fontWeight:600,color:newOrder.paid_at_intake?"var(--warning-text)":"var(--text-muted)" }}>💰 Pagado al recibir la ropa</div><div style={{ fontSize:13,color:"var(--text-dim)" }}>Marca esto si el cliente ya pagó hoy, aunque venga a recogerla después</div></div>
                   </label>
                   {newOrder.paid_at_intake && (
                     <div>
                       <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label>
                       <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                         {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
-                          <label key={opt.value} onClick={()=>setNewOrder(p=>({...p,payment_method:opt.value}))} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:newOrder.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newOrder.payment_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"8px 4px",color:newOrder.payment_method===opt.value?"#FFD54F":"var(--text-muted)" }}>{opt.label}</label>
+                          <label key={opt.value} onClick={()=>setNewOrder(p=>({...p,payment_method:opt.value}))} style={{ flex:"1 1 30%",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:newOrder.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newOrder.payment_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"8px 4px",color:newOrder.payment_method===opt.value?"var(--warning-text)":"var(--text-muted)" }}>{opt.label}</label>
                         ))}
                       </div>
                     </div>
@@ -4637,7 +4637,7 @@ export default function LavanderiaApp() {
                     </select>
                   </div>
                   <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newAdvance.amount} onChange={e=>setNewAdvance(p=>({...p,amount:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=><label key={opt.value} onClick={()=>setNewAdvance(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:newAdvance.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAdvance.payment_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"10px 6px",color:newAdvance.payment_method===opt.value?"#FFD54F":"var(--text-muted)" }}>{opt.label}</label>)}</div></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=><label key={opt.value} onClick={()=>setNewAdvance(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:newAdvance.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAdvance.payment_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"10px 6px",color:newAdvance.payment_method===opt.value?"var(--warning-text)":"var(--text-muted)" }}>{opt.label}</label>)}</div></div>
                   <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newAdvance.date} onChange={e=>setNewAdvance(p=>({...p,date:e.target.value}))} /></div>
                   <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOTA (opcional)</label><input style={inp} placeholder="Ej: Adelanto para transporte" value={newAdvance.note} onChange={e=>setNewAdvance(p=>({...p,note:e.target.value}))} /></div>
                   <button onClick={addAdvance} disabled={saving||!newAdvance.employee_id||!newAdvance.amount} style={{ ...btn,background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",padding:12,opacity:(saving||!newAdvance.employee_id||!newAdvance.amount)?0.5:1 }}>{saving?"Guardando...":"Guardar Adelanto"}</button>
@@ -4769,7 +4769,7 @@ export default function LavanderiaApp() {
               <div style={{ display:"flex",gap:16,background:"var(--bg-app)",borderRadius:8,padding:"10px 14px",fontSize:15 }}>
                 <div><div style={{ color:"var(--text-muted)",fontSize:13 }}>TOTAL ORDEN</div><div style={{ fontWeight:800,color:"var(--text-primary)" }}>${Math.round(Number(abonoModal.price)).toLocaleString()}</div></div>
                 <div><div style={{ color:"var(--text-muted)",fontSize:13 }}>ABONADO</div><div style={{ fontWeight:800,color:"#66BB6A" }}>${Math.round(getAbonado(abonoModal.id)).toLocaleString()}</div></div>
-                <div><div style={{ color:"var(--text-muted)",fontSize:13 }}>SALDO</div><div style={{ fontWeight:800,color:"#FFD54F" }}>${Math.round(getSaldo(abonoModal)).toLocaleString()}</div></div>
+                <div><div style={{ color:"var(--text-muted)",fontSize:13 }}>SALDO</div><div style={{ fontWeight:800,color:"var(--warning-text)" }}>${Math.round(getSaldo(abonoModal)).toLocaleString()}</div></div>
               </div>
             </div>
             {abonos.filter(a=>a.order_id===abonoModal.id).length > 0 && (
@@ -4790,7 +4790,7 @@ export default function LavanderiaApp() {
               <div>
                 <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>MONTO DEL ABONO</label>
                 <input type="number" style={{ padding:"10px 12px",borderRadius:8,border:"1px solid #FFD54F",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:18,fontWeight:700,width:"100%",boxSizing:"border-box" }} placeholder="0" value={newAbono.amount} onChange={e=>setNewAbono(p=>({...p,amount:e.target.value}))} autoFocus />
-                {newAbono.amount && Number(newAbono.amount) > 0 && <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:4 }}>Saldo restante: <strong style={{ color:"#FFD54F" }}>${Math.max(0,Math.round(getSaldo(abonoModal)-Number(newAbono.amount))).toLocaleString()}</strong></div>}
+                {newAbono.amount && Number(newAbono.amount) > 0 && <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:4 }}>Saldo restante: <strong style={{ color:"var(--warning-text)" }}>${Math.max(0,Math.round(getSaldo(abonoModal)-Number(newAbono.amount))).toLocaleString()}</strong></div>}
               </div>
               <div>
                 <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:6 }}>FECHA DEL ABONO</label>
@@ -4801,7 +4801,7 @@ export default function LavanderiaApp() {
                 <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:6 }}>MÉTODO DE PAGO</label>
                 <div style={{ display:"flex",gap:8 }}>
                   {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=>(
-                    <label key={opt.value} onClick={()=>setNewAbono(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:newAbono.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAbono.payment_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:8,padding:"8px 4px",color:newAbono.payment_method===opt.value?"#FFD54F":"var(--text-muted)" }}>{opt.label}</label>
+                    <label key={opt.value} onClick={()=>setNewAbono(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:newAbono.payment_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newAbono.payment_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:8,padding:"8px 4px",color:newAbono.payment_method===opt.value?"var(--warning-text)":"var(--text-muted)" }}>{opt.label}</label>
                   ))}
                 </div>
               </div>
@@ -4967,7 +4967,7 @@ export default function LavanderiaApp() {
             </div>
             <div style={{ background:"var(--bg-app)",borderRadius:14,padding:20,marginBottom:20 }}>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:12,borderBottom:"1px solid var(--bg-surface)" }}><span style={{ color:"var(--text-muted)",fontSize:15 }}>Ingresos del día</span><span style={{ fontWeight:700,color:"#66BB6A",fontSize:18 }}>${Math.round(todayRevenue)}</span></div>
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:12,borderBottom:"1px solid var(--bg-surface)" }}><span style={{ color:"var(--text-muted)",fontSize:15 }}>Precio por prenda</span><span style={{ fontWeight:700,color:"#FFD54F",fontSize:18 }}>${precioPrend.toLocaleString()}</span></div>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:12,borderBottom:"1px solid var(--bg-surface)" }}><span style={{ color:"var(--text-muted)",fontSize:15 }}>Precio por prenda</span><span style={{ fontWeight:700,color:"var(--warning-text)",fontSize:18 }}>${precioPrend.toLocaleString()}</span></div>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ color:"var(--text-muted)",fontSize:15 }}>Total prendas estimado</span><span style={{ fontWeight:800,color:"#4FC3F7",fontSize:32 }}>{precioPrend>0?Math.round(todayRevenue/precioPrend):0}</span></div>
             </div>
             <div style={{ background:"rgba(79,195,247,0.06)",border:"1px solid rgba(79,195,247,0.2)",borderRadius:10,padding:"10px 14px",marginBottom:20,textAlign:"center",fontSize:15,color:"var(--text-muted)" }}>
@@ -5053,8 +5053,8 @@ export default function LavanderiaApp() {
                     <div style={{ display:"flex",justifyContent:"space-between" }}><span style={{ color:"var(--text-muted)" }}>− Adelantos en efectivo</span><span style={{ color:"#EF5350" }}>${Math.round(efectivoAdelantos).toLocaleString()}</span></div>
                   </div>
                   <div style={{ borderTop:"1px solid rgba(255,213,79,0.3)",marginTop:10,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                    <span style={{ fontWeight:700,color:"#FFD54F" }}>Total que debe haber en caja</span>
-                    <span style={{ fontWeight:800,fontSize:25,color:"#FFD54F" }}>${Math.round(totalEnCaja).toLocaleString()}</span>
+                    <span style={{ fontWeight:700,color:"var(--warning-text)" }}>Total que debe haber en caja</span>
+                    <span style={{ fontWeight:800,fontSize:25,color:"var(--warning-text)" }}>${Math.round(totalEnCaja).toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -5124,7 +5124,7 @@ export default function LavanderiaApp() {
                   </div>
                   <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #FFD54F" }}>
                     <div style={{ fontSize:13,color:"var(--text-muted)" }}>Abonos</div>
-                    <div style={{ fontWeight:800,color:"#FFD54F" }}>${Math.round(totalAbonos).toLocaleString()}</div>
+                    <div style={{ fontWeight:800,color:"var(--warning-text)" }}>${Math.round(totalAbonos).toLocaleString()}</div>
                   </div>
                   <div style={{ background:"var(--bg-app)",borderRadius:10,padding:"10px 14px",borderLeft:"3px solid #FF8A65" }}>
                     <div style={{ fontSize:13,color:"var(--text-muted)" }}>Parciales</div>
@@ -5393,7 +5393,7 @@ export default function LavanderiaApp() {
             {calcOp && <div style={{ fontSize:14,color:"var(--text-muted)",marginBottom:2 }}>{calcPrev} {calcOp}</div>}
             <div style={{ fontSize:37,fontWeight:700,color:"var(--text-primary)",overflowX:"auto",whiteSpace:"nowrap" }}>{calcDisplay}</div>
           </div>
-          {[[{l:"AC",fn:calcClear,style:{background:"#EF5350",color:"#fff"}},{l:"+/-",fn:calcToggleSign,style:{background:"var(--border)",color:"var(--text-primary)"}},{l:"%",fn:calcPercent,style:{background:"var(--border)",color:"var(--text-primary)"}},{l:"÷",fn:()=>calcOperation("÷"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"7",fn:()=>calcInput("7")},{l:"8",fn:()=>calcInput("8")},{l:"9",fn:()=>calcInput("9")},{l:"×",fn:()=>calcOperation("×"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"4",fn:()=>calcInput("4")},{l:"5",fn:()=>calcInput("5")},{l:"6",fn:()=>calcInput("6")},{l:"-",fn:()=>calcOperation("-"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"1",fn:()=>calcInput("1")},{l:"2",fn:()=>calcInput("2")},{l:"3",fn:()=>calcInput("3")},{l:"+",fn:()=>calcOperation("+"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"⌫",fn:calcBackspace,style:{background:"var(--border)",color:"#FFD54F"}},{l:"0",fn:()=>calcInput("0")},{l:".",fn:calcDot},{l:"=",fn:calcEquals,style:{background:"#66BB6A",color:"#fff"}}]].map((row,ri) => (
+          {[[{l:"AC",fn:calcClear,style:{background:"#EF5350",color:"#fff"}},{l:"+/-",fn:calcToggleSign,style:{background:"var(--border)",color:"var(--text-primary)"}},{l:"%",fn:calcPercent,style:{background:"var(--border)",color:"var(--text-primary)"}},{l:"÷",fn:()=>calcOperation("÷"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"7",fn:()=>calcInput("7")},{l:"8",fn:()=>calcInput("8")},{l:"9",fn:()=>calcInput("9")},{l:"×",fn:()=>calcOperation("×"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"4",fn:()=>calcInput("4")},{l:"5",fn:()=>calcInput("5")},{l:"6",fn:()=>calcInput("6")},{l:"-",fn:()=>calcOperation("-"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"1",fn:()=>calcInput("1")},{l:"2",fn:()=>calcInput("2")},{l:"3",fn:()=>calcInput("3")},{l:"+",fn:()=>calcOperation("+"),style:{background:"#4FC3F7",color:"#000"}}],[{l:"⌫",fn:calcBackspace,style:{background:"var(--border)",color:"var(--warning-text)"}},{l:"0",fn:()=>calcInput("0")},{l:".",fn:calcDot},{l:"=",fn:calcEquals,style:{background:"#66BB6A",color:"#fff"}}]].map((row,ri) => (
             <div key={ri} style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:8 }}>
               {row.map((b,bi) => <button key={bi} onClick={b.fn} style={{ padding:"14px 0",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:18,background:b.style?.background||"var(--bg-surface)",color:b.style?.color||"var(--text-primary)" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.8"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>{b.l}</button>)}
             </div>
