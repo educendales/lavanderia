@@ -174,6 +174,7 @@ export default function LavanderiaApp() {
   const [entregaSearch, setEntregaSearch] = useState("");
   const [selectedEntregas, setSelectedEntregas] = useState([]);
   const [entregaMultiPayment, setEntregaMultiPayment] = useState("");
+  const [entregaMultiPaymentByOrder, setEntregaMultiPaymentByOrder] = useState({});
   const [entregaMultiSinRecibo, setEntregaMultiSinRecibo] = useState(false);
   const [entregaMultiDate, setEntregaMultiDate] = useState(today);
   const [confirmingMulti, setConfirmingMulti] = useState(false);
@@ -490,12 +491,16 @@ export default function LavanderiaApp() {
   const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
 
   const confirmarMultiEntrega = async () => {
-    if (!entregaMultiPayment) { alert("⚠️ Selecciona un método de pago antes de confirmar la entrega."); return; }
+    const faltantes = selectedEntregas.filter(o => !entregaMultiPaymentByOrder[o.id]);
+    if (faltantes.length) { alert(`⚠️ Falta el método de pago de ${faltantes.length} recibo(s) antes de confirmar.`); return; }
     let workingQueue = [...offlineQueue];
     let queueChanged = false;
     const newQueuedActions = [];
+    let huboEfectivo = false;
     for (const order of selectedEntregas) {
-      const patchBody = { status: "entregado", payment_method: entregaMultiPayment, sin_recibo: entregaMultiSinRecibo, delivered_at: entregaMultiDate, delivered_by: user.name };
+      const metodoOrden = entregaMultiPaymentByOrder[order.id];
+      if (metodoOrden === "efectivo") huboEfectivo = true;
+      const patchBody = { status: "entregado", payment_method: metodoOrden, sin_recibo: entregaMultiSinRecibo, delivered_at: entregaMultiDate, delivered_by: user.name };
       const its = orderItems[order.id] || [];
       const pendientes = its.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
       const isOfflineOrder = String(order.id).startsWith("offline-");
@@ -523,9 +528,11 @@ export default function LavanderiaApp() {
     }
     if (queueChanged) saveOfflineQueue(workingQueue);
     if (newQueuedActions.length) saveOfflineActionQueue([...offlineActionQueue, ...newQueuedActions]);
-    if (entregaMultiPayment === "efectivo") openCashDrawer("entrega_multiple", `${selectedEntregas.length} órdenes`);
-    setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPayment, delivered_at: entregaMultiDate, delivered_by: user.name } : o));
+    if (huboEfectivo) openCashDrawer("entrega_multiple", `${selectedEntregas.length} órdenes`);
+    setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPaymentByOrder[o.id], delivered_at: entregaMultiDate, delivered_by: user.name } : o));
     setSelectedEntregas([]);
+    setEntregaMultiPaymentByOrder({});
+    setEntregaMultiPayment("");
     setConfirmingMulti(false);
   };
 
@@ -1084,7 +1091,7 @@ export default function LavanderiaApp() {
     setEntregaResults(results);
     setEntregaResult(null); setEntregaConfirmed(false); setEntregaSinRecibo(false); setEntregaPayment("");
     setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null); setParcialPayment("");
-    setEntregaDate(today); setParcialDate(today); setEntregaMultiDate(today); setEntregaMultiPayment(""); setEntregaMultiSinRecibo(false);
+    setEntregaDate(today); setParcialDate(today); setEntregaMultiDate(today); setEntregaMultiPayment(""); setEntregaMultiSinRecibo(false); setEntregaMultiPaymentByOrder({}); setSelectedEntregas([]);
     const yaSinRecibo = results.filter(o => o.status === "entregado" && o.sin_recibo);
     if (yaSinRecibo.length > 0) {
       const msg = yaSinRecibo.map(o => {
@@ -2124,10 +2131,25 @@ export default function LavanderiaApp() {
                         <input type="date" value={entregaMultiDate} onChange={e=>setEntregaMultiDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 180 }} />
                       </div>
                       <div style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO</label>
+                        <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>(aplicar a todos)</span></label>
                         <div style={{ display: "flex", gap: 8 }}>
                           {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
-                            <label key={opt.value} onClick={() => setEntregaMultiPayment(opt.value)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:entregaMultiPayment===opt.value?"rgba(102,187,106,0.2)":"rgba(255,255,255,0.04)",border:`2px solid ${entregaMultiPayment===opt.value?"#66BB6A":"var(--border)"}`,borderRadius:8,padding:"8px 4px",color:entregaMultiPayment===opt.value?"#66BB6A":"var(--text-muted)" }}>{opt.label}</label>
+                            <label key={opt.value} onClick={() => { setEntregaMultiPayment(opt.value); setEntregaMultiPaymentByOrder(prev => { const next = {...prev}; selectedEntregas.forEach(o => { next[o.id] = opt.value; }); return next; }); }} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:entregaMultiPayment===opt.value?"rgba(102,187,106,0.2)":"rgba(255,255,255,0.04)",border:`2px solid ${entregaMultiPayment===opt.value?"#66BB6A":"var(--border)"}`,borderRadius:8,padding:"8px 4px",color:entregaMultiPayment===opt.value?"#66BB6A":"var(--text-muted)" }}>{opt.label}</label>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>💸 PAGO MIXTO — ajusta el método de cada recibo si no pagaron todo con el mismo</label>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 180, overflowY: "auto" }}>
+                          {selectedEntregas.map(o => (
+                            <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-app)", borderRadius: 8, padding: "6px 10px" }}>
+                              <span style={{ fontSize: 13, color: "var(--text-muted)", minWidth: 90 }}>{o.order_number} · ${Math.round(Number(o.price))}</span>
+                              <div style={{ display: "flex", gap: 4, flex: 1 }}>
+                                {[{value:"efectivo",label:"💵"},{value:"nequi",label:"📱"},{value:"daviplata",label:"💜"},{value:"breb",label:"🔵"},{value:"tarjeta",label:"💳"}].map(opt => (
+                                  <button key={opt.value} onClick={() => setEntregaMultiPaymentByOrder(prev => ({ ...prev, [o.id]: opt.value }))} title={opt.value} style={{ flex:1,padding:"5px 0",borderRadius:6,border:`1.5px solid ${entregaMultiPaymentByOrder[o.id]===opt.value?"#66BB6A":"var(--border)"}`,background:entregaMultiPaymentByOrder[o.id]===opt.value?"rgba(102,187,106,0.2)":"transparent",cursor:"pointer",fontSize:14 }}>{opt.label}</button>
+                                ))}
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -2137,9 +2159,14 @@ export default function LavanderiaApp() {
                           <span style={{ fontSize:15,color:entregaMultiSinRecibo?"var(--warning-text)":"var(--text-muted)" }}>📋 Entregado sin recibo</span>
                         </label>
                       </div>
-                      <button onClick={confirmarMultiEntrega} disabled={!entregaMultiPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:17,fontWeight:800,borderRadius:10,opacity:!entregaMultiPayment?0.5:1,cursor:!entregaMultiPayment?"not-allowed":"pointer" }}>
-                        {!entregaMultiPayment ? "⚠️ Selecciona un método de pago" : `✅ Confirmar ${selectedEntregas.length} entrega${selectedEntregas.length>1?"s":""} · $${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}`}
-                      </button>
+                      {(() => {
+                        const faltantes = selectedEntregas.filter(o => !entregaMultiPaymentByOrder[o.id]).length;
+                        return (
+                          <button onClick={confirmarMultiEntrega} disabled={faltantes>0} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:14,fontSize:17,fontWeight:800,borderRadius:10,opacity:faltantes>0?0.5:1,cursor:faltantes>0?"not-allowed":"pointer" }}>
+                            {faltantes>0 ? `⚠️ Falta el método de pago de ${faltantes} recibo${faltantes>1?"s":""}` : `✅ Confirmar ${selectedEntregas.length} entrega${selectedEntregas.length>1?"s":""} · $${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}`}
+                          </button>
+                        );
+                      })()}
                     </div>
                   )}
                   {entregaResults.map(o => {
@@ -2148,7 +2175,7 @@ export default function LavanderiaApp() {
                     return <div key={o.id} style={{ ...card, marginBottom: 10, borderLeft: `4px solid ${yaSinRecibo?"#EF5350":isSelected?"#66BB6A":STATUS_LABELS[o.status]?.color||"var(--border)"}`, background: yaSinRecibo?"rgba(239,83,80,0.06)":isSelected?"rgba(102,187,106,0.06)":"var(--bg-card)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
-                          {isPending && <input type="checkbox" checked={isSelected} onChange={() => setSelectedEntregas(prev=>isSelected?prev.filter(s=>s.id!==o.id):[...prev,o])} style={{ width:20,height:20,accentColor:"#66BB6A",cursor:"pointer",flexShrink:0 }} />}
+                          {isPending && <input type="checkbox" checked={isSelected} onChange={() => { setSelectedEntregas(prev=>isSelected?prev.filter(s=>s.id!==o.id):[...prev,o]); setEntregaMultiPaymentByOrder(prev => { const next = { ...prev }; if (isSelected) delete next[o.id]; else next[o.id] = entregaMultiPayment || ""; return next; }); }} style={{ width:20,height:20,accentColor:"#66BB6A",cursor:"pointer",flexShrink:0 }} />}
                           {!isPending && <span style={{ fontSize: 21, flexShrink: 0 }}>{yaSinRecibo?"⚠️":"✅"}</span>}
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
