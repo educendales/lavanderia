@@ -180,6 +180,7 @@ export default function LavanderiaApp() {
   const [confirmingMulti, setConfirmingMulti] = useState(false);
   const [entregaResults, setEntregaResults] = useState(null);
   const [entregaResult, setEntregaResult] = useState(null);
+  const [entregaResultMedia, setEntregaResultMedia] = useState([]);
   const [entregaPayment, setEntregaPayment] = useState("");
   const [entregaSinRecibo, setEntregaSinRecibo] = useState(false);
   const [entregaDate, setEntregaDate] = useState(today);
@@ -237,6 +238,17 @@ export default function LavanderiaApp() {
   const [showEliminados, setShowEliminados] = useState(false);
   const [reversadasSearch, setReversadasSearch] = useState("");
   const [showCalc, setShowCalc] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [capturedMedia, setCapturedMedia] = useState([]); // {id, type:'photo'|'video', blob, previewUrl, orderNumber, uploading, uploaded}
+  const videoElRef = useRef(null);
+  const canvasElRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const recordTimerRef = useRef(null);
   const [calcInputMode, setCalcInputMode] = useState("manual");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAyuda, setShowAyuda] = useState(false);
@@ -290,6 +302,7 @@ export default function LavanderiaApp() {
   const [claveNueva, setClaveNueva] = useState("");
   const [claveConfirm, setClaveConfirm] = useState("");
   const [nombreImpresora, setNombreImpresora] = useState(() => { try { return localStorage.getItem("nombreImpresora") || "BIXOLON SRP-330II"; } catch { return "BIXOLON SRP-330II"; } });
+  const [anchoRecibo, setAnchoRecibo] = useState(() => { try { return Number(localStorage.getItem("anchoRecibo")) || 42; } catch { return 42; } });
   const [negocioPais, setNegocioPais] = useState(() => { try { return localStorage.getItem("negocioPais") || "57"; } catch { return "57"; } });
   const [negocioLogo, setNegocioLogo] = useState(() => { try { return localStorage.getItem("negocioLogo") || ""; } catch { return ""; } });
   const [logoEnRecibo, setLogoEnRecibo] = useState(() => { try { return localStorage.getItem("logoEnRecibo") !== "false"; } catch { return true; } });
@@ -813,6 +826,10 @@ export default function LavanderiaApp() {
     return () => window.removeEventListener("keydown", handleGlobalKeydown);
   }, []);
   useEffect(() => { if (barcodeTrigger > 0) searchEntrega(); }, [barcodeTrigger]);
+  useEffect(() => {
+    if (entregaResult?.order_number) { getOrderMedia(entregaResult.order_number).then(setEntregaResultMedia); }
+    else { setEntregaResultMedia([]); }
+  }, [entregaResult?.order_number]);
   useEffect(() => { window.scrollTo(0, 0); mainContentRef.current?.scrollTo(0, 0); }, [tab]);
   useEffect(() => { if (user) loadData(); }, [user]);
   useEffect(() => { if (!user) setPin(""); }, [user]);
@@ -1360,6 +1377,83 @@ export default function LavanderiaApp() {
     });
   };
 
+  const startCamera = async () => {
+    setCameraError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true });
+      cameraStreamRef.current = stream;
+      if (videoElRef.current) { videoElRef.current.srcObject = stream; await videoElRef.current.play().catch(()=>{}); }
+    } catch (e) {
+      setCameraError(e.name === "NotAllowedError" ? "Debes darle permiso al navegador para usar la cámara." : "No se pudo abrir la cámara: " + e.message);
+    }
+  };
+  const stopCamera = () => {
+    if (cameraStreamRef.current) { cameraStreamRef.current.getTracks().forEach(t => t.stop()); cameraStreamRef.current = null; }
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
+    setIsRecording(false);
+    setRecordSeconds(0);
+  };
+  const closeCameraPanel = () => { stopCamera(); setShowCamera(false); };
+  const takePhoto = () => {
+    if (!videoElRef.current || !canvasElRef.current) return;
+    const video = videoElRef.current, canvas = canvasElRef.current;
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const id = Date.now() + "-" + Math.random();
+      setCapturedMedia(prev => [{ id, type: "photo", blob, previewUrl: URL.createObjectURL(blob), orderNumber: "", uploading: false, uploaded: false }, ...prev]);
+    }, "image/jpeg", 0.9);
+  };
+  const startRecording = () => {
+    if (!cameraStreamRef.current) return;
+    recordedChunksRef.current = [];
+    let mr;
+    try { mr = new MediaRecorder(cameraStreamRef.current, { mimeType: "video/webm;codecs=vp8,opus" }); }
+    catch { mr = new MediaRecorder(cameraStreamRef.current); }
+    mr.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data); };
+    mr.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+      const id = Date.now() + "-" + Math.random();
+      setCapturedMedia(prev => [{ id, type: "video", blob, previewUrl: URL.createObjectURL(blob), orderNumber: "", uploading: false, uploaded: false }, ...prev]);
+    };
+    mediaRecorderRef.current = mr;
+    mr.start();
+    setIsRecording(true);
+    setRecordSeconds(0);
+    recordTimerRef.current = setInterval(() => setRecordSeconds(s => s + 1), 1000);
+  };
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") mediaRecorderRef.current.stop();
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
+    setIsRecording(false);
+  };
+  const discardCapturedMedia = (id) => setCapturedMedia(prev => prev.filter(m => m.id !== id));
+  const saveCapturedMedia = async (id) => {
+    const item = capturedMedia.find(m => m.id === id);
+    if (!item) return;
+    setCapturedMedia(prev => prev.map(m => m.id === id ? { ...m, uploading: true } : m));
+    try {
+      const ext = item.type === "photo" ? "jpg" : "webm";
+      const path = `${today}/${item.type}-${item.id}.${ext}`;
+      const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/evidencias/${path}`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": item.type === "photo" ? "image/jpeg" : "video/webm" },
+        body: item.blob
+      });
+      if (!uploadRes.ok) throw new Error("No se pudo subir el archivo (revisa que el bucket 'evidencias' exista y sea público)");
+      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/evidencias/${path}`;
+      await db.post("order_media", { order_number: item.orderNumber || null, type: item.type, url: publicUrl, employee: user?.name || "" });
+      setCapturedMedia(prev => prev.map(m => m.id === id ? { ...m, uploading: false, uploaded: true } : m));
+    } catch (e) {
+      setCapturedMedia(prev => prev.map(m => m.id === id ? { ...m, uploading: false } : m));
+      alert("❌ " + e.message);
+    }
+  };
+  const getOrderMedia = async (orderNumber) => {
+    try { const res = await db.get("order_media", `&order_number=eq.${orderNumber}`); return Array.isArray(res) ? res : []; }
+    catch { return []; }
+  };
   const openCashDrawer = async (reason = "otro", detail = "") => {
     const hora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
     try {
@@ -1396,8 +1490,8 @@ export default function LavanderiaApp() {
     const NORMAL_FONT = ESC + "M\x00";
     const CUT = GS + "V\x41\x00";
     const LF = "\n";
-    const LINE = "-".repeat(42);
-    const W = 42;
+    const LINE = "-".repeat(anchoRecibo);
+    const W = anchoRecibo;
 
     const rpad = (left, right) => {
       const l = normalize(String(left));
@@ -1505,24 +1599,42 @@ export default function LavanderiaApp() {
     data += BOLD_OFF + LEFT;
     data += LF;
 
-    // Legal text - smallest font
-    const LEGALW = 56;
+    // Legal text - smallest font, ancho proporcional al de la impresora, justificado
+    const LEGALW = Math.round(anchoRecibo * (56/42));
     const FONT_B = ESC + "M\x01";
     const FONT_A = ESC + "M\x00";
     const TINY = GS + "!\x00" + ESC + "M\x01";
     data += CENTER + TINY;
     const legalNorm = normalize(reciboLegal);
     const legalWords = legalNorm.split(" ");
-    let line2 = "";
+    const legalLines = [];
+    let currentWords = [];
+    let currentLen = 0;
     legalWords.forEach(word => {
-      if ((line2 + " " + word).trim().length <= LEGALW) {
-        line2 = (line2 + " " + word).trim();
-      } else {
-        data += line2 + LF;
-        line2 = word;
-      }
+      const addLen = currentWords.length === 0 ? word.length : currentLen + 1 + word.length;
+      if (addLen <= LEGALW) { currentWords.push(word); currentLen = addLen; }
+      else { legalLines.push(currentWords); currentWords = [word]; currentLen = word.length; }
     });
-    if (line2) data += line2 + LF;
+    if (currentWords.length) legalLines.push(currentWords);
+    const justifyLine = (words, width) => {
+      if (words.length === 1) return words[0];
+      const wordsLen = words.reduce((s,w)=>s+w.length,0);
+      const totalSpaces = Math.max(words.length-1, width - wordsLen);
+      const gaps = words.length - 1;
+      const baseSpace = Math.floor(totalSpaces / gaps);
+      let extra = totalSpaces - baseSpace*gaps;
+      let line = words[0];
+      for (let i=1;i<words.length;i++){
+        let spaces = baseSpace + (extra > 0 ? 1 : 0);
+        if (extra > 0) extra--;
+        line += " ".repeat(Math.max(1,spaces)) + words[i];
+      }
+      return line;
+    };
+    legalLines.forEach((lineWords, idx) => {
+      const isLast = idx === legalLines.length - 1;
+      data += (isLast || lineWords.length === 1 ? lineWords.join(" ") : justifyLine(lineWords, LEGALW)) + LF;
+    });
     data += FONT_A + GS + "!\x00" + NORMAL_FONT + LEFT;
     data += LF + LF + LF;
     data += CUT;
@@ -1602,8 +1714,8 @@ export default function LavanderiaApp() {
     const NORMAL_FONT = ESC + "M\x00";
     const CUT = GS + "V\x41\x00";
     const LF = "\n";
-    const LINE = "-".repeat(42);
-    const W = 42;
+    const LINE = "-".repeat(anchoRecibo);
+    const W = anchoRecibo;
 
     const wrap = (text) => {
       let out = "";
@@ -2228,6 +2340,22 @@ export default function LavanderiaApp() {
                       ))}
                     </div>
                     {orderItems[entregaResult.id] && <div style={{ marginBottom: 20 }}><div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>DETALLE DE PRENDAS</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{orderItems[entregaResult.id].map((it,i) => <div key={i} style={{ background: "var(--bg-surface)", borderRadius: 8, padding: "6px 12px", fontSize: 14 }}>{it.service&&(() => { const sv=services.find(s=>s.id===it.service); return sv?<span style={{ color:sv.color }}>{sv.icon} </span>:null; })()}<span style={{ fontWeight:700,color:"#4FC3F7" }}>{it.quantity}×</span> <span>{GARMENT_ICONS[it.garment_type]||"👕"} {it.garment_type}</span>{it.color&&<span style={{ color:"#C792EA" }}> · {it.color}</span>}<span style={{ color:"#66BB6A",fontWeight:700 }}> · ${Math.round(Number(it.price)*Number(it.quantity))}</span></div>)}</div></div>}
+                    {entregaResultMedia.length > 0 && (
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>📷 EVIDENCIA GUARDADA ({entregaResultMedia.length})</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {entregaResultMedia.map(m => (
+                            <a key={m.id} href={m.url} target="_blank" rel="noreferrer" style={{ display:"block" }}>
+                              {m.type === "photo" ? (
+                                <img src={m.url} alt="" style={{ width:70,height:70,objectFit:"cover",borderRadius:8,border:"1px solid var(--border)" }} />
+                              ) : (
+                                <div style={{ width:70,height:70,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-surface)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24 }}>🎬</div>
+                              )}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {entregaResult.paid_at_intake && <div style={{ background: "rgba(255,213,79,0.1)", border: "1px solid rgba(255,213,79,0.3)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 15, color: "var(--warning-text)", fontWeight: 700 }}>💰 Esta orden ya fue pagada al recibir la ropa el {entregaResult.date} ({entregaResult.payment_method==="nequi"?"Nequi":entregaResult.payment_method==="daviplata"?"Daviplata":entregaResult.payment_method==="breb"?"Bre-b":entregaResult.payment_method==="tarjeta"?"Tarjeta":"Efectivo"}). No hay nada pendiente por cobrar.</div>}
                     {entregaResult.notes && <div style={{ background: "rgba(255,213,79,0.08)", border: "1px solid rgba(255,213,79,0.2)", borderRadius: 8, padding: "10px 14px", marginBottom: 20, fontSize: 15, color: "var(--warning-text)" }}>📝 {entregaResult.notes}</div>}
                     {entregaResult.status !== "entregado" && !entregaConfirmed && !showParcialForm && !parcialConfirmedInfo && (
@@ -4071,6 +4199,11 @@ export default function LavanderiaApp() {
                     <input style={{ ...inp, borderColor: "rgba(79,195,247,0.3)" }} value={nombreImpresora} onChange={e => setNombreImpresora(e.target.value)} placeholder="Ej: BIXOLON SRP-330II" />
                     <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Debe coincidir exactamente con el nombre en Windows → Dispositivos e impresoras</div>
                   </div>
+                  <div>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>↔️ ANCHO DEL RECIBO (caracteres por línea)</label>
+                    <input type="number" min={28} max={64} style={{ ...inp, borderColor: "rgba(79,195,247,0.3)" }} value={anchoRecibo} onChange={e => { const v = Number(e.target.value)||42; setAnchoRecibo(v); try { localStorage.setItem("anchoRecibo", String(v)); } catch {} }} />
+                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Bixolon SRP-330II ≈ 42 · SAT Q22 y otras de 80mm estándar ≈ 48. Si el recibo sale corrido hacia la izquierda o se corta, ajusta este número e imprime una de prueba.</div>
+                  </div>
                   <div style={{ gridColumn: "span 2" }}>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DIRECCIÓN</label>
                     <input style={{ ...inp }} value={negocioDireccion} onChange={e => setNegocioDireccion(e.target.value)} placeholder="Ej: Carrera 113 # 75-56" />
@@ -5394,6 +5527,62 @@ export default function LavanderiaApp() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* FLOATING CAMERA */}
+      <button onClick={() => { setShowCamera(!showCamera); if (!showCamera) startCamera(); else closeCameraPanel(); }} title="Cámara" style={{ position:"fixed",bottom:28,right:96,zIndex:300,width:56,height:56,borderRadius:"50%",border:"none",background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",fontSize:25,cursor:"pointer",boxShadow:"0 4px 20px rgba(255,138,101,0.4)",display:"flex",alignItems:"center",justifyContent:"center" }}>📷</button>
+
+      {showCamera && (
+        <div style={{ position:"fixed",bottom:96,right:28,zIndex:300,background:"var(--bg-card)",borderRadius:20,padding:16,border:"1px solid var(--border)",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",width:340,maxHeight:"80vh",overflowY:"auto",fontFamily:"'Segoe UI',sans-serif" }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+            <span style={{ color:"var(--text-muted)",fontSize:15,fontWeight:600 }}>📷 Cámara — Evidencia</span>
+            <button onClick={closeCameraPanel} style={{ background:"none",border:"none",color:"var(--text-muted)",fontSize:21,cursor:"pointer" }}>✕</button>
+          </div>
+          {cameraError ? (
+            <div style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.4)",borderRadius:10,padding:"12px 14px",fontSize:13,color:"#EF5350",marginBottom:10 }}>{cameraError}</div>
+          ) : (
+            <div style={{ position:"relative",background:"#000",borderRadius:12,overflow:"hidden",marginBottom:10 }}>
+              <video ref={videoElRef} muted playsInline style={{ width:"100%",display:"block",maxHeight:220,objectFit:"cover" }} />
+              {isRecording && <div style={{ position:"absolute",top:8,left:8,background:"rgba(239,83,80,0.9)",color:"#fff",fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:20,display:"flex",alignItems:"center",gap:5 }}><span style={{ width:8,height:8,borderRadius:"50%",background:"#fff" }} />● REC {Math.floor(recordSeconds/60)}:{String(recordSeconds%60).padStart(2,"0")}</div>}
+            </div>
+          )}
+          <canvas ref={canvasElRef} style={{ display:"none" }} />
+          <div style={{ display:"flex",gap:8,marginBottom:14 }}>
+            <button onClick={takePhoto} disabled={!!cameraError} style={{ ...btn,flex:1,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:"10px 0",fontSize:14,fontWeight:700,opacity:cameraError?0.5:1 }}>📸 Foto</button>
+            {!isRecording ? (
+              <button onClick={startRecording} disabled={!!cameraError} style={{ ...btn,flex:1,background:"rgba(239,83,80,0.15)",color:"#EF5350",border:"1px solid rgba(239,83,80,0.4)",padding:"10px 0",fontSize:14,fontWeight:700,opacity:cameraError?0.5:1 }}>⏺ Grabar</button>
+            ) : (
+              <button onClick={stopRecording} style={{ ...btn,flex:1,background:"#EF5350",color:"#fff",padding:"10px 0",fontSize:14,fontWeight:700 }}>⏹ Detener</button>
+            )}
+          </div>
+          {capturedMedia.length > 0 && (
+            <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+              <div style={{ fontSize:13,color:"var(--text-dim)",fontWeight:600 }}>CAPTURADO — asigna la orden y guarda</div>
+              {capturedMedia.map(m => (
+                <div key={m.id} style={{ background:"var(--bg-app)",borderRadius:10,padding:10,display:"flex",gap:10,alignItems:"center" }}>
+                  {m.type === "photo" ? (
+                    <img src={m.previewUrl} alt="" style={{ width:56,height:56,objectFit:"cover",borderRadius:8 }} />
+                  ) : (
+                    <video src={m.previewUrl} style={{ width:56,height:56,objectFit:"cover",borderRadius:8 }} muted />
+                  )}
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <input placeholder="# de orden (opcional)" value={m.orderNumber} disabled={m.uploaded} onChange={e => setCapturedMedia(prev => prev.map(x => x.id===m.id?{...x,orderNumber:e.target.value}:x))} style={{ ...inp,padding:"5px 8px",fontSize:12,width:"100%",marginBottom:6 }} />
+                    <div style={{ display:"flex",gap:6 }}>
+                      {m.uploaded ? (
+                        <span style={{ fontSize:12,color:"#66BB6A",fontWeight:700 }}>✅ Guardado</span>
+                      ) : (
+                        <>
+                          <button onClick={() => saveCapturedMedia(m.id)} disabled={m.uploading} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"4px 10px",fontSize:12 }}>{m.uploading?"Subiendo...":"💾 Guardar"}</button>
+                          <button onClick={() => discardCapturedMedia(m.id)} disabled={m.uploading} style={{ ...btn,background:"rgba(239,83,80,0.1)",color:"#EF5350",padding:"4px 10px",fontSize:12 }}>🗑</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
