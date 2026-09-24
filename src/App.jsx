@@ -133,6 +133,10 @@ export default function LavanderiaApp() {
   const [modal, setModal] = useState(null);
   const [filterDate, setFilterDate] = useState(today);
   const [buscarPrendaTipo, setBuscarPrendaTipo] = useState("");
+  const [galeriaDesde, setGaleriaDesde] = useState(today);
+  const [galeriaHasta, setGaleriaHasta] = useState(today);
+  const [galeriaMedia, setGaleriaMedia] = useState([]);
+  const [galeriaLoading, setGaleriaLoading] = useState(false);
   const [buscarPrendaDesde, setBuscarPrendaDesde] = useState(today);
   const [buscarPrendaHasta, setBuscarPrendaHasta] = useState(today);
   const [desgloseServDesde, setDesgloseServDesde] = useState(today);
@@ -243,6 +247,10 @@ export default function LavanderiaApp() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [capturedMedia, setCapturedMedia] = useState([]); // {id, type:'photo'|'video', blob, previewUrl, orderNumber, uploading, uploaded}
+  const [cameraPanelPos, setCameraPanelPos] = useState(null); // {x,y} en px, null = posición por defecto
+  const [cameraPanelSize, setCameraPanelSize] = useState({ width: 340, height: null });
+  const dragStateRef = useRef(null);
+  const resizeStateRef = useRef(null);
   const videoElRef = useRef(null);
   const canvasElRef = useRef(null);
   const cameraStreamRef = useRef(null);
@@ -711,6 +719,7 @@ export default function LavanderiaApp() {
   const manualOrderNumberRef = useRef(null);
   const inventarioSectionRef = useRef(null);
   const buscarPrendaSectionRef = useRef(null);
+  const evidenciaSectionRef = useRef(null);
   const [barcodeTrigger, setBarcodeTrigger] = useState(0);
   const [scannedCodes, setScannedCodes] = useState([]);
   const [comparisonResult, setComparisonResult] = useState(null);
@@ -741,7 +750,7 @@ export default function LavanderiaApp() {
       const active = document.activeElement;
       const isTyping = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT" || active.isContentEditable);
 
-      const fKeyTabs = { F2: "entregas", F3: "expenses", F5: "report", F6: "inventario_comparativo", F7: "report" };
+      const fKeyTabs = { F2: "entregas", F3: "expenses", F5: "report", F6: "inventario_comparativo", F7: "report", F8: "report" };
       if (e.key === "F1") {
         e.preventDefault();
         if (!isTyping) {
@@ -763,6 +772,7 @@ export default function LavanderiaApp() {
           setTab(fKeyTabs[e.key]);
           if (e.key === "F5") setTimeout(() => inventarioSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
           if (e.key === "F7") setTimeout(() => buscarPrendaSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+          if (e.key === "F8") setTimeout(() => evidenciaSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
         }
         return;
       }
@@ -826,6 +836,7 @@ export default function LavanderiaApp() {
     return () => window.removeEventListener("keydown", handleGlobalKeydown);
   }, []);
   useEffect(() => { if (barcodeTrigger > 0) searchEntrega(); }, [barcodeTrigger]);
+  useEffect(() => { loadGaleriaMedia(); }, []);
   useEffect(() => {
     if (entregaResult?.order_number) { getOrderMedia(entregaResult.order_number).then(setEntregaResultMedia); }
     else { setEntregaResultMedia([]); }
@@ -1394,6 +1405,61 @@ export default function LavanderiaApp() {
     setRecordSeconds(0);
   };
   const closeCameraPanel = () => { stopCamera(); setShowCamera(false); };
+  const startDragCamera = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const panelEl = document.getElementById("camera-panel");
+    const rect = panelEl ? panelEl.getBoundingClientRect() : { left: window.innerWidth-368, top: window.innerHeight-500 };
+    dragStateRef.current = { startX: clientX, startY: clientY, startLeft: rect.left, startTop: rect.top };
+    const onMove = (ev) => {
+      const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const dx = cx - dragStateRef.current.startX, dy = cy - dragStateRef.current.startY;
+      const panelW = panelEl ? panelEl.offsetWidth : 340;
+      const panelH = panelEl ? panelEl.offsetHeight : 400;
+      let newLeft = dragStateRef.current.startLeft + dx;
+      let newTop = dragStateRef.current.startTop + dy;
+      newLeft = Math.max(0, Math.min(window.innerWidth - panelW, newLeft));
+      newTop = Math.max(0, Math.min(window.innerHeight - panelH, newTop));
+      setCameraPanelPos({ x: newLeft, y: newTop });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onUp);
+  };
+  const startResizeCamera = (e) => {
+    e.stopPropagation();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const panelEl = document.getElementById("camera-panel");
+    const rect = panelEl ? panelEl.getBoundingClientRect() : { width: 340, height: 400 };
+    resizeStateRef.current = { startX: clientX, startY: clientY, startW: rect.width, startH: rect.height };
+    const onMove = (ev) => {
+      const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const dx = cx - resizeStateRef.current.startX, dy = cy - resizeStateRef.current.startY;
+      const newW = Math.max(260, Math.min(window.innerWidth - 20, resizeStateRef.current.startW + dx));
+      const newH = Math.max(300, Math.min(window.innerHeight - 20, resizeStateRef.current.startH + dy));
+      setCameraPanelSize({ width: newW, height: newH });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onUp);
+  };
   const takePhoto = () => {
     if (!videoElRef.current || !canvasElRef.current) return;
     const video = videoElRef.current, canvas = canvasElRef.current;
@@ -1443,7 +1509,7 @@ export default function LavanderiaApp() {
       });
       if (!uploadRes.ok) throw new Error("No se pudo subir el archivo (revisa que el bucket 'evidencias' exista y sea público)");
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/evidencias/${path}`;
-      await db.post("order_media", { order_number: item.orderNumber || null, type: item.type, url: publicUrl, employee: user?.name || "" });
+      await db.post("order_media", { order_number: item.orderNumber || null, type: item.type, url: publicUrl, employee: user?.name || "", date: today });
       setCapturedMedia(prev => prev.map(m => m.id === id ? { ...m, uploading: false, uploaded: true } : m));
     } catch (e) {
       setCapturedMedia(prev => prev.map(m => m.id === id ? { ...m, uploading: false } : m));
@@ -1453,6 +1519,102 @@ export default function LavanderiaApp() {
   const getOrderMedia = async (orderNumber) => {
     try { const res = await db.get("order_media", `&order_number=eq.${orderNumber}`); return Array.isArray(res) ? res : []; }
     catch { return []; }
+  };
+  const loadGaleriaMedia = async () => {
+    setGaleriaLoading(true);
+    try {
+      const res = await db.get("order_media", `&date=gte.${galeriaDesde}&date=lte.${galeriaHasta}`);
+      setGaleriaMedia(Array.isArray(res) ? res : []);
+    } catch { setGaleriaMedia([]); }
+    setGaleriaLoading(false);
+  };
+  const deleteMediaItem = async (item) => {
+    const ok = await checkClave("eliminar esta evidencia"); if (!ok) return;
+    if (!window.confirm("¿Eliminar esta foto/video? No se puede deshacer.")) return;
+    try {
+      const marker = "/evidencias/";
+      const idx = item.url.indexOf(marker);
+      if (idx !== -1) {
+        const path = item.url.slice(idx + marker.length);
+        await fetch(`${SUPABASE_URL}/storage/v1/object/evidencias/${path}`, {
+          method: "DELETE",
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+        });
+      }
+    } catch (e) { console.error("No se pudo borrar el archivo del almacenamiento:", e); }
+    await db.delete("order_media", item.id);
+    setGaleriaMedia(prev => prev.filter(m => m.id !== item.id));
+    setEntregaResultMedia(prev => prev.filter(m => m.id !== item.id));
+  };
+  const logoToEscPosRaster = async (dataUrl, maxWidthDots = 200) => {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = dataUrl;
+    });
+
+    // Paso 1: dibujar a resolución original y recortar el espacio en blanco/transparente sobrante
+    const rawCanvas = document.createElement("canvas");
+    rawCanvas.width = img.width; rawCanvas.height = img.height;
+    const rawCtx = rawCanvas.getContext("2d");
+    rawCtx.drawImage(img, 0, 0);
+    const rawData = rawCtx.getImageData(0, 0, img.width, img.height).data;
+
+    let minX = img.width, minY = img.height, maxX = 0, maxY = 0;
+    let foundContent = false;
+    for (let y = 0; y < img.height; y++) {
+      for (let x = 0; x < img.width; x++) {
+        const idx = (y * img.width + x) * 4;
+        const r = rawData[idx], g = rawData[idx+1], b = rawData[idx+2], a = rawData[idx+3];
+        const isBlankPixel = a < 20 || (r > 245 && g > 245 && b > 245);
+        if (!isBlankPixel) {
+          foundContent = true;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (!foundContent) { minX = 0; minY = 0; maxX = img.width - 1; maxY = img.height - 1; }
+    const pad = Math.round(Math.max(img.width, img.height) * 0.03);
+    minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+    maxX = Math.min(img.width - 1, maxX + pad); maxY = Math.min(img.height - 1, maxY + pad);
+    const cropW = maxX - minX + 1, cropH = maxY - minY + 1;
+
+    // Paso 2: reescalar el recorte al ancho final y convertir a blanco y negro
+    let w = Math.min(cropW, maxWidthDots);
+    w = w - (w % 8);
+    if (w < 8) w = 8;
+    const h = Math.max(1, Math.round(cropH * (w / cropW)));
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(rawCanvas, minX, minY, cropW, cropH, 0, 0, w, h);
+    const imageData = ctx.getImageData(0, 0, w, h).data;
+
+    const widthBytes = w / 8;
+    const bytes = new Uint8Array(widthBytes * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        const r = imageData[idx], g = imageData[idx+1], b = imageData[idx+2], a = imageData[idx+3];
+        const gray = a < 128 ? 255 : (0.299*r + 0.587*g + 0.114*b);
+        if (gray < 150) {
+          const byteIndex = y * widthBytes + Math.floor(x/8);
+          const bitIndex = 7 - (x % 8);
+          bytes[byteIndex] |= (1 << bitIndex);
+        }
+      }
+    }
+    const GS = "\x1D";
+    const xL = widthBytes & 0xFF, xH = (widthBytes >> 8) & 0xFF;
+    const yL = h & 0xFF, yH = (h >> 8) & 0xFF;
+    let out = GS + "v0" + String.fromCharCode(0) + String.fromCharCode(xL) + String.fromCharCode(xH) + String.fromCharCode(yL) + String.fromCharCode(yH);
+    for (let i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+    return out;
   };
   const openCashDrawer = async (reason = "otro", detail = "") => {
     const hora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
@@ -1503,6 +1665,12 @@ export default function LavanderiaApp() {
     let data = "";
     data += RESET;
     data += ESC + "3\x18";  // reduce line spacing to 24 dots
+    if (logoEnRecibo && negocioLogo) {
+      try {
+        const logoRaster = await logoToEscPosRaster(negocioLogo, Math.min(200, Math.round(anchoRecibo * 4.2)));
+        data += CENTER + logoRaster + LF;
+      } catch (e) { console.error("No se pudo imprimir el logo:", e); }
+    }
     // Header - centered bold
     data += CENTER + BOLD_ON;
     data += "Factura No.: " + (order.order_number?.replace(/^[A-Za-z]/,"") || "") + LF;
@@ -2059,6 +2227,7 @@ export default function LavanderiaApp() {
               { key: "F5", icon: "📋", label: "Inventario" },
               { key: "F6", icon: "🔍", label: "Comparativo" },
               { key: "F7", icon: "🔎", label: "Buscar Prendas" },
+              { key: "F8", icon: "📷", label: "Evidencia" },
             ].map(s => (
               <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.03)", border: "1px solid var(--bg-surface)", borderRadius: 8, padding: "4px 10px 4px 6px" }}>
                 <span style={{ background: "var(--bg-app)", border: "1px solid var(--border)", borderRadius: 5, padding: "2px 6px", fontSize: 12, fontWeight: 800, color: "#4FC3F7", fontFamily: "monospace", boxShadow: "0 1px 0 var(--border)" }}>{s.key}</span>
@@ -2345,13 +2514,16 @@ export default function LavanderiaApp() {
                         <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>📷 EVIDENCIA GUARDADA ({entregaResultMedia.length})</div>
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                           {entregaResultMedia.map(m => (
-                            <a key={m.id} href={m.url} target="_blank" rel="noreferrer" style={{ display:"block" }}>
-                              {m.type === "photo" ? (
-                                <img src={m.url} alt="" style={{ width:70,height:70,objectFit:"cover",borderRadius:8,border:"1px solid var(--border)" }} />
-                              ) : (
-                                <div style={{ width:70,height:70,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-surface)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24 }}>🎬</div>
-                              )}
-                            </a>
+                            <div key={m.id} style={{ position:"relative" }}>
+                              <a href={m.url} target="_blank" rel="noreferrer" style={{ display:"block" }}>
+                                {m.type === "photo" ? (
+                                  <img src={m.url} alt="" style={{ width:70,height:70,objectFit:"cover",borderRadius:8,border:"1px solid var(--border)" }} />
+                                ) : (
+                                  <div style={{ width:70,height:70,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-surface)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24 }}>🎬</div>
+                                )}
+                              </a>
+                              <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteMediaItem(m); }} title="Eliminar" style={{ position:"absolute",top:-6,right:-6,width:20,height:20,borderRadius:"50%",border:"none",background:"rgba(239,83,80,0.95)",color:"#fff",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>🗑</button>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -3727,6 +3899,45 @@ export default function LavanderiaApp() {
                         </table>
                       </div>;
                 })()}
+              </div>
+
+              {/* GALERÍA DE EVIDENCIA (CÁMARA) */}
+              <div ref={evidenciaSectionRef} style={{ ...card, marginTop: 20 }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#FF8A65" }}>📷 Evidencia Guardada (Fotos y Videos)</h3>
+                <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Todo lo que se ha guardado desde el botón flotante de la cámara, en un rango de fechas.</p>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+                  <div>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
+                    <input type="date" value={galeriaDesde} onChange={e => setGaleriaDesde(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>HASTA</label>
+                    <input type="date" value={galeriaHasta} onChange={e => setGaleriaHasta(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150 }} />
+                  </div>
+                  <button onClick={loadGaleriaMedia} disabled={galeriaLoading} style={{ ...btn, background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff", padding: "10px 18px", fontSize: 14, fontWeight: 700 }}>{galeriaLoading ? "Buscando..." : "🔍 Buscar"}</button>
+                  <button onClick={() => { setGaleriaDesde(today); setGaleriaHasta(today); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "10px 14px", fontSize: 14 }}>Hoy</button>
+                </div>
+                {galeriaMedia.length === 0 ? (
+                  <p style={{ color: "var(--text-dim)", fontSize: 15, textAlign: "center", padding: "20px 0" }}>{galeriaLoading ? "Cargando..." : "No hay evidencia guardada en ese rango."}</p>
+                ) : (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                    {galeriaMedia.map(m => (
+                      <div key={m.id} style={{ position: "relative" }}>
+                        <a href={m.url} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+                          {m.type === "photo" ? (
+                            <img src={m.url} alt="" style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)" }} />
+                          ) : (
+                            <div style={{ width: 110, height: 110, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>🎬</div>
+                          )}
+                          <div style={{ position: "absolute", bottom: 4, left: 4, right: 4, background: "rgba(0,0,0,0.7)", borderRadius: 6, padding: "2px 6px", fontSize: 11, color: "#fff", textAlign: "center" }}>
+                            {m.order_number || "sin orden"}
+                          </div>
+                        </a>
+                        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteMediaItem(m); }} title="Eliminar" style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%", border: "none", background: "rgba(239,83,80,0.9)", color: "#fff", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>🗑</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* BUSCAR PRENDAS POR TIPO */}
@@ -5534,16 +5745,22 @@ export default function LavanderiaApp() {
       <button onClick={() => { setShowCamera(!showCamera); if (!showCamera) startCamera(); else closeCameraPanel(); }} title="Cámara" style={{ position:"fixed",bottom:28,right:96,zIndex:300,width:56,height:56,borderRadius:"50%",border:"none",background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",fontSize:25,cursor:"pointer",boxShadow:"0 4px 20px rgba(255,138,101,0.4)",display:"flex",alignItems:"center",justifyContent:"center" }}>📷</button>
 
       {showCamera && (
-        <div style={{ position:"fixed",bottom:96,right:28,zIndex:300,background:"var(--bg-card)",borderRadius:20,padding:16,border:"1px solid var(--border)",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",width:340,maxHeight:"80vh",overflowY:"auto",fontFamily:"'Segoe UI',sans-serif" }}>
-          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
-            <span style={{ color:"var(--text-muted)",fontSize:15,fontWeight:600 }}>📷 Cámara — Evidencia</span>
+        <div id="camera-panel" style={{ position:"fixed", ...(cameraPanelPos ? { left: cameraPanelPos.x, top: cameraPanelPos.y } : { bottom:96, right:28 }), zIndex:300,background:"var(--bg-card)",borderRadius:20,padding:16,border:"1px solid var(--border)",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",width:cameraPanelSize.width,height:cameraPanelSize.height||"auto",maxHeight:cameraPanelSize.height?undefined:"80vh",overflowY:"auto",fontFamily:"'Segoe UI',sans-serif" }}>
+          <div onMouseDown={startDragCamera} onTouchStart={startDragCamera} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,cursor:"move",userSelect:"none" }}>
+            <span style={{ color:"var(--text-muted)",fontSize:15,fontWeight:600 }}>✥ 📷 Cámara — Evidencia</span>
             <button onClick={closeCameraPanel} style={{ background:"none",border:"none",color:"var(--text-muted)",fontSize:21,cursor:"pointer" }}>✕</button>
           </div>
+          <div
+            onMouseDown={startResizeCamera}
+            onTouchStart={startResizeCamera}
+            title="Arrastra para cambiar el tamaño"
+            style={{ position:"absolute",bottom:4,right:4,width:20,height:20,cursor:"nwse-resize",background:"linear-gradient(135deg,transparent 50%,var(--text-dim) 50%)",borderRadius:"0 0 8px 0",opacity:0.6 }}
+          />
           {cameraError ? (
             <div style={{ background:"rgba(239,83,80,0.1)",border:"1px solid rgba(239,83,80,0.4)",borderRadius:10,padding:"12px 14px",fontSize:13,color:"#EF5350",marginBottom:10 }}>{cameraError}</div>
           ) : (
             <div style={{ position:"relative",background:"#000",borderRadius:12,overflow:"hidden",marginBottom:10 }}>
-              <video ref={videoElRef} muted playsInline style={{ width:"100%",display:"block",maxHeight:220,objectFit:"cover" }} />
+              <video ref={videoElRef} muted playsInline style={{ width:"100%",display:"block",maxHeight:cameraPanelSize.height?Math.max(160,cameraPanelSize.height-260):220,objectFit:"cover" }} />
               {isRecording && <div style={{ position:"absolute",top:8,left:8,background:"rgba(239,83,80,0.9)",color:"#fff",fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:20,display:"flex",alignItems:"center",gap:5 }}><span style={{ width:8,height:8,borderRadius:"50%",background:"#fff" }} />● REC {Math.floor(recordSeconds/60)}:{String(recordSeconds%60).padStart(2,"0")}</div>}
             </div>
           )}
