@@ -7,10 +7,20 @@ const QZ_CERTIFICATE = "-----BEGIN CERTIFICATE-----\nMIIDxzCCAq+gAwIBAgIUW4qFv2D
 
 const db = {
   async get(table, params = "") {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?order=created_at.desc${params}`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-    });
-    return res.json();
+    let allRows = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?order=created_at.desc${params}`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Range: `${from}-${from + pageSize - 1}` }
+      });
+      const page = await res.json();
+      if (!Array.isArray(page)) return page;
+      allRows = allRows.concat(page);
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
+    return allRows;
   },
   async post(table, body) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
