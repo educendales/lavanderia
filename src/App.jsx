@@ -1976,6 +1976,10 @@ export default function LavanderiaApp() {
 
   const confirmarMarcarPagada = async () => {
     if (!markPaidModal) return;
+    if (markPaidModal.paid_at_intake) {
+      const ok = await checkClave("corregir el método de pago");
+      if (!ok) return;
+    }
     await db.patch("orders", markPaidModal.id, { paid_at_intake: true, payment_method: markPaidMethod });
     setOrders(prev => prev.map(o => o.id === markPaidModal.id ? { ...o, paid_at_intake: true, payment_method: markPaidMethod } : o));
     setMarkPaidModal(null);
