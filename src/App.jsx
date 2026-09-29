@@ -71,6 +71,15 @@ const STATUS_LABELS = {
   entregado: { label: "Entregado", color: "#9E9E9E" },
 };
 
+const MENSAJE_DECORACIONES = {
+  ninguna: { label: "Ninguna", emoji: "", asciiChar: "" },
+  flores: { label: "🌸 Flores", emoji: "🌸", asciiChar: "*" },
+  corazones: { label: "💕 Corazones", emoji: "💕", asciiChar: "*" },
+  navideno: { label: "🎄 Navideño", emoji: "🎄🔔", asciiChar: "*" },
+  estrellas: { label: "✨ Estrellas", emoji: "✨", asciiChar: "*" },
+  globos: { label: "🎈 Fiesta", emoji: "🎈🎉", asciiChar: "*" },
+};
+
 // ---- Festivos de Colombia ----
 const getEasterSunday = (year) => {
   const a = year % 19, b = Math.floor(year / 100), c = year % 100;
@@ -362,6 +371,11 @@ export default function LavanderiaApp() {
   const [negocioDireccion, setNegocioDireccion] = useState(() => { try { return localStorage.getItem("negocioDireccion") || "CARRERA 113 # 75-56"; } catch { return "CARRERA 113 # 75-56"; } });
   const [negocioTelefono, setNegocioTelefono] = useState(() => { try { return localStorage.getItem("negocioTelefono") || ""; } catch { return ""; } });
   const [reciboSubtitulo, setReciboSubtitulo] = useState(() => { try { return localStorage.getItem("reciboSubtitulo") || "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } catch { return "PRENDAS EL DIA INDICADO DESPUES DE LAS 5"; } });
+  const [mensajeTemporada, setMensajeTemporada] = useState(() => { try { return localStorage.getItem("mensajeTemporada") || ""; } catch { return ""; } });
+  const [mostrarMensajeTemporada, setMostrarMensajeTemporada] = useState(() => { try { return localStorage.getItem("mostrarMensajeTemporada") === "true"; } catch { return false; } });
+  const [mensajeTemporadaTamano, setMensajeTemporadaTamano] = useState(() => { try { return localStorage.getItem("mensajeTemporadaTamano") || "normal"; } catch { return "normal"; } });
+  const [mensajeTemporadaNegrita, setMensajeTemporadaNegrita] = useState(() => { try { return localStorage.getItem("mensajeTemporadaNegrita") !== "false"; } catch { return true; } });
+  const [mensajeTemporadaDecoracion, setMensajeTemporadaDecoracion] = useState(() => { try { return localStorage.getItem("mensajeTemporadaDecoracion") || "ninguna"; } catch { return "ninguna"; } });
   const [reciboLegal, setReciboLegal] = useState(() => { try { return localStorage.getItem("reciboLegal") || "CONTRATO DE SERVICIO ENTRE LA EMPRESA Y EL CLIENTE. Para entregar el trabajo exigimos este recibo. La empresa no sera responsable por perdida o dano cuando este se deba a fuerza mayor o caso fortuito (robo, incendio, etc), hecho de un tercero, uso indebido de la prenda, o ausencia o inobservancia de instrucciones de cuidado. Pasados 30 dias de la fecha de este recibo cesa la responsabilidad de la empresa sobre las prendas no reclamadas. NO respondemos por objetos como dinero, joyas y demas dejados en los vestidos, ni por telas, panos o colores afectados por procesos anteriores a este servicio (encogimiento, decoloracion previa). En caso de perdida o dano imputable a la lavanderia, se indemnizara el valor razonable de la prenda declarado por el cliente al momento de la entrega, descontando un porcentaje por desgaste segun su antiguedad. Se recomienda declarar el valor de prendas especiales o de alto costo al momento de dejarlas."; } catch { return ""; } });
 
   const getClave = async () => {
@@ -1330,6 +1344,7 @@ export default function LavanderiaApp() {
         <tr><td class="bold">No. Piezas</td><td class="right bold">${order.garments}</td></tr>
       </table>
       ${order.notes ? `<div class="line"></div><div class="obs"><b>Obs:</b> ${order.notes.toUpperCase()}</div>` : ''}
+      ${mostrarMensajeTemporada && mensajeTemporada ? `<div class="line"></div><div class="center" style="font-size:${mensajeTemporadaTamano==="muy_grande"?22:mensajeTemporadaTamano==="grande"?17:13}px;font-weight:${mensajeTemporadaNegrita?700:400};padding:8px;border:2px dashed #999;border-radius:8px;margin:4px 0">${MENSAJE_DECORACIONES[mensajeTemporadaDecoracion]?.emoji||""} ${mensajeTemporada} ${MENSAJE_DECORACIONES[mensajeTemporadaDecoracion]?.emoji||""}</div>` : ''}
       <div class="line"></div>
       <div class="small center">RESPONDEMOS POR SUS PRENDAS SOLO POR 30 DIAS</div>
       <div class="legal">${reciboLegal}</div>
@@ -1379,6 +1394,7 @@ export default function LavanderiaApp() {
         <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px"><span>Total a Pagar</span><span>$${Math.round(Number(order.price)).toLocaleString("es-CO")}</span></div>
         <div style="display:flex;justify-content:space-between"><span>No. Piezas</span><span>${order.garments}</span></div>
         ${order.notes ? `<hr style="border:1px dashed #000;margin:6px 0"/><div style="font-size:9px"><b>Obs:</b> ${order.notes.toUpperCase()}</div>` : ''}
+        ${mostrarMensajeTemporada && mensajeTemporada ? `<hr style="border:1px dashed #000;margin:6px 0"/><div style="font-size:${mensajeTemporadaTamano==="muy_grande"?18:mensajeTemporadaTamano==="grande"?14:11}px;font-weight:${mensajeTemporadaNegrita?700:400};text-align:center;padding:6px;border:2px dashed #999;border-radius:6px">${MENSAJE_DECORACIONES[mensajeTemporadaDecoracion]?.emoji||""} ${mensajeTemporada} ${MENSAJE_DECORACIONES[mensajeTemporadaDecoracion]?.emoji||""}</div>` : ''}
         <hr style="border:1px dashed #000;margin:6px 0"/>
         <div style="font-size:8px;text-align:center;margin-top:4px">${reciboLegal}</div>
       `;
@@ -1767,6 +1783,20 @@ export default function LavanderiaApp() {
       data += SMALL;
       data += "Obs: " + normalize(order.notes) + LF;
       data += NORMAL_FONT;
+      data += LINE + LF;
+    }
+    if (mostrarMensajeTemporada && mensajeTemporada) {
+      const sizeCmd = mensajeTemporadaTamano === "muy_grande" ? (GS + "!\x22") : mensajeTemporadaTamano === "grande" ? (GS + "!\x11") : (GS + "!\x00");
+      const borderChar = MENSAJE_DECORACIONES[mensajeTemporadaDecoracion]?.asciiChar || "";
+      data += CENTER + GS + "!\x00";
+      if (borderChar) data += borderChar.repeat(anchoRecibo) + LF;
+      data += sizeCmd;
+      if (mensajeTemporadaNegrita) data += BOLD_ON;
+      data += normalize(mensajeTemporada) + LF;
+      if (mensajeTemporadaNegrita) data += BOLD_OFF;
+      data += GS + "!\x00";
+      if (borderChar) data += borderChar.repeat(anchoRecibo) + LF;
+      data += LEFT;
       data += LINE + LF;
     }
 
@@ -4690,6 +4720,33 @@ export default function LavanderiaApp() {
                     <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 6, fontWeight: 600 }}>TEXTO LEGAL (al final del recibo)</label>
                     <textarea value={reciboLegal} onChange={e => setReciboLegal(e.target.value)} style={{ ...inp, height: 120, resize: "vertical", fontSize: 14, lineHeight: 1.5 }} />
                     <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("reciboLegal",reciboLegal);}catch{}alert("✅ Guardado");}} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "10px 16px", marginTop: 8, width: "100%" }}>💾 Guardar texto legal</button>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 6, fontWeight: 600 }}>🎉 MENSAJE DE TEMPORADA (mitad del recibo)</label>
+                    <p style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}>Para saludos de fechas especiales — Amor y Amistad, Navidad, Día de la Madre, etc. Aparece en los tres tipos de recibo (impreso, pantalla y WhatsApp).</p>
+                    <input style={{ ...inp, borderColor: "rgba(255,138,101,0.3)" }} placeholder="Ej: ¡Feliz Día del Amor y la Amistad!" value={mensajeTemporada} onChange={e => setMensajeTemporada(e.target.value)} />
+                    <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap", alignItems:"center" }}>
+                      <span style={{ fontSize:13, color:"var(--text-dim)" }}>TAMAÑO:</span>
+                      {[{v:"normal",l:"Normal"},{v:"grande",l:"Grande"},{v:"muy_grande",l:"Muy grande"}].map(opt => (
+                        <label key={opt.v} onClick={() => setMensajeTemporadaTamano(opt.v)} style={{ cursor:"pointer",fontSize:13,fontWeight:600,padding:"6px 12px",borderRadius:20,background:mensajeTemporadaTamano===opt.v?"rgba(255,138,101,0.2)":"rgba(255,255,255,0.04)",border:`1.5px solid ${mensajeTemporadaTamano===opt.v?"#FF8A65":"var(--border)"}`,color:mensajeTemporadaTamano===opt.v?"#FF8A65":"var(--text-muted)" }}>{opt.l}</label>
+                      ))}
+                      <label onClick={() => setMensajeTemporadaNegrita(!mensajeTemporadaNegrita)} style={{ cursor:"pointer",fontSize:13,fontWeight:mensajeTemporadaNegrita?800:400,padding:"6px 12px",borderRadius:20,background:mensajeTemporadaNegrita?"rgba(255,138,101,0.2)":"rgba(255,255,255,0.04)",border:`1.5px solid ${mensajeTemporadaNegrita?"#FF8A65":"var(--border)"}`,color:mensajeTemporadaNegrita?"#FF8A65":"var(--text-muted)",marginLeft:8 }}>N Negrita</label>
+                    </div>
+                    <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap", alignItems:"center" }}>
+                      <span style={{ fontSize:13, color:"var(--text-dim)" }}>DECORACIÓN:</span>
+                      {Object.entries(MENSAJE_DECORACIONES).map(([key, deco]) => (
+                        <label key={key} onClick={() => setMensajeTemporadaDecoracion(key)} style={{ cursor:"pointer",fontSize:13,fontWeight:600,padding:"6px 12px",borderRadius:20,background:mensajeTemporadaDecoracion===key?"rgba(255,138,101,0.2)":"rgba(255,255,255,0.04)",border:`1.5px solid ${mensajeTemporadaDecoracion===key?"#FF8A65":"var(--border)"}`,color:mensajeTemporadaDecoracion===key?"#FF8A65":"var(--text-muted)" }}>{deco.label}</label>
+                      ))}
+                    </div>
+                    <p style={{ fontSize:12, color:"var(--text-dim)", marginTop:6 }}>En el recibo impreso, la decoración se dibuja con un marco de asteriscos (los emojis no siempre se ven bien en impresoras térmicas).</p>
+                    <div style={{ marginTop:10, padding:"14px", background:"var(--bg-app)", borderRadius:8, textAlign:"center", fontSize: mensajeTemporadaTamano==="muy_grande"?22:mensajeTemporadaTamano==="grande"?17:13, fontWeight: mensajeTemporadaNegrita?700:400, border:"2px dashed var(--border)" }}>
+                      {MENSAJE_DECORACIONES[mensajeTemporadaDecoracion]?.emoji} {mensajeTemporada || "Vista previa del mensaje..."} {MENSAJE_DECORACIONES[mensajeTemporadaDecoracion]?.emoji}
+                    </div>
+                    <label onClick={() => setMostrarMensajeTemporada(!mostrarMensajeTemporada)} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",marginTop:10,background:mostrarMensajeTemporada?"rgba(255,138,101,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${mostrarMensajeTemporada?"#FF8A65":"var(--border)"}`,borderRadius:8,padding:"10px 14px" }}>
+                      <input type="checkbox" checked={mostrarMensajeTemporada} onChange={e=>setMostrarMensajeTemporada(e.target.checked)} style={{ width:16,height:16,accentColor:"#FF8A65" }} />
+                      <span style={{ fontSize:15,color:mostrarMensajeTemporada?"#FF8A65":"var(--text-muted)" }}>Mostrar este mensaje en los recibos</span>
+                    </label>
+                    <button onClick={async()=>{const ok=await checkClave("guardar");if(!ok)return;try{localStorage.setItem("mensajeTemporada",mensajeTemporada);localStorage.setItem("mostrarMensajeTemporada",String(mostrarMensajeTemporada));localStorage.setItem("mensajeTemporadaTamano",mensajeTemporadaTamano);localStorage.setItem("mensajeTemporadaNegrita",String(mensajeTemporadaNegrita));localStorage.setItem("mensajeTemporadaDecoracion",mensajeTemporadaDecoracion);}catch{}alert("✅ Guardado");}} style={{ ...btn, background: "linear-gradient(135deg,#FF8A65,#E64A19)", color: "#fff", padding: "10px 16px", marginTop: 10, width: "100%" }}>💾 Guardar mensaje de temporada</button>
                   </div>
                 </div>
               </div>
