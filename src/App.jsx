@@ -2370,7 +2370,11 @@ export default function LavanderiaApp() {
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button title="Registrar abono" onClick={() => { setAbonoModal(o); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", padding: "5px 10px", fontSize: 14 }}>💰</button>
-                            {!o.paid_at_intake && <button title="Marcar como pagada al recibir" onClick={() => { setMarkPaidModal(o); setMarkPaidMethod("efectivo"); }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "5px 10px", fontSize: 14 }}>✅💰</button>}
+                            {!o.paid_at_intake ? (
+                              <button title="Marcar como pagada al recibir" onClick={() => { setMarkPaidModal(o); setMarkPaidMethod("efectivo"); }} style={{ ...btn, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "5px 10px", fontSize: 14 }}>✅💰</button>
+                            ) : (
+                              <button title="Corregir método de pago" onClick={() => { setMarkPaidModal(o); setMarkPaidMethod(o.payment_method || "efectivo"); }} style={{ ...btn, background: "rgba(255,138,101,0.15)", color: "#FF8A65", padding: "5px 10px", fontSize: 14 }}>✏️💰</button>
+                            )}
                             <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>
                             <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 14 }}>🗑</button>
                           </div>
@@ -5234,13 +5238,13 @@ export default function LavanderiaApp() {
       {markPaidModal && (
         <div onClick={() => setMarkPaidModal(null)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200 }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:"var(--bg-card)",borderRadius:16,padding:28,width:400,maxWidth:"92vw",border:"1px solid #66BB6A",fontFamily:"'Segoe UI',sans-serif" }}>
-            <h3 style={{ margin:"0 0 4px",fontSize:21,color:"var(--text-primary)" }}>✅💰 Marcar como Pagada al Recibir</h3>
+            <h3 style={{ margin:"0 0 4px",fontSize:21,color:"var(--text-primary)" }}>{markPaidModal.paid_at_intake ? "✏️💰 Corregir Método de Pago" : "✅💰 Marcar como Pagada al Recibir"}</h3>
             <div style={{ marginBottom:16 }}>
               <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
                 <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{markPaidModal.order_number}</span>
                 <span style={{ fontWeight:600 }}>{markPaidModal.client_name}</span>
               </div>
-              <p style={{ fontSize:15,color:"var(--text-muted)",margin:0 }}>El cliente pagó ${Math.round(Number(markPaidModal.price)).toLocaleString()} al dejar la ropa (hoy). Esto va a contar la plata el día de hoy, aunque venga a recoger después.</p>
+              <p style={{ fontSize:15,color:"var(--text-muted)",margin:0 }}>{markPaidModal.paid_at_intake ? `Esta orden ya está marcada como pagada (\$${Math.round(Number(markPaidModal.price)).toLocaleString()}). Elige el método correcto — el número de la orden no cambia.` : `El cliente pagó \$${Math.round(Number(markPaidModal.price)).toLocaleString()} al dejar la ropa (hoy). Esto va a contar la plata el día de hoy, aunque venga a recoger después.`}</p>
             </div>
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               <div>
@@ -5253,7 +5257,7 @@ export default function LavanderiaApp() {
               </div>
               <div style={{ display:"flex",gap:10,marginTop:4 }}>
                 <button onClick={()=>setMarkPaidModal(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
-                <button onClick={confirmarMarcarPagada} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:15 }}>✅ Confirmar Pago</button>
+                <button onClick={confirmarMarcarPagada} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:15 }}>{markPaidModal.paid_at_intake ? "✏️ Guardar Corrección" : "✅ Confirmar Pago"}</button>
               </div>
             </div>
           </div>
