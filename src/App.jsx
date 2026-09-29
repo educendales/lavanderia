@@ -525,15 +525,15 @@ export default function LavanderiaApp() {
     }
   };
 
-  const saveServices = (list) => { setServices(list); try { localStorage.setItem("services", JSON.stringify(list)); } catch {} };
-  const saveConditions = (list) => { setConditions(list); try { localStorage.setItem("conditions", JSON.stringify(list)); } catch {} };
-  const saveShoeBrands = (list) => { setShoeBrands(list); try { localStorage.setItem("shoeBrands", JSON.stringify(list)); } catch {} };
-  const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} };
+  const saveServices = (list) => { setServices(list); try { localStorage.setItem("services", JSON.stringify(list)); } catch {} saveConfig("services", list); };
+  const saveConditions = (list) => { setConditions(list); try { localStorage.setItem("conditions", JSON.stringify(list)); } catch {} saveConfig("conditions", list); };
+  const saveShoeBrands = (list) => { setShoeBrands(list); try { localStorage.setItem("shoeBrands", JSON.stringify(list)); } catch {} saveConfig("shoeBrands", list); };
+  const saveGarmentTypes = (list) => { setGarmentTypes(list); try { localStorage.setItem("garmentTypes", JSON.stringify(list)); } catch {} saveConfig("garmentTypes", list); };
   const saveGarmentPieces = (map) => { setGarmentPieces(map); try { localStorage.setItem("garmentPieces", JSON.stringify(map)); } catch {} };
   const getPiecesPerUnit = (garmentType) => Number(garmentPieces[garmentType]) || 1;
   const saveGarmentExtraDays = (map) => { setGarmentExtraDays(map); try { localStorage.setItem("garmentExtraDays", JSON.stringify(map)); } catch {} };
   const getExtraDays = (garmentType) => Number(garmentExtraDays[garmentType]) || 0;
-  const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} };
+  const saveColors = (list) => { setColors(list); try { localStorage.setItem("colors", JSON.stringify(list)); } catch {} saveConfig("colors", list); };
 
   const confirmarMultiEntrega = async () => {
     const faltantes = selectedEntregas.filter(o => !entregaMultiPaymentByOrder[o.id]);
@@ -723,7 +723,7 @@ export default function LavanderiaApp() {
   }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi, ab, adv, ag, dom, cb, pd, dl, cdl] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base"), db.get("partial_deliveries"), db.get("donations_losses"), db.get("cash_drawer_log")]);
+    const [o, e, c, oi, ab, adv, ag, dom, cb, pd, dl, cdl, cfg] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base"), db.get("partial_deliveries"), db.get("donations_losses"), db.get("cash_drawer_log"), db.get("config")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
@@ -736,6 +736,24 @@ export default function LavanderiaApp() {
     if (Array.isArray(pd)) setPartialDeliveries(pd);
     if (Array.isArray(dl)) setDonationsLosses(dl);
     if (Array.isArray(cdl)) setCashDrawerLog(cdl);
+    if (Array.isArray(cfg)) {
+      const cmap = {};
+      cfg.forEach(row => { cmap[row.key] = row.value; });
+      const applyJSON = (key, setter) => { if (cmap[key] !== undefined) { try { setter(JSON.parse(cmap[key])); localStorage.setItem(key, cmap[key]); } catch {} } };
+      const applyStr = (key, setter) => { if (cmap[key] !== undefined) { setter(cmap[key]); try { localStorage.setItem(key, cmap[key]); } catch {} } };
+      applyJSON("garmentTypes", setGarmentTypes);
+      applyJSON("services", setServices);
+      applyJSON("colors", setColors);
+      applyJSON("conditions", setConditions);
+      applyJSON("shoeBrands", setShoeBrands);
+      applyJSON("precioDefaults", setPrecioDefaults);
+      applyJSON("precioByService", setPrecioByService);
+      applyStr("negocioNombre", setNegocioNombre);
+      applyStr("negocioDireccion", setNegocioDireccion);
+      applyStr("negocioTelefono", setNegocioTelefono);
+      applyStr("negocioPais", setNegocioPais);
+      applyStr("negocioLogo", setNegocioLogo);
+    }
   };
   const mainContentRef = useRef(null);
   const firstGarmentInputRef = useRef(null);
@@ -1641,6 +1659,23 @@ export default function LavanderiaApp() {
     let out = GS + "v0" + String.fromCharCode(0) + String.fromCharCode(xL) + String.fromCharCode(xH) + String.fromCharCode(yL) + String.fromCharCode(yH);
     for (let i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
     return out;
+  };
+  const saveConfig = async (key, value) => {
+    const strValue = typeof value === "string" ? value : JSON.stringify(value);
+    try { localStorage.setItem(key, strValue); } catch {}
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/config?on_conflict=key`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
+        body: JSON.stringify({ key, value: strValue })
+      });
+      return true;
+    } catch (e) { console.error("No se pudo guardar en config:", key, e); return false; }
+  };
+  const configSaveTimersRef = useRef({});
+  const saveConfigDebounced = (key, value, delay = 800) => {
+    if (configSaveTimersRef.current[key]) clearTimeout(configSaveTimersRef.current[key]);
+    configSaveTimersRef.current[key] = setTimeout(() => saveConfig(key, value), delay);
   };
   const openCashDrawer = async (reason = "otro", detail = "") => {
     const hora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
@@ -4482,6 +4517,7 @@ export default function LavanderiaApp() {
                         reader.onload = ev => {
                           setNegocioLogo(ev.target.result);
                           try { localStorage.setItem("negocioLogo", ev.target.result); } catch {}
+                          saveConfig("negocioLogo", ev.target.result);
                         };
                         reader.readAsDataURL(file);
                       }} style={{ display: "none" }} id="logoInput" />
@@ -4503,6 +4539,10 @@ export default function LavanderiaApp() {
                   const ok = await checkClave("guardar");
                   if (!ok) return;
                   try { localStorage.setItem("negocioNombre", negocioNombre); localStorage.setItem("negocioDireccion", negocioDireccion); localStorage.setItem("negocioTelefono", negocioTelefono); localStorage.setItem("negocioPais", negocioPais); localStorage.setItem("nombreImpresora", nombreImpresora); } catch {}
+                  saveConfig("negocioNombre", negocioNombre);
+                  saveConfig("negocioDireccion", negocioDireccion);
+                  saveConfig("negocioTelefono", negocioTelefono);
+                  saveConfig("negocioPais", negocioPais);
                   alert("✅ Información guardada");
                 }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", marginTop: 14, width: "100%" }}>
                   💾 Guardar información
@@ -4629,7 +4669,7 @@ export default function LavanderiaApp() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
                     {garmentTypes.map(g => <div key={g} style={{ display:"flex",alignItems:"center",gap:8,background:"var(--bg-app)",borderRadius:8,padding:"8px 12px" }}>
                       <span style={{ fontSize:15,flex:1 }}>{GARMENT_ICONS[g]||"👕"} {g}</span>
-                      <input type="number" placeholder="Precio" value={precioDefaults[g]||""} onChange={e => { const val=e.target.value; const updated={...precioDefaults,[g]:val?Number(val):undefined}; if(!val)delete updated[g]; setPrecioDefaults(updated); try{localStorage.setItem("precioDefaults",JSON.stringify(updated));}catch{} }} style={{ width:90,padding:"4px 8px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-card)",color:"#66BB6A",fontSize:15,fontWeight:700,textAlign:"right" }} />
+                      <input type="number" placeholder="Precio" value={precioDefaults[g]||""} onChange={e => { const val=e.target.value; const updated={...precioDefaults,[g]:val?Number(val):undefined}; if(!val)delete updated[g]; setPrecioDefaults(updated); try{localStorage.setItem("precioDefaults",JSON.stringify(updated));}catch{} saveConfigDebounced("precioDefaults", updated); }} style={{ width:90,padding:"4px 8px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-card)",color:"#66BB6A",fontSize:15,fontWeight:700,textAlign:"right" }} />
                     </div>)}
                   </div>
                 ) : (
@@ -4644,6 +4684,7 @@ export default function LavanderiaApp() {
                           if (!newVal) delete updated[configServiceTab][g];
                           setPrecioByService(updated);
                           try { localStorage.setItem("precioByService", JSON.stringify(updated)); } catch {}
+                          saveConfigDebounced("precioByService", updated);
                         }} style={{ width:90,padding:"4px 8px",borderRadius:6,border:"1px solid var(--border)",background:"var(--bg-card)",color:"#66BB6A",fontSize:15,fontWeight:700,textAlign:"right" }} />
                       </div>;
                     })}
