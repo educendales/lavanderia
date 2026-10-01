@@ -330,9 +330,27 @@ export default function LavanderiaApp() {
   const [claveConfirm, setClaveConfirm] = useState("");
   const [nombreImpresora, setNombreImpresora] = useState(() => { try { return localStorage.getItem("nombreImpresora") || "BIXOLON SRP-330II"; } catch { return "BIXOLON SRP-330II"; } });
   const [anchoRecibo, setAnchoRecibo] = useState(() => { try { return Number(localStorage.getItem("anchoRecibo")) || 42; } catch { return 42; } });
-  const [numeroOrdenTamano, setNumeroOrdenTamano] = useState(() => { try { return localStorage.getItem("numeroOrdenTamano") || "normal"; } catch { return "normal"; } });
+  const [numeroOrdenTamano, setNumeroOrdenTamano] = useState(() => {
+    try {
+      const v = localStorage.getItem("numeroOrdenTamano");
+      if (v === "muy_grande") return 5;
+      if (v === "grande") return 3;
+      if (v === "normal") return 2;
+      const n = Number(v);
+      return n >= 1 && n <= 8 ? n : 2;
+    } catch { return 2; }
+  });
   const [numeroOrdenCuadro, setNumeroOrdenCuadro] = useState(() => { try { return localStorage.getItem("numeroOrdenCuadro") !== "false"; } catch { return true; } });
-  const [nombreTelTamano, setNombreTelTamano] = useState(() => { try { return localStorage.getItem("nombreTelTamano") || "normal"; } catch { return "normal"; } });
+  const [nombreTelTamano, setNombreTelTamano] = useState(() => {
+    try {
+      const v = localStorage.getItem("nombreTelTamano");
+      if (v === "muy_grande") return 4;
+      if (v === "grande") return 2;
+      if (v === "normal") return 1;
+      const n = Number(v);
+      return n >= 1 && n <= 8 ? n : 1;
+    } catch { return 1; }
+  });
   const [negocioPais, setNegocioPais] = useState(() => { try { return localStorage.getItem("negocioPais") || "57"; } catch { return "57"; } });
   const [negocioLogo, setNegocioLogo] = useState(() => { try { return localStorage.getItem("negocioLogo") || ""; } catch { return ""; } });
   const [logoEnRecibo, setLogoEnRecibo] = useState(() => { try { return localStorage.getItem("logoEnRecibo") !== "false"; } catch { return true; } });
@@ -1791,7 +1809,8 @@ export default function LavanderiaApp() {
     data += LF;
 
     // Order number, tamaño y cuadro de asteriscos configurables por computador
-    const numSizeCmd = numeroOrdenTamano === "muy_grande" ? "\x44" : numeroOrdenTamano === "grande" ? "\x22" : "\x11";
+    const numMult = Math.max(1, Math.min(8, Number(numeroOrdenTamano) || 2)) - 1;
+    const numSizeCmd = String.fromCharCode((numMult << 4) | numMult);
     const sideLine = "*" + " ".repeat(Math.max(0, anchoRecibo - 2)) + "*";
     data += BOLD_ON;
     if (numeroOrdenCuadro) {
@@ -1828,11 +1847,13 @@ export default function LavanderiaApp() {
     data += "ENTREGA: " + (order.delivery_date||"") + LF;
     data += BIG_OFF + BOLD_OFF + LEFT;
     data += LINE + LF;
-    if (nombreTelTamano === "normal") {
+    const infoMult = Math.max(1, Math.min(8, Number(nombreTelTamano) || 1));
+    if (infoMult <= 1) {
       data += BOLD_ON + rpad("Cliente:", normalize(order.client_name||"")) + BOLD_OFF + LF;
       data += rpad("Telefono:", order.phone||"") + LF;
     } else {
-      const infoSizeCmd = nombreTelTamano === "muy_grande" ? "\x33" : "\x11";
+      const im = infoMult - 1;
+      const infoSizeCmd = String.fromCharCode((im << 4) | im);
       data += "Cliente:" + LF;
       data += GS + "!" + infoSizeCmd + BOLD_ON;
       data += normalize(order.client_name||"") + LF;
@@ -4563,11 +4584,12 @@ export default function LavanderiaApp() {
                     <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Bixolon SRP-330II ≈ 42 · SAT Q22 y otras de 80mm estándar ≈ 48. Si el recibo sale corrido hacia la izquierda o se corta, ajusta este número e imprime una de prueba.</div>
                   </div>
                   <div>
-                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>🔢 TAMAÑO DEL NÚMERO DE ORDEN</label>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                      {[{v:"normal",l:"Normal"},{v:"grande",l:"Grande"},{v:"muy_grande",l:"Muy grande"}].map(opt => (
-                        <label key={opt.v} onClick={() => { setNumeroOrdenTamano(opt.v); try { localStorage.setItem("numeroOrdenTamano", opt.v); } catch {} }} style={{ cursor:"pointer",fontSize:13,fontWeight:600,padding:"6px 12px",borderRadius:20,background:numeroOrdenTamano===opt.v?"rgba(79,195,247,0.2)":"rgba(255,255,255,0.04)",border:`1.5px solid ${numeroOrdenTamano===opt.v?"#4FC3F7":"var(--border)"}`,color:numeroOrdenTamano===opt.v?"#4FC3F7":"var(--text-muted)" }}>{opt.l}</label>
-                      ))}
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>🔢 TAMAÑO DEL NÚMERO DE ORDEN (1 a 8)</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <button onClick={() => { const v = Math.max(1, numeroOrdenTamano-1); setNumeroOrdenTamano(v); try { localStorage.setItem("numeroOrdenTamano", String(v)); } catch {} }} disabled={numeroOrdenTamano<=1} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",opacity:numeroOrdenTamano<=1?0.4:1 }}>−</button>
+                      <span style={{ fontSize:20,fontWeight:800,color:"#4FC3F7",minWidth:28,textAlign:"center" }}>{numeroOrdenTamano}</span>
+                      <button onClick={() => { const v = Math.min(8, numeroOrdenTamano+1); setNumeroOrdenTamano(v); try { localStorage.setItem("numeroOrdenTamano", String(v)); } catch {} }} disabled={numeroOrdenTamano>=8} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",opacity:numeroOrdenTamano>=8?0.4:1 }}>+</button>
+                      <span style={{ fontSize:13,color:"var(--text-dim)" }}>imprime una prueba después de cada cambio</span>
                     </div>
                     <label onClick={() => { const v = !numeroOrdenCuadro; setNumeroOrdenCuadro(v); try { localStorage.setItem("numeroOrdenCuadro", String(v)); } catch {} }} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",background:numeroOrdenCuadro?"rgba(79,195,247,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${numeroOrdenCuadro?"#4FC3F7":"var(--border)"}`,borderRadius:8,padding:"8px 12px" }}>
                       <input type="checkbox" checked={numeroOrdenCuadro} readOnly style={{ width:16,height:16,accentColor:"#4FC3F7" }} />
@@ -4576,13 +4598,13 @@ export default function LavanderiaApp() {
                     <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Este ajuste es solo de este computador — puedes dejarlo distinto en cada impresora.</div>
                   </div>
                   <div>
-                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>👤 TAMAÑO DE NOMBRE Y TELÉFONO DEL CLIENTE</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {[{v:"normal",l:"Normal"},{v:"grande",l:"Grande"},{v:"muy_grande",l:"Muy grande"}].map(opt => (
-                        <label key={opt.v} onClick={() => { setNombreTelTamano(opt.v); try { localStorage.setItem("nombreTelTamano", opt.v); } catch {} }} style={{ cursor:"pointer",fontSize:13,fontWeight:600,padding:"6px 12px",borderRadius:20,background:nombreTelTamano===opt.v?"rgba(79,195,247,0.2)":"rgba(255,255,255,0.04)",border:`1.5px solid ${nombreTelTamano===opt.v?"#4FC3F7":"var(--border)"}`,color:nombreTelTamano===opt.v?"#4FC3F7":"var(--text-muted)" }}>{opt.l}</label>
-                      ))}
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>👤 TAMAÑO DE NOMBRE Y TELÉFONO (1 a 8)</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <button onClick={() => { const v = Math.max(1, nombreTelTamano-1); setNombreTelTamano(v); try { localStorage.setItem("nombreTelTamano", String(v)); } catch {} }} disabled={nombreTelTamano<=1} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",opacity:nombreTelTamano<=1?0.4:1 }}>−</button>
+                      <span style={{ fontSize:20,fontWeight:800,color:"#4FC3F7",minWidth:28,textAlign:"center" }}>{nombreTelTamano}</span>
+                      <button onClick={() => { const v = Math.min(8, nombreTelTamano+1); setNombreTelTamano(v); try { localStorage.setItem("nombreTelTamano", String(v)); } catch {} }} disabled={nombreTelTamano>=8} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",opacity:nombreTelTamano>=8?0.4:1 }}>+</button>
                     </div>
-                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>En "Grande" o "Muy grande", el nombre y el teléfono pasan a su propia línea debajo de la etiqueta, para no desalinear el recibo. Ajuste solo de este computador.</div>
+                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>En 1 queda como siempre (en la misma línea de la etiqueta). De 2 en adelante, el nombre y el teléfono pasan a su propia línea debajo, para no desalinear el recibo. Ajuste solo de este computador.</div>
                   </div>
                   <div style={{ gridColumn: "span 2" }}>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DIRECCIÓN</label>
