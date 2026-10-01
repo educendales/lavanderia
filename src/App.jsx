@@ -330,6 +330,8 @@ export default function LavanderiaApp() {
   const [claveConfirm, setClaveConfirm] = useState("");
   const [nombreImpresora, setNombreImpresora] = useState(() => { try { return localStorage.getItem("nombreImpresora") || "BIXOLON SRP-330II"; } catch { return "BIXOLON SRP-330II"; } });
   const [anchoRecibo, setAnchoRecibo] = useState(() => { try { return Number(localStorage.getItem("anchoRecibo")) || 42; } catch { return 42; } });
+  const [numeroOrdenTamano, setNumeroOrdenTamano] = useState(() => { try { return localStorage.getItem("numeroOrdenTamano") || "normal"; } catch { return "normal"; } });
+  const [numeroOrdenCuadro, setNumeroOrdenCuadro] = useState(() => { try { return localStorage.getItem("numeroOrdenCuadro") !== "false"; } catch { return true; } });
   const [negocioPais, setNegocioPais] = useState(() => { try { return localStorage.getItem("negocioPais") || "57"; } catch { return "57"; } });
   const [negocioLogo, setNegocioLogo] = useState(() => { try { return localStorage.getItem("negocioLogo") || ""; } catch { return ""; } });
   const [logoEnRecibo, setLogoEnRecibo] = useState(() => { try { return localStorage.getItem("logoEnRecibo") !== "false"; } catch { return true; } });
@@ -1787,16 +1789,21 @@ export default function LavanderiaApp() {
     if (subLine) data += subLine + LF;
     data += LF;
 
-    // Order number extra big, en un cuadrado completo de asteriscos
+    // Order number, tamaño y cuadro de asteriscos configurables por computador
+    const numSizeCmd = numeroOrdenTamano === "muy_grande" ? "\x44" : numeroOrdenTamano === "grande" ? "\x22" : "\x11";
     const sideLine = "*" + " ".repeat(Math.max(0, anchoRecibo - 2)) + "*";
     data += BOLD_ON;
-    data += "*".repeat(anchoRecibo) + LF;
-    data += sideLine + LF;
-    data += GS + "!\x44";
+    if (numeroOrdenCuadro) {
+      data += "*".repeat(anchoRecibo) + LF;
+      data += sideLine + LF;
+    }
+    data += GS + "!" + numSizeCmd;
     data += (order.order_number||"") + LF;
     data += GS + "!\x00";
-    data += sideLine + LF;
-    data += "*".repeat(anchoRecibo) + LF;
+    if (numeroOrdenCuadro) {
+      data += sideLine + LF;
+      data += "*".repeat(anchoRecibo) + LF;
+    }
     data += BOLD_OFF;
 
     // Barcode
@@ -4541,6 +4548,19 @@ export default function LavanderiaApp() {
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>↔️ ANCHO DEL RECIBO (caracteres por línea)</label>
                     <input type="number" min={28} max={64} style={{ ...inp, borderColor: "rgba(79,195,247,0.3)" }} value={anchoRecibo} onChange={e => { const v = Number(e.target.value)||42; setAnchoRecibo(v); try { localStorage.setItem("anchoRecibo", String(v)); } catch {} }} />
                     <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Bixolon SRP-330II ≈ 42 · SAT Q22 y otras de 80mm estándar ≈ 48. Si el recibo sale corrido hacia la izquierda o se corta, ajusta este número e imprime una de prueba.</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>🔢 TAMAÑO DEL NÚMERO DE ORDEN</label>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                      {[{v:"normal",l:"Normal"},{v:"grande",l:"Grande"},{v:"muy_grande",l:"Muy grande"}].map(opt => (
+                        <label key={opt.v} onClick={() => { setNumeroOrdenTamano(opt.v); try { localStorage.setItem("numeroOrdenTamano", opt.v); } catch {} }} style={{ cursor:"pointer",fontSize:13,fontWeight:600,padding:"6px 12px",borderRadius:20,background:numeroOrdenTamano===opt.v?"rgba(79,195,247,0.2)":"rgba(255,255,255,0.04)",border:`1.5px solid ${numeroOrdenTamano===opt.v?"#4FC3F7":"var(--border)"}`,color:numeroOrdenTamano===opt.v?"#4FC3F7":"var(--text-muted)" }}>{opt.l}</label>
+                      ))}
+                    </div>
+                    <label onClick={() => { const v = !numeroOrdenCuadro; setNumeroOrdenCuadro(v); try { localStorage.setItem("numeroOrdenCuadro", String(v)); } catch {} }} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",background:numeroOrdenCuadro?"rgba(79,195,247,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${numeroOrdenCuadro?"#4FC3F7":"var(--border)"}`,borderRadius:8,padding:"8px 12px" }}>
+                      <input type="checkbox" checked={numeroOrdenCuadro} readOnly style={{ width:16,height:16,accentColor:"#4FC3F7" }} />
+                      <span style={{ fontSize:14,color:numeroOrdenCuadro?"#4FC3F7":"var(--text-muted)" }}>Encerrarlo en un cuadro de asteriscos</span>
+                    </label>
+                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Este ajuste es solo de este computador — puedes dejarlo distinto en cada impresora.</div>
                   </div>
                   <div style={{ gridColumn: "span 2" }}>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DIRECCIÓN</label>
