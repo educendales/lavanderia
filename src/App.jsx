@@ -304,11 +304,11 @@ export default function LavanderiaApp() {
   const [showCambiarClave, setShowCambiarClave] = useState(false);
   const [nuevoConsecutivo, setNuevoConsecutivo] = useState("");
   const WA_MENSAJES_DEFAULT = [
-    "Hola {nombre}, le informamos que su(s) prenda(s) en Lavanderías Shaddai ya están listas para retirar. Recuerde que puede recogerlas después de las 5pm. Orden: {orden}. ¡Gracias por preferirnos!",
-    "¡Hola {nombre}! Le recordamos que ya puede pasar por su(s) prenda(s) de la orden {orden} en Lavanderías Shaddai. La recepción abre hasta las 5pm. ¡Gracias por confiar en nosotros!",
-    "Buen día {nombre}, su pedido {orden} en Lavanderías Shaddai está listo desde hace unos días. Cuando pueda, ya lo puede recoger. ¡Gracias!",
-    "{nombre}, le comentamos que su ropa de la orden {orden} sigue esperando en Lavanderías Shaddai, ya lista para entregar. Quedamos atentos a su visita. ¡Gracias por su preferencia!",
-    "Hola {nombre}, un recordatorio amable: su(s) prenda(s) (orden {orden}) están listas en Lavanderías Shaddai desde hace un tiempo. Le esperamos para entregárselas. ¡Gracias!",
+    "Hola {nombre}, le informamos que su(s) prenda(s) en {negocio} ya están listas para retirar. Recuerde que puede recogerlas después de las 5pm. Orden: {orden}. ¡Gracias por preferirnos!",
+    "¡Hola {nombre}! Le recordamos que ya puede pasar por su(s) prenda(s) de la orden {orden} en {negocio}. La recepción abre hasta las 5pm. ¡Gracias por confiar en nosotros!",
+    "Buen día {nombre}, su pedido {orden} en {negocio} está listo desde hace unos días. Cuando pueda, ya lo puede recoger. ¡Gracias!",
+    "{nombre}, le comentamos que su ropa de la orden {orden} sigue esperando en {negocio}, ya lista para entregar. Quedamos atentos a su visita. ¡Gracias por su preferencia!",
+    "Hola {nombre}, un recordatorio amable: su(s) prenda(s) (orden {orden}) están listas en {negocio} desde hace un tiempo. Le esperamos para entregárselas. ¡Gracias!",
   ];
   const [waMensajes, setWaMensajes] = useState(() => {
     try {
@@ -321,7 +321,7 @@ export default function LavanderiaApp() {
   const getRandomWaMensaje = (nombre, orden) => {
     const list = waMensajes.length ? waMensajes : WA_MENSAJES_DEFAULT;
     const tpl = list[Math.floor(Math.random() * list.length)];
-    return tpl.replace("{nombre}", nombre).replace("{orden}", orden || "");
+    return tpl.replace("{nombre}", nombre).replace("{orden}", orden || "").replace("{negocio}", negocioNombre);
   };
   const [waSending, setWaSending] = useState(false);
   const [waSendProgress, setWaSendProgress] = useState({ current: 0, total: 0 });
@@ -758,6 +758,7 @@ export default function LavanderiaApp() {
   const mainContentRef = useRef(null);
   const firstGarmentInputRef = useRef(null);
   const phoneInputRef = useRef(null);
+  const guardarImprimirBtnRef = useRef(null);
   const manualOrderNumberRef = useRef(null);
   const inventarioSectionRef = useRef(null);
   const buscarPrendaSectionRef = useRef(null);
@@ -772,6 +773,8 @@ export default function LavanderiaApp() {
   useEffect(() => { document.title = "LavaGest"; }, []);
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
+  const modalRef = useRef(modal);
+  useEffect(() => { modalRef.current = modal; }, [modal]);
   const ordersRef = useRef(orders);
   useEffect(() => { ordersRef.current = orders; }, [orders]);
   const showCalcRef = useRef(showCalc);
@@ -823,6 +826,13 @@ export default function LavanderiaApp() {
         if (!isTyping) {
           setShowManualOrder(true);
           setTimeout(() => { manualOrderNumberRef.current?.focus(); }, 50);
+        }
+        return;
+      }
+      if (e.key === "F12") {
+        if (modalRef.current === "newOrder") {
+          e.preventDefault();
+          guardarImprimirBtnRef.current?.click();
         }
         return;
       }
@@ -1449,6 +1459,21 @@ export default function LavanderiaApp() {
     setRecordSeconds(0);
   };
   const closeCameraPanel = () => { stopCamera(); setShowCamera(false); };
+  const handleEnterAdvance = (e) => {
+    if (e.key !== "Enter") return;
+    const tag = e.target.tagName;
+    if (tag === "TEXTAREA" || tag === "BUTTON" || tag === "A") return;
+    e.preventDefault();
+    const container = e.currentTarget;
+    const focusables = Array.from(container.querySelectorAll('input:not([type="checkbox"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'))
+      .filter(el => el.offsetParent !== null);
+    const idx = focusables.indexOf(e.target);
+    if (idx > -1 && idx < focusables.length - 1) {
+      const next = focusables[idx + 1];
+      next.focus();
+      if (next.select) next.select();
+    }
+  };
   const startDragCamera = (e) => {
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -1631,7 +1656,14 @@ export default function LavanderiaApp() {
     let w = Math.min(cropW, maxWidthDots);
     w = w - (w % 8);
     if (w < 8) w = 8;
-    const h = Math.max(1, Math.round(cropH * (w / cropW)));
+    const maxHeightDots = 250; // evita logos desproporcionadamente altos que traben la impresora
+    let h = Math.max(1, Math.round(cropH * (w / cropW)));
+    if (h > maxHeightDots) {
+      h = maxHeightDots;
+      w = Math.max(8, Math.round(cropW * (h / cropH)));
+      w = w - (w % 8);
+      if (w < 8) w = 8;
+    }
     const canvas = document.createElement("canvas");
     canvas.width = w; canvas.height = h;
     const ctx = canvas.getContext("2d");
@@ -1755,10 +1787,17 @@ export default function LavanderiaApp() {
     if (subLine) data += subLine + LF;
     data += LF;
 
-    // Order number big
-    data += BOLD_ON + BIG_ON;
-    data += "*" + (order.order_number||"") + "*" + LF;
-    data += BIG_OFF + BOLD_OFF;
+    // Order number extra big, en un cuadrado completo de asteriscos
+    const sideLine = "*" + " ".repeat(Math.max(0, anchoRecibo - 2)) + "*";
+    data += BOLD_ON;
+    data += "*".repeat(anchoRecibo) + LF;
+    data += sideLine + LF;
+    data += GS + "!\x44";
+    data += (order.order_number||"") + LF;
+    data += GS + "!\x00";
+    data += sideLine + LF;
+    data += "*".repeat(anchoRecibo) + LF;
+    data += BOLD_OFF;
 
     // Barcode
     data += CENTER;
@@ -2390,8 +2429,8 @@ export default function LavanderiaApp() {
                   <input type="date" value={orderFilterDate} onChange={e => setOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 160, fontSize: 15 }} />
                   {orderFilterDate && <button onClick={() => setOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 14 }}>Ver todas</button>}
                   <select value={orderStatusFilter} onChange={e => { setOrderStatusFilter(e.target.value); if (e.target.value) setOrderFilterDate(""); }} style={{ ...inp, width: 160, fontSize: 15 }}>
-                    <option value="" style={{ background:"#1a1a2e" }}>Todos los estados</option>
-                    {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k} style={{ background:"#1a1a2e" }}>{v.label}</option>)}
+                    <option value="" style={{ background:"#1a1a2e",color:"#fff" }}>Todos los estados</option>
+                    {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k} style={{ background:"#1a1a2e",color:"#fff" }}>{v.label}</option>)}
                   </select>
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
@@ -2635,8 +2674,9 @@ export default function LavanderiaApp() {
                         </div>
                         <button onClick={confirmarEntrega} disabled={!entregaPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:18,fontWeight:800,borderRadius:10,marginBottom:10,opacity:!entregaPayment?0.5:1,cursor:!entregaPayment?"not-allowed":"pointer" }}>{!entregaPayment?"⚠️ Selecciona un método de pago":`✅ Confirmar Entrega Completa · $${Math.round(getSaldo(entregaResult))}`}</button>
                         {getItemsPendientes(entregaResult.id).length > 1 && (
-                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:16,fontWeight:700,borderRadius:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
+                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:16,fontWeight:700,borderRadius:10,marginTop:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
                         )}
+                        <button onClick={() => { setAbonoModal(entregaResult); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, width:"100%",background:"rgba(255,213,79,0.1)",color:"var(--warning-text)",border:"1px solid rgba(255,213,79,0.3)",padding:14,fontSize:16,fontWeight:700,borderRadius:10,marginTop:10 }}>💰 Registrar Abono (el cliente no se lleva la ropa hoy)</button>
                       </>
                     )}
 
@@ -2826,8 +2866,8 @@ export default function LavanderiaApp() {
                   <h3 style={{ margin: 0, fontSize: 18, color: "var(--text-muted)" }}>Órdenes de agencias</h3>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                     <select value={selectedAgencyId} onChange={e => setSelectedAgencyId(e.target.value)} style={{ ...inp, width: 180, fontSize: 15 }}>
-                      <option value="" style={{ background:"#1a1a2e" }}>Todas las agencias</option>
-                      {agencies.map(ag => <option key={ag.id} value={ag.id} style={{ background:"#1a1a2e" }}>{ag.name}</option>)}
+                      <option value="" style={{ background:"#1a1a2e",color:"#fff" }}>Todas las agencias</option>
+                      {agencies.map(ag => <option key={ag.id} value={ag.id} style={{ background:"#1a1a2e",color:"#fff" }}>{ag.name}</option>)}
                     </select>
                     <input type="date" value={agencyOrderFilterDate} onChange={e => setAgencyOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                     {agencyOrderFilterDate && <button onClick={() => setAgencyOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 14 }}>Ver todas</button>}
@@ -2920,8 +2960,8 @@ export default function LavanderiaApp() {
                   <h3 style={{ margin: 0, fontSize: 18, color: "var(--text-muted)" }}>Órdenes de domiciliarios</h3>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                     <select value={selectedDomiciliarioId} onChange={e => setSelectedDomiciliarioId(e.target.value)} style={{ ...inp, width: 180, fontSize: 15 }}>
-                      <option value="" style={{ background:"#1a1a2e" }}>Todos los domiciliarios</option>
-                      {domiciliarios.map(dm => <option key={dm.id} value={dm.id} style={{ background:"#1a1a2e" }}>{dm.name}</option>)}
+                      <option value="" style={{ background:"#1a1a2e",color:"#fff" }}>Todos los domiciliarios</option>
+                      {domiciliarios.map(dm => <option key={dm.id} value={dm.id} style={{ background:"#1a1a2e",color:"#fff" }}>{dm.name}</option>)}
                     </select>
                     <input type="date" value={domiciliarioOrderFilterDate} onChange={e => setDomiciliarioOrderFilterDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, fontSize: 15 }} />
                     {domiciliarioOrderFilterDate && <button onClick={() => setDomiciliarioOrderFilterDate("")} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 14 }}>Ver todas</button>}
@@ -3552,8 +3592,8 @@ export default function LavanderiaApp() {
                   <div>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>AGENCIA</label>
                     <select value={agencyReportId} onChange={e => setAgencyReportId(e.target.value)} style={{ ...inp, width: 180, fontSize: 15 }}>
-                      <option value="todas" style={{ background:"#1a1a2e" }}>Todas las agencias</option>
-                      {agencies.map(ag => <option key={ag.id} value={ag.id} style={{ background:"#1a1a2e" }}>{ag.name}</option>)}
+                      <option value="todas" style={{ background:"#1a1a2e",color:"#fff" }}>Todas las agencias</option>
+                      {agencies.map(ag => <option key={ag.id} value={ag.id} style={{ background:"#1a1a2e",color:"#fff" }}>{ag.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -3667,8 +3707,8 @@ export default function LavanderiaApp() {
                   <div>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DOMICILIARIO</label>
                     <select value={domiciliarioReportId} onChange={e => setDomiciliarioReportId(e.target.value)} style={{ ...inp, width: 180, fontSize: 15 }}>
-                      <option value="todas" style={{ background:"#1a1a2e" }}>Todos los domiciliarios</option>
-                      {domiciliarios.map(dm => <option key={dm.id} value={dm.id} style={{ background:"#1a1a2e" }}>{dm.name}</option>)}
+                      <option value="todas" style={{ background:"#1a1a2e",color:"#fff" }}>Todos los domiciliarios</option>
+                      {domiciliarios.map(dm => <option key={dm.id} value={dm.id} style={{ background:"#1a1a2e",color:"#fff" }}>{dm.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -4075,6 +4115,7 @@ export default function LavanderiaApp() {
                                 <th style={{ padding: "6px 10px" }}>Color</th>
                                 <th style={{ padding: "6px 10px", textAlign: "right" }}>Cant.</th>
                                 <th style={{ padding: "6px 10px" }}>Fecha</th>
+                                <th style={{ padding: "6px 10px" }}></th>
                               </tr>
                             </thead>
                             <tbody>
@@ -4086,6 +4127,9 @@ export default function LavanderiaApp() {
                                   <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>{r.item.color || "—"}</td>
                                   <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>{r.item.quantity}</td>
                                   <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>{r.order.date}</td>
+                                  <td style={{ padding: "6px 10px" }}>{r.order.phone && r.order.status === "listo" && (
+                                    <a href={getWhatsAppUrl(negocioPais + r.order.phone.replace(/[^0-9]/g, ""), getRandomWaMensaje(r.order.client_name, r.order.order_number || ""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar recordatorio por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", padding: "4px 8px", fontSize: 13, textDecoration: "none", display: "inline-block", borderRadius: 8, border: "1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>
+                                  )}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -4244,9 +4288,9 @@ export default function LavanderiaApp() {
                   <div>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>TIPO</label>
                     <select value={dlTypeFilter} onChange={e => setDlTypeFilter(e.target.value)} style={{ ...inp, width: 160, fontSize: 15 }}>
-                      <option value="" style={{ background:"#1a1a2e" }}>Todos</option>
-                      <option value="donacion" style={{ background:"#1a1a2e" }}>🎁 Donación</option>
-                      <option value="perdida" style={{ background:"#1a1a2e" }}>⚠️ Pérdida</option>
+                      <option value="" style={{ background:"#1a1a2e",color:"#fff" }}>Todos</option>
+                      <option value="donacion" style={{ background:"#1a1a2e",color:"#fff" }}>🎁 Donación</option>
+                      <option value="perdida" style={{ background:"#1a1a2e",color:"#fff" }}>⚠️ Pérdida</option>
                     </select>
                   </div>
                 </div>
@@ -4524,7 +4568,7 @@ export default function LavanderiaApp() {
                       <label htmlFor="logoInput" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", border: "1px solid rgba(79,195,247,0.3)", cursor: "pointer", display: "inline-block", fontSize: 14, padding: "8px 14px" }}>
                         📁 Subir logo
                       </label>
-                      {negocioLogo && <button onClick={() => { setNegocioLogo(""); try { localStorage.removeItem("negocioLogo"); } catch {} }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", fontSize: 14, padding: "8px 14px", marginLeft: 8 }}>🗑 Quitar</button>}
+                      {negocioLogo && <button onClick={() => { setNegocioLogo(""); try { localStorage.removeItem("negocioLogo"); } catch {} saveConfig("negocioLogo", ""); }} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", fontSize: 14, padding: "8px 14px", marginLeft: 8 }}>🗑 Quitar</button>}
                       <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 6 }}>PNG, JPG. Recomendado: cuadrado 200x200px</div>
                     </div>
                   </div>
@@ -4722,8 +4766,8 @@ export default function LavanderiaApp() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE</label><input style={inp} placeholder="Nombre del empleado" value={newEmployee.name} onChange={e=>setNewEmployee(p=>({...p,name:e.target.value}))} /></div>
                       <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>PIN (4-6 dígitos)</label><input style={inp} type="password" placeholder="••••" maxLength={6} value={newEmployee.pin} onChange={e=>setNewEmployee(p=>({...p,pin:e.target.value}))} /></div>
-                      <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>ROL</label><select style={inp} value={newEmployee.role} onChange={e=>setNewEmployee(p=>({...p,role:e.target.value}))}><option value="employee" style={{ background:"#1a1a2e" }}>👤 Empleado</option><option value="admin" style={{ background:"#1a1a2e" }}>👑 Administrador</option></select></div>
-                      <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TURNO</label><select style={inp} value={newEmployee.turno} onChange={e=>setNewEmployee(p=>({...p,turno:e.target.value}))}><option value="mañana" style={{ background:"#1a1a2e" }}>🌅 Mañana</option><option value="tarde" style={{ background:"#1a1a2e" }}>🌆 Tarde</option><option value="noche" style={{ background:"#1a1a2e" }}>🌙 Noche</option><option value="completo" style={{ background:"#1a1a2e" }}>⏰ Día completo</option></select></div>
+                      <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>ROL</label><select style={inp} value={newEmployee.role} onChange={e=>setNewEmployee(p=>({...p,role:e.target.value}))}><option value="employee" style={{ background:"#1a1a2e",color:"#fff" }}>👤 Empleado</option><option value="admin" style={{ background:"#1a1a2e",color:"#fff" }}>👑 Administrador</option></select></div>
+                      <div><label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TURNO</label><select style={inp} value={newEmployee.turno} onChange={e=>setNewEmployee(p=>({...p,turno:e.target.value}))}><option value="mañana" style={{ background:"#1a1a2e",color:"#fff" }}>🌅 Mañana</option><option value="tarde" style={{ background:"#1a1a2e",color:"#fff" }}>🌆 Tarde</option><option value="noche" style={{ background:"#1a1a2e",color:"#fff" }}>🌙 Noche</option><option value="completo" style={{ background:"#1a1a2e",color:"#fff" }}>⏰ Día completo</option></select></div>
                       <button onClick={addEmployee} disabled={!newEmployee.name||!newEmployee.pin} style={{ ...btn,background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",padding:12,fontWeight:800,opacity:!newEmployee.name||!newEmployee.pin?0.5:1 }}>+ Crear Usuario</button>
                     </div>
                   </div>
@@ -4735,7 +4779,7 @@ export default function LavanderiaApp() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div>
                     <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 6, fontWeight: 600 }}>MENSAJES DE WHATSAPP 📱 (varios, para no repetir el mismo texto)</label>
-                    <p style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}>Usa <strong style={{color:"#25D366"}}>{"{nombre}"}</strong> para el nombre del cliente y <strong style={{color:"#25D366"}}>{"{orden}"}</strong> para el número de orden. Cada vez que envíes, la app escoge uno al azar de esta lista — así WhatsApp no ve el mismo texto repetido y hay menos riesgo de que bloquee tu cuenta.</p>
+                    <p style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}>Usa <strong style={{color:"#25D366"}}>{"{nombre}"}</strong> para el nombre del cliente, <strong style={{color:"#25D366"}}>{"{orden}"}</strong> para el número de orden, y <strong style={{color:"#25D366"}}>{"{negocio}"}</strong> para el nombre del negocio (el que pusiste en Información del Negocio). Cada vez que envíes, la app escoge uno al azar de esta lista — así WhatsApp no ve el mismo texto repetido y hay menos riesgo de que bloquee tu cuenta.</p>
                     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                       {waMensajes.map((m, i) => (
                         <div key={i} style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
@@ -4894,7 +4938,7 @@ export default function LavanderiaApp() {
 
             {modal === "newOrder" && (
               <>
-                <div style={{ padding:"28px 28px 16px", overflowY:"auto", flex:1, minHeight:0 }}>
+                <div onKeyDown={handleEnterAdvance} style={{ padding:"28px 28px 16px", overflowY:"auto", flex:1, minHeight:0 }}>
                 <h3 style={{ margin:"0 0 20px",fontSize:21 }}>➕ Nueva Orden</h3>
                 {newOrder.agencia_id && (() => { const ag = agencies.find(a=>a.id===newOrder.agencia_id); const pct = Number(ag?.discount_percent)||0; return <div style={{ background:"rgba(255,138,101,0.1)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:15,color:"#FF8A65",display:"flex",alignItems:"center",gap:6 }}>🏢 Orden para agencia: <b>{newOrder.client_name}</b>{pct > 0 && <span style={{ marginLeft:"auto",color:"#66BB6A",fontWeight:700 }}>🏷️ {pct}% descuento aplicado</span>}</div>; })()}
                 {newOrder.domiciliario_id && <div style={{ background:"rgba(102,187,106,0.1)",border:"1px solid rgba(102,187,106,0.3)",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:15,color:"#66BB6A",display:"flex",alignItems:"center",gap:6 }}>🛵 Orden para domiciliario: <b>{newOrder.client_name}</b></div>}
@@ -5060,7 +5104,7 @@ export default function LavanderiaApp() {
                     <button onClick={addOrder} disabled={saving||!newOrder.client_name} style={{ ...btn,flex:1,minWidth:120,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",border:"1px solid rgba(79,195,247,0.4)",padding:12,fontSize:15,opacity:saving||!newOrder.client_name?0.6:1 }}>
                       {saving?"Guardando...":"💾 Solo Guardar"}
                     </button>
-                    <button onClick={async () => {
+                    <button ref={guardarImprimirBtnRef} onClick={async () => {
                       if (!newOrder.client_name || items.length === 0) return;
                       setSaving(true);
                       const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
@@ -5103,7 +5147,7 @@ export default function LavanderiaApp() {
                 <h3 style={{ margin:"0 0 20px",fontSize:21 }}>💰 Nuevo Gasto</h3>
                 <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
                   <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CONCEPTO</label><input style={inp} placeholder="Ej: Detergente" value={newExpense.concept} onChange={e=>setNewExpense(p=>({...p,concept:e.target.value}))} /></div>
-                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CATEGORÍA</label><select style={inp} value={newExpense.category} onChange={e=>setNewExpense(p=>({...p,category:e.target.value}))}>{["insumos","servicios","mantenimiento","otros"].map(c=><option key={c} value={c} style={{ background:"#1a1a2e" }}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}</select></div>
+                  <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CATEGORÍA</label><select style={inp} value={newExpense.category} onChange={e=>setNewExpense(p=>({...p,category:e.target.value}))}>{["insumos","servicios","mantenimiento","otros"].map(c=><option key={c} value={c} style={{ background:"#1a1a2e",color:"#fff" }}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}</select></div>
                   <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:8 }}>MÉTODO DE PAGO</label><div style={{ display:"flex",gap:10 }}>{[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt=><label key={opt.value} onClick={()=>setNewExpense(p=>({...p,payment_method:opt.value}))} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:14,fontWeight:600,background:newExpense.payment_method===opt.value?"rgba(79,195,247,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newExpense.payment_method===opt.value?"#4FC3F7":"var(--border)"}`,borderRadius:10,padding:"10px 6px",color:newExpense.payment_method===opt.value?"#4FC3F7":"var(--text-muted)" }}>{opt.label}</label>)}</div></div>
                   <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newExpense.amount} onChange={e=>setNewExpense(p=>({...p,amount:e.target.value}))} /></div>
                   <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>FECHA</label><input style={{ ...inp,colorScheme:"dark" }} type="date" value={newExpense.date} onChange={e=>setNewExpense(p=>({...p,date:e.target.value}))} /></div>
@@ -5119,8 +5163,8 @@ export default function LavanderiaApp() {
                   <div>
                     <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>EMPLEADO</label>
                     <select style={inp} value={newAdvance.employee_id} onChange={e=>setNewAdvance(p=>({...p,employee_id:e.target.value}))}>
-                      <option value="" style={{ background:"#1a1a2e" }}>Selecciona un empleado...</option>
-                      {employees.map(emp => <option key={emp.id} value={emp.id} style={{ background:"#1a1a2e" }}>{emp.name}</option>)}
+                      <option value="" style={{ background:"#1a1a2e",color:"#fff" }}>Selecciona un empleado...</option>
+                      {employees.map(emp => <option key={emp.id} value={emp.id} style={{ background:"#1a1a2e",color:"#fff" }}>{emp.name}</option>)}
                     </select>
                   </div>
                   <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>MONTO ($)</label><input style={inp} type="number" placeholder="0" value={newAdvance.amount} onChange={e=>setNewAdvance(p=>({...p,amount:e.target.value}))} /></div>
@@ -5186,7 +5230,7 @@ export default function LavanderiaApp() {
                     const o = savedOrder.order;
                     await generateReciboImage(o, savedOrder.itemsMap);
                     const phone = (o.phone||"").replace(/[^0-9]/g,"");
-                    const partes = ["Hola " + o.client_name + ", adjunto su recibo de Lavanderias Shaddai.","Orden: " + (o.order_number||""),"Total: $" + Math.round(Number(o.price)),"Entrega: " + (o.delivery_date||""),"Gracias por preferirnos!"];
+                    const partes = ["Hola " + o.client_name + ", adjunto su recibo de " + negocioNombre + ".","Orden: " + (o.order_number||""),"Total: $" + Math.round(Number(o.price)),"Entrega: " + (o.delivery_date||""),"Gracias por preferirnos!"];
                     const msg = partes.join(String.fromCharCode(10));
                     window.open(getWhatsAppUrl(negocioPais + phone, msg), "lavagest_whatsapp");
                     await db.patch("orders", o.id, { recibo_enviado: "whatsapp" });
@@ -5432,8 +5476,8 @@ export default function LavanderiaApp() {
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>NOMBRE</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingEmployee.name} onChange={e=>setEditingEmployee(p=>({...p,name:e.target.value}))} /></div>
               <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>PIN</label><input style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} type="password" maxLength={6} value={editingEmployee.pin} onChange={e=>setEditingEmployee(p=>({...p,pin:e.target.value}))} /></div>
-              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>ROL</label><select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingEmployee.role} onChange={e=>setEditingEmployee(p=>({...p,role:e.target.value}))}><option value="employee" style={{ background:"#1a1a2e" }}>👤 Empleado</option><option value="admin" style={{ background:"#1a1a2e" }}>👑 Administrador</option></select></div>
-              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TURNO</label><select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingEmployee.turno||"mañana"} onChange={e=>setEditingEmployee(p=>({...p,turno:e.target.value}))}><option value="mañana" style={{ background:"#1a1a2e" }}>🌅 Mañana</option><option value="tarde" style={{ background:"#1a1a2e" }}>🌆 Tarde</option><option value="noche" style={{ background:"#1a1a2e" }}>🌙 Noche</option><option value="completo" style={{ background:"#1a1a2e" }}>⏰ Día completo</option></select></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>ROL</label><select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingEmployee.role} onChange={e=>setEditingEmployee(p=>({...p,role:e.target.value}))}><option value="employee" style={{ background:"#1a1a2e",color:"#fff" }}>👤 Empleado</option><option value="admin" style={{ background:"#1a1a2e",color:"#fff" }}>👑 Administrador</option></select></div>
+              <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>TURNO</label><select style={{ padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-app)",color:"var(--text-primary)",fontSize:16,width:"100%",boxSizing:"border-box" }} value={editingEmployee.turno||"mañana"} onChange={e=>setEditingEmployee(p=>({...p,turno:e.target.value}))}><option value="mañana" style={{ background:"#1a1a2e",color:"#fff" }}>🌅 Mañana</option><option value="tarde" style={{ background:"#1a1a2e",color:"#fff" }}>🌆 Tarde</option><option value="noche" style={{ background:"#1a1a2e",color:"#fff" }}>🌙 Noche</option><option value="completo" style={{ background:"#1a1a2e",color:"#fff" }}>⏰ Día completo</option></select></div>
               <div style={{ display:"flex",gap:10,marginTop:8 }}>
                 <button onClick={()=>setEditingEmployee(null)} style={{ flex:1,padding:12,borderRadius:8,border:"none",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",fontWeight:600,cursor:"pointer",fontSize:15 }}>Cancelar</button>
                 <button onClick={updateEmployee} style={{ flex:2,padding:12,borderRadius:8,border:"none",background:"linear-gradient(135deg,#FFD54F,#F57F17)",color:"#000",fontWeight:800,cursor:"pointer",fontSize:15 }}>💾 Guardar cambios</button>
