@@ -332,6 +332,7 @@ export default function LavanderiaApp() {
   const [anchoRecibo, setAnchoRecibo] = useState(() => { try { return Number(localStorage.getItem("anchoRecibo")) || 42; } catch { return 42; } });
   const [numeroOrdenTamano, setNumeroOrdenTamano] = useState(() => { try { return localStorage.getItem("numeroOrdenTamano") || "normal"; } catch { return "normal"; } });
   const [numeroOrdenCuadro, setNumeroOrdenCuadro] = useState(() => { try { return localStorage.getItem("numeroOrdenCuadro") !== "false"; } catch { return true; } });
+  const [nombreTelTamano, setNombreTelTamano] = useState(() => { try { return localStorage.getItem("nombreTelTamano") || "normal"; } catch { return "normal"; } });
   const [negocioPais, setNegocioPais] = useState(() => { try { return localStorage.getItem("negocioPais") || "57"; } catch { return "57"; } });
   const [negocioLogo, setNegocioLogo] = useState(() => { try { return localStorage.getItem("negocioLogo") || ""; } catch { return ""; } });
   const [logoEnRecibo, setLogoEnRecibo] = useState(() => { try { return localStorage.getItem("logoEnRecibo") !== "false"; } catch { return true; } });
@@ -1827,8 +1828,20 @@ export default function LavanderiaApp() {
     data += "ENTREGA: " + (order.delivery_date||"") + LF;
     data += BIG_OFF + BOLD_OFF + LEFT;
     data += LINE + LF;
-    data += BOLD_ON + rpad("Cliente:", normalize(order.client_name||"")) + BOLD_OFF + LF;
-    data += rpad("Telefono:", order.phone||"") + LF;
+    if (nombreTelTamano === "normal") {
+      data += BOLD_ON + rpad("Cliente:", normalize(order.client_name||"")) + BOLD_OFF + LF;
+      data += rpad("Telefono:", order.phone||"") + LF;
+    } else {
+      const infoSizeCmd = nombreTelTamano === "muy_grande" ? "\x33" : "\x11";
+      data += "Cliente:" + LF;
+      data += GS + "!" + infoSizeCmd + BOLD_ON;
+      data += normalize(order.client_name||"") + LF;
+      data += GS + "!\x00" + BOLD_OFF;
+      data += "Telefono:" + LF;
+      data += GS + "!" + infoSizeCmd;
+      data += (order.phone||"") + LF;
+      data += GS + "!\x00";
+    }
     if (order.a_domicilio && order.address) data += rpad("Direccion:", normalize(order.address)) + LF;
     data += LINE + LF;
 
@@ -4561,6 +4574,15 @@ export default function LavanderiaApp() {
                       <span style={{ fontSize:14,color:numeroOrdenCuadro?"#4FC3F7":"var(--text-muted)" }}>Encerrarlo en un cuadro de asteriscos</span>
                     </label>
                     <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Este ajuste es solo de este computador — puedes dejarlo distinto en cada impresora.</div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>👤 TAMAÑO DE NOMBRE Y TELÉFONO DEL CLIENTE</label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {[{v:"normal",l:"Normal"},{v:"grande",l:"Grande"},{v:"muy_grande",l:"Muy grande"}].map(opt => (
+                        <label key={opt.v} onClick={() => { setNombreTelTamano(opt.v); try { localStorage.setItem("nombreTelTamano", opt.v); } catch {} }} style={{ cursor:"pointer",fontSize:13,fontWeight:600,padding:"6px 12px",borderRadius:20,background:nombreTelTamano===opt.v?"rgba(79,195,247,0.2)":"rgba(255,255,255,0.04)",border:`1.5px solid ${nombreTelTamano===opt.v?"#4FC3F7":"var(--border)"}`,color:nombreTelTamano===opt.v?"#4FC3F7":"var(--text-muted)" }}>{opt.l}</label>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>En "Grande" o "Muy grande", el nombre y el teléfono pasan a su propia línea debajo de la etiqueta, para no desalinear el recibo. Ajuste solo de este computador.</div>
                   </div>
                   <div style={{ gridColumn: "span 2" }}>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DIRECCIÓN</label>
