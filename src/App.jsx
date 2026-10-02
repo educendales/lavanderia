@@ -827,6 +827,7 @@ export default function LavanderiaApp() {
           const priceDefault = precioDefaults[defaultType];
           const defaultPrice = priceByService || priceDefault || "";
           setItems([{ ...emptyItem, price: defaultPrice }]);
+          setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
           setModal("newOrder");
           setTimeout(()=>{phoneInputRef.current?.focus();},50);
         }
@@ -2483,6 +2484,7 @@ export default function LavanderiaApp() {
                     const priceDefault = precioDefaults[defaultType];
                     const defaultPrice = priceByService || priceDefault || "";
                     setItems([{ ...emptyItem, price: defaultPrice }]);
+                    setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
                     setModal("newOrder");
                     setTimeout(()=>{phoneInputRef.current?.focus();},50);
                   }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
