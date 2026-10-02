@@ -779,6 +779,7 @@ export default function LavanderiaApp() {
   const mainContentRef = useRef(null);
   const firstGarmentInputRef = useRef(null);
   const phoneInputRef = useRef(null);
+  const lastAutoNotesRef = useRef("");
   const guardarImprimirBtnRef = useRef(null);
   const manualOrderNumberRef = useRef(null);
   const inventarioSectionRef = useRef(null);
@@ -827,7 +828,7 @@ export default function LavanderiaApp() {
           const priceDefault = precioDefaults[defaultType];
           const defaultPrice = priceByService || priceDefault || "";
           setItems([{ ...emptyItem, price: defaultPrice }]);
-          setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
+          setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() }); lastAutoNotesRef.current = "";
           setModal("newOrder");
           setTimeout(()=>{phoneInputRef.current?.focus();},50);
         }
@@ -945,6 +946,21 @@ export default function LavanderiaApp() {
   const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity) * getPiecesPerUnit(i.garment_type), 0);
   const totalPrice = (its) => its.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0);
   const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); const brandFound = shoeBrands.filter(b => { const k="marca_"+b.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length && !brandFound.length) return null; const qty = Number(it.quantity)||1; const brandTxt = brandFound.length ? ` (${brandFound.join(", ")})` : ""; return `${qty>1?qty+" ":""}${it.garment_type}${brandTxt}${found.length?": "+found.join(", "):""}`; }).filter(Boolean); return lines.join(" | "); };
+  const applyAutoNotes = (its) => {
+    const newAuto = buildNotes(its);
+    setNewOrder(p => {
+      let manual = p.notes || "";
+      if (lastAutoNotesRef.current && manual.endsWith(lastAutoNotesRef.current)) {
+        manual = manual.slice(0, manual.length - lastAutoNotesRef.current.length);
+        manual = manual.replace(/\s*\|\s*$/, "").trim();
+      } else if (manual === lastAutoNotesRef.current) {
+        manual = "";
+      }
+      lastAutoNotesRef.current = newAuto;
+      const combined = [manual, newAuto].filter(Boolean).join(manual && newAuto ? " | " : "");
+      return { ...p, notes: combined };
+    });
+  };
 
   const saveOfflineQueue = (q) => { setOfflineQueue(q); try { localStorage.setItem("offlineQueue", JSON.stringify(q)); } catch {} };
   const getNextOfflineNumber = () => {
@@ -1061,7 +1077,7 @@ export default function LavanderiaApp() {
       if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
       else if (newOrder.client_name) { const nc = await db.post("clients", { name: newOrder.client_name, phone: newOrder.phone, email: "", total_orders: 1 }); if (Array.isArray(nc)) setClients(prev => [nc[0], ...prev]); }
     }
-    setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
+    setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() }); lastAutoNotesRef.current = "";
     setItems([{ ...emptyItem, price: precioDefaults[emptyItem.garment_type] || "" }]);
     setSaving(false);
     if (!result.offline) loadData();
@@ -1103,9 +1119,9 @@ export default function LavanderiaApp() {
       }
       const conditionKeys = conditions.map(c => c.toLowerCase().replace(/\s+/g,"_"));
       const brandKeys = shoeBrands.map(b => "marca_"+b.toLowerCase().replace(/\s+/g,"_"));
-      if (conditionKeys.includes(field) || brandKeys.includes(field)) setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
+      if (conditionKeys.includes(field) || brandKeys.includes(field)) applyAutoNotes(updated);
       if (field === "garment_type") {
-        setNewOrder(p => ({ ...p, notes: buildNotes(updated) }));
+        applyAutoNotes(updated);
       }
       if (field === "garment_type") {
         const maxExtra = Math.max(0, ...updated.map(it => getExtraDays(it.garment_type)));
@@ -2484,7 +2500,7 @@ export default function LavanderiaApp() {
                     const priceDefault = precioDefaults[defaultType];
                     const defaultPrice = priceByService || priceDefault || "";
                     setItems([{ ...emptyItem, price: defaultPrice }]);
-                    setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() });
+                    setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault() }); lastAutoNotesRef.current = "";
                     setModal("newOrder");
                     setTimeout(()=>{phoneInputRef.current?.focus();},50);
                   }} style={{ ...btn, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff" }}>+ Nueva Orden</button>
@@ -5197,7 +5213,7 @@ export default function LavanderiaApp() {
                       } else if (result.ok && result.offline) {
                         printOrderQZ(result.order, result.itemsMap);
                       }
-                      setNewOrder({...emptyOrder,delivery_date:getDeliveryDefault()});
+                      setNewOrder({...emptyOrder,delivery_date:getDeliveryDefault()}); lastAutoNotesRef.current = "";
                       setItems([{...emptyItem,price:precioDefaults[emptyItem.garment_type]||""}]);
                       setSaving(false);
                       setTimeout(()=>{phoneInputRef.current?.focus();},50);
