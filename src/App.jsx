@@ -5110,6 +5110,7 @@ export default function LavanderiaApp() {
                                       else if(e.key==="ArrowUp"&&colorMatches.length>0){ e.preventDefault(); setColorSuggestIdx(idx=>Math.max(idx-1,0)); }
                                       else if(e.key==="Enter"){
                                         e.preventDefault();
+                                        e.stopPropagation();
                                         const chosen = colorSuggestIdx>=0&&colorMatches[colorSuggestIdx] ? colorMatches[colorSuggestIdx] : (colorMatches.length===1?colorMatches[0]:null);
                                         if(chosen){ updateItem(i,"colors",[...(item.colors||[]),chosen]); updateItem(i,"colorInput",""); setColorSuggestIdx(-1); }
                                       }
