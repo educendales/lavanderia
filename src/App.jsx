@@ -375,15 +375,25 @@ export default function LavanderiaApp() {
     const remaining = selected.length - toSend.length;
     setWaSending(true);
     setWaSendProgress({ current: 0, total: toSend.length });
+    let omitidos = 0;
     toSend.forEach((o, i) => {
       setTimeout(() => {
-        const msg = getRandomWaMensaje(o.client_name, o.order_number || "");
-        window.open(getWhatsAppUrl(negocioPais + (o.phone||"").replace(/[^0-9]/g,""), msg), "lavagest_whatsapp");
+        const ordenActual = ordersRef.current.find(x => x.id === o.id);
+        const sigueListo = ordenActual && ordenActual.status === "listo";
+        if (sigueListo) {
+          const msg = getRandomWaMensaje(o.client_name, o.order_number || "");
+          window.open(getWhatsAppUrl(negocioPais + (o.phone||"").replace(/[^0-9]/g,""), msg), "lavagest_whatsapp");
+        } else {
+          omitidos++;
+        }
         setWaSendProgress({ current: i+1, total: toSend.length });
         if (i === toSend.length - 1) {
           setTimeout(() => {
             setWaSending(false);
-            if (remaining > 0) alert(`✅ Se enviaron ${toSend.length} recordatorios.\n\n⏳ Quedaron ${remaining} sin enviar — el límite por tanda es ${WA_BULK_MAX}, para cuidar tu cuenta de WhatsApp. Selecciónalos y dale enviar de nuevo en un rato (no de una vez seguida).`);
+            let aviso = "";
+            if (omitidos > 0) aviso += `⏭️ ${omitidos} no se enviaron porque ya habían sido entregadas o cambiaron de estado mientras tanto.\n\n`;
+            if (remaining > 0) aviso += `⏳ Quedaron ${remaining} sin enviar — el límite por tanda es ${WA_BULK_MAX}, para cuidar tu cuenta de WhatsApp. Selecciónalos y dale enviar de nuevo en un rato (no de una vez seguida).`;
+            if (aviso) alert(`✅ Se enviaron ${toSend.length - omitidos} recordatorios.\n\n${aviso}`);
           }, 800);
         }
       }, i * WA_BULK_INTERVAL_MS);
