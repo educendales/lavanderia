@@ -4240,6 +4240,7 @@ export default function LavanderiaApp() {
                         <div style={{ display:"flex",gap:10,marginBottom:10,flexWrap:"wrap",alignItems:"center" }}>
                           <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"6px 12px",fontSize:14 }}>✅ Seleccionar todos</button>
                           <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.status==="listo"&&o.phone).map(o=>o.id))} style={{ ...btn,background:"rgba(102,187,106,0.15)",color:"#66BB6A",padding:"6px 12px",fontSize:14 }}>🟢 Solo "Listo"</button>
+                          <button onClick={() => setSelectedInventory(pendingOrders.filter(o=>o.status==="listo"&&o.phone&&o.delivery_date&&o.delivery_date<=today).map(o=>o.id))} style={{ ...btn,background:"rgba(255,213,79,0.15)",color:"var(--warning-text)",padding:"6px 12px",fontSize:14,fontWeight:700 }}>📅 Ya cumplieron fecha</button>
                           {selectedInventory.length > 0 && <>
                             <button onClick={() => setSelectedInventory([])} disabled={waSending} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",padding:"6px 12px",fontSize:14,opacity:waSending?0.5:1 }}>✕ Limpiar</button>
                             <button onClick={() => {
@@ -4256,6 +4257,7 @@ export default function LavanderiaApp() {
                           <tbody>{pendingOrders.map(o=>{
                             const daysIn=Math.floor((new Date()-new Date(o.date))/(1000*60*60*24));
                             const isLate=o.delivery_date&&new Date(o.delivery_date)<new Date()&&o.status!=="entregado";
+                            const isFuture=o.delivery_date&&o.delivery_date>today&&o.status!=="entregado";
                             const isSelected = selectedInventory.includes(o.id);
                             return<tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)",background:isSelected?"rgba(37,211,102,0.05)":isLate?"rgba(239,83,80,0.05)":"transparent" }}>
                               <td style={{ padding:"10px 12px" }}>
@@ -4269,9 +4271,9 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td>
                               <td style={{ padding:"10px 12px" }}><span style={{ background:STATUS_LABELS[o.status]?.color+"22",color:STATUS_LABELS[o.status]?.color,padding:"2px 8px",borderRadius:20,fontSize:13,fontWeight:600,whiteSpace:"nowrap" }}>{STATUS_LABELS[o.status]?.label}</span></td>
                               <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.date}</td>
-                              <td style={{ padding:"10px 12px",fontSize:14 }}><span style={{ color:isLate?"#EF5350":"var(--warning-text)",fontWeight:isLate?700:400 }}>{isLate?"⚠️ ":"📅 "}{o.delivery_date||"—"}</span></td>
+                              <td style={{ padding:"10px 12px",fontSize:14 }}><span style={{ color:isLate?"#EF5350":isFuture?"var(--text-dim)":"#66BB6A",fontWeight:isLate||!isFuture?700:400 }} title={isFuture?"Todavía no llega la fecha prometida de entrega":""}>{isLate?"⚠️ ":isFuture?"⏳ ":"✅ "}{o.delivery_date||"—"}</span></td>
                               <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"var(--warning-text)":"var(--text-muted)",fontSize:15 }}>{daysIn}d</span></td>
-                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), getRandomWaMensaje(o.client_name,o.order_number||""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
+                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), getRandomWaMensaje(o.client_name,o.order_number||""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" onClick={(e)=>{ if(isFuture && !window.confirm(`La fecha de entrega prometida de ${o.client_name} (${o.delivery_date}) todavía no llega. ¿Seguro que quieres enviarle el recordatorio de todas formas?`)) e.preventDefault(); }} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
                             </tr>;
                           })}</tbody>
                         </table>
