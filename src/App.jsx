@@ -10,8 +10,12 @@ const db = {
     let allRows = [];
     let from = 0;
     const pageSize = 1000;
+    // Orden DETERMINÍSTICO: muchas filas importadas comparten el mismo created_at,
+    // así que se desempata por id. Sin eso, entre una página y otra se pueden
+    // saltar o repetir filas. "config" no tiene id ni created_at: se ordena por key.
+    const orderBy = table === "config" ? "key.asc" : "created_at.desc,id.desc";
     while (true) {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?order=created_at.desc${params}`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?order=${orderBy}${params}`, {
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Range: `${from}-${from + pageSize - 1}` }
       });
       const page = await res.json();
@@ -19,6 +23,11 @@ const db = {
       allRows = allRows.concat(page);
       if (page.length < pageSize) break;
       from += pageSize;
+    }
+    // Red de seguridad: quitar filas repetidas por id
+    if (allRows.length && allRows[0].id !== undefined) {
+      const seen = new Set();
+      allRows = allRows.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
     }
     return allRows;
   },
@@ -156,6 +165,8 @@ export default function LavanderiaApp() {
   const [galeriaHasta, setGaleriaHasta] = useState(today);
   const [galeriaMedia, setGaleriaMedia] = useState([]);
   const [galeriaLoading, setGaleriaLoading] = useState(false);
+  const [deletedOrdersLog, setDeletedOrdersLog] = useState([]);
+  const [deletedLogFilter, setDeletedLogFilter] = useState("");
   const [buscarPrendaDesde, setBuscarPrendaDesde] = useState(today);
   const [buscarPrendaHasta, setBuscarPrendaHasta] = useState(today);
   const [desgloseServDesde, setDesgloseServDesde] = useState(today);
@@ -637,6 +648,7 @@ export default function LavanderiaApp() {
       }
     } else {
       if (!window.confirm(`¿Eliminar la orden ${order.order_number}? El cliente no dejó las prendas.\n\nEsto también borrará sus abonos, entregas parciales y prendas registradas — no podrás deshacerlo.`)) return;
+      await logDeletedOrder(order, "Reversar");
       await db.deleteBy("order_items", "order_id", order.id);
       await db.deleteBy("abonos", "order_id", order.id);
       await db.deleteBy("partial_deliveries", "order_id", order.id);
@@ -754,7 +766,7 @@ export default function LavanderiaApp() {
   }, []);
 
   const loadData = async () => {
-    const [o, e, c, oi, ab, adv, ag, dom, cb, pd, dl, cdl, cfg] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base"), db.get("partial_deliveries"), db.get("donations_losses"), db.get("cash_drawer_log"), db.get("config")]);
+    const [o, e, c, oi, ab, adv, ag, dom, cb, pd, dl, cdl, cfg, dol] = await Promise.all([db.get("orders"), db.get("expenses"), db.get("clients"), db.get("order_items"), db.get("abonos"), db.get("employee_advances"), db.get("agencies"), db.get("domiciliarios"), db.get("caja_base"), db.get("partial_deliveries"), db.get("donations_losses"), db.get("cash_drawer_log"), db.get("config"), db.get("deleted_orders_log")]);
     if (Array.isArray(o)) setOrders(o);
     if (Array.isArray(e)) setExpenses(e);
     if (Array.isArray(c)) setClients(c);
@@ -767,6 +779,7 @@ export default function LavanderiaApp() {
     if (Array.isArray(pd)) setPartialDeliveries(pd);
     if (Array.isArray(dl)) setDonationsLosses(dl);
     if (Array.isArray(cdl)) setCashDrawerLog(cdl);
+    if (Array.isArray(dol)) setDeletedOrdersLog(dol);
     if (Array.isArray(cfg)) {
       const cmap = {};
       cfg.forEach(row => { cmap[row.key] = row.value; });
@@ -1201,7 +1214,25 @@ export default function LavanderiaApp() {
   const addDomiciliario = async () => { if (!newDomiciliario.name) return; setSaving(true); const res = await db.post("domiciliarios", newDomiciliario); if (Array.isArray(res) && res[0]) setDomiciliarios(prev => [res[0], ...prev]); setNewDomiciliario({ name: "", phone: "", contact_name: "", address: "" }); setModal(null); setSaving(false); };
   const deleteDomiciliario = async (id) => { const ok = await checkClave("eliminar"); if (!ok) return; if (!window.confirm("¿Eliminar este domiciliario? Sus órdenes históricas no se borran.")) return; await db.delete("domiciliarios", id); setDomiciliarios(prev => prev.filter(d => d.id !== id)); };
   const updateDomiciliario = async () => { if (!editingDomiciliario) return; await db.patch("domiciliarios", editingDomiciliario.id, { name: editingDomiciliario.name, phone: editingDomiciliario.phone, contact_name: editingDomiciliario.contact_name, address: editingDomiciliario.address }); setDomiciliarios(prev => prev.map(d => d.id === editingDomiciliario.id ? { ...d, ...editingDomiciliario } : d)); setEditingDomiciliario(null); };
+  // Guarda una copia de la orden ANTES de borrarla, para saber qué se eliminó y quién lo hizo.
+  // Si la tabla deleted_orders_log todavía no existe, no pasa nada: el borrado sigue normal.
+  const logDeletedOrder = async (order, origen) => {
+    try {
+      const its = orderItems[order.id] || [];
+      const abonado = abonos.filter(a => a.order_id === order.id).reduce((sum, a) => sum + Number(a.amount || 0), 0);
+      const res = await db.post("deleted_orders_log", {
+        order_number: order.order_number, client_name: order.client_name, phone: order.phone,
+        status: order.status, price: Number(order.price) || 0, garments: Number(order.garments) || 0,
+        order_date: order.date || null, delivery_date: order.delivery_date || null, abonado,
+        items: its.map(it => `${it.quantity}x ${it.garment_type}${it.color ? " " + it.color : ""} $${Math.round(Number(it.price) || 0)}`).join(" | "),
+        notes: order.notes || "", deleted_by: user?.name || "", origen, date: today
+      });
+      if (Array.isArray(res) && res[0]) setDeletedOrdersLog(prev => [res[0], ...prev]);
+    } catch (e) { console.error("No se pudo registrar el borrado:", e); }
+  };
   const deleteOrder = async (id) => {
+    const orderToLog = orders.find(o => o.id === id);
+    if (orderToLog) await logDeletedOrder(orderToLog, "Tabla de órdenes");
     setOrders(prev => prev.filter(o => o.id !== id));
     setOrderItems(prev => { const next = { ...prev }; delete next[id]; return next; });
     setAbonos(prev => prev.filter(a => a.order_id !== id));
@@ -4090,6 +4121,50 @@ export default function LavanderiaApp() {
                           <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"var(--warning-text)",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:13,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:14 }}>👤 {o.delivered_by}</span>:<span style={{ color:"var(--text-dim)",fontSize:14 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:13,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
                         </table>
                       </div>;
+                })()}
+              </div>
+
+              {/* ÓRDENES ELIMINADAS (REGISTRO) */}
+              <div style={{ ...card, marginTop: 20 }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#EF5350" }}>🗑 Órdenes Eliminadas</h3>
+                <p style={{ margin: "0 0 14px", fontSize: 15, color: "var(--text-muted)" }}>Registro de cada orden que se elimina: qué era, cuánto valía, y quién la eliminó. Solo cuenta desde que se activó este registro.</p>
+                <input style={{ ...inp, marginBottom: 12, maxWidth: 320 }} placeholder="Buscar por número, cliente o teléfono..." value={deletedLogFilter} onChange={e => setDeletedLogFilter(e.target.value)} />
+                {(() => {
+                  const q = deletedLogFilter.trim().toLowerCase();
+                  const rows = deletedOrdersLog.filter(l => !q || [l.order_number, l.client_name, l.phone].some(v => String(v || "").toLowerCase().includes(q))).slice(0, 200);
+                  if (rows.length === 0) return <p style={{ color: "var(--text-dim)", fontSize: 15, textAlign: "center", padding: "16px 0" }}>{deletedOrdersLog.length === 0 ? "Todavía no hay órdenes eliminadas registradas." : "Ninguna coincide con esa búsqueda."}</p>;
+                  return (
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-muted)", textAlign: "left" }}>
+                            <th style={{ padding: "6px 10px" }}>Eliminada</th>
+                            <th style={{ padding: "6px 10px" }}>Orden</th>
+                            <th style={{ padding: "6px 10px" }}>Cliente</th>
+                            <th style={{ padding: "6px 10px" }}>Estado</th>
+                            <th style={{ padding: "6px 10px", textAlign: "right" }}>Total</th>
+                            <th style={{ padding: "6px 10px" }}>Prendas</th>
+                            <th style={{ padding: "6px 10px" }}>Por</th>
+                            <th style={{ padding: "6px 10px" }}>Desde</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map(l => (
+                            <tr key={l.id} style={{ borderBottom: "1px solid var(--bg-surface)", verticalAlign: "top" }}>
+                              <td style={{ padding: "6px 10px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{l.created_at ? new Date(l.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : l.date}</td>
+                              <td style={{ padding: "6px 10px", fontWeight: 700, color: "#EF5350" }}>{l.order_number}</td>
+                              <td style={{ padding: "6px 10px" }}>{l.client_name}<div style={{ fontSize: 12, color: "var(--text-dim)" }}>{l.phone}</div></td>
+                              <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>{STATUS_LABELS[l.status]?.label || l.status}</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>${Math.round(Number(l.price) || 0).toLocaleString("es-CO")}{Number(l.abonado) > 0 && <div style={{ fontSize: 12, color: "#66BB6A" }}>abonó ${Math.round(Number(l.abonado)).toLocaleString("es-CO")}</div>}</td>
+                              <td style={{ padding: "6px 10px", fontSize: 13, color: "var(--text-muted)", maxWidth: 260 }}>{l.items || "—"}{l.notes ? <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Obs: {l.notes}</div> : null}</td>
+                              <td style={{ padding: "6px 10px" }}>{l.deleted_by || "—"}</td>
+                              <td style={{ padding: "6px 10px", color: "var(--text-dim)", fontSize: 13 }}>{l.origen}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
                 })()}
               </div>
 
