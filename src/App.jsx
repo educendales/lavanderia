@@ -129,7 +129,9 @@ const addBusinessDaysSkippingHolidays = (startDate, days) => {
 const getToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const getDeliveryDefault = () => { const d = addBusinessDaysSkippingHolidays(new Date(), 2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const today = getToday();
-const emptyOrder = { client_name: "", phone: "", status: "listo", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "", paid_at_intake: false, payment_method: null };
+const emptyOrder = { client_name: "", phone: "", status: "listo", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "", paid_at_intake: false, payment_method: null, abono_amount: "", abono_method: "efectivo" };
+const PAY_LABELS = { efectivo: "Efectivo", nequi: "Nequi", daviplata: "Daviplata", breb: "Bre-b", tarjeta: "Tarjeta" };
+const fmtCOP = (n) => "$" + String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 const emptyItem = { garment_type: "", quantity: "", price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
 const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = (svcs||DEFAULT_SERVICES).find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
 
@@ -993,23 +995,35 @@ export default function LavanderiaApp() {
     const d = new Date();
     return `OFF${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}-${String(counter).padStart(3,"0")}`;
   };
-  const trySaveOrderOrQueue = async (orderPayload, itemsList) => {
+  const trySaveOrderOrQueue = async (orderPayload, itemsList, abonoRec) => {
     try {
       const res = await db.post("orders", orderPayload);
       if (!Array.isArray(res) || !res[0]) throw new Error("Respuesta inesperada del servidor");
       const orderId = res[0].id;
       for (const item of itemsList) await db.post("order_items", { order_id: orderId, garment_type: item.garment_type, quantity: Number(item.quantity), price: Number(item.price), color: (item.colors||[]).join(", "), service: item.service });
+      if (abonoRec) {
+        try {
+          const ar = await db.post("abonos", { ...abonoRec, order_id: orderId });
+          if (Array.isArray(ar) && ar[0]) setAbonos(prev => [...prev, ar[0]]);
+          else throw new Error("abono no guardado");
+        } catch {
+          const rec = { ...abonoRec, order_id: orderId };
+          saveOfflineActionQueue([...offlineActionQueue, { type: "abono", record: rec }]);
+          setAbonos(prev => [...prev, { ...rec, id: `offline-abono-${Date.now()}` }]);
+        }
+      }
       return { ok: true, offline: false, order: res[0] };
     } catch (err) {
       const tempNumber = getNextOfflineNumber();
       const cleanItems = itemsList.map(it => ({ garment_type: it.garment_type, quantity: Number(it.quantity), price: Number(it.price), color: (it.colors||[]).join(", "), service: it.service }));
-      const queuedOrder = { ...orderPayload, order_number: tempNumber, _tempId: tempNumber, _items: cleanItems };
+      const queuedOrder = { ...orderPayload, order_number: tempNumber, _tempId: tempNumber, _items: cleanItems, ...(abonoRec ? { _abonos: [abonoRec] } : {}) };
       saveOfflineQueue([...offlineQueue, queuedOrder]);
       const localId = `offline-${tempNumber}`;
       const localOrder = { ...orderPayload, id: localId, order_number: tempNumber, _offline: true };
       setOrders(prev => [localOrder, ...prev]);
       const localItems = cleanItems.map((it,i) => ({ ...it, id: `${localId}-${i}`, order_id: localId }));
       setOrderItems(prev => ({ ...prev, [localId]: localItems }));
+      if (abonoRec) setAbonos(prev => [...prev, { ...abonoRec, order_id: localId, id: `offline-abono-${tempNumber}` }]);
       return { ok: true, offline: true, order: localOrder, itemsMap: { [localId]: localItems } };
     }
   };
@@ -1022,7 +1036,7 @@ export default function LavanderiaApp() {
     let syncedAny = false;
     for (const q of queue) {
       try {
-        const { _items, _tempId, _partials, ...orderPayload } = q;
+        const { _items, _tempId, _partials, _abonos, ...orderPayload } = q;
         const res = await db.post("orders", orderPayload);
         if (Array.isArray(res) && res[0]) {
           const orderId = res[0].id;
@@ -1030,6 +1044,13 @@ export default function LavanderiaApp() {
           if (_partials && _partials.length) {
             for (const p of _partials) await db.post("partial_deliveries", { ...p, order_id: orderId });
           }
+          if (_abonos && _abonos.length) {
+            for (const ab of _abonos) {
+              const ar = await db.post("abonos", { ...ab, order_id: orderId });
+              if (!(Array.isArray(ar) && ar[0])) saveOfflineActionQueue([...JSON.parse(localStorage.getItem("offlineActionQueue") || "[]"), { type: "abono", record: { ...ab, order_id: orderId } }]);
+            }
+          }
+          setAbonos(prev => prev.filter(a => a.order_id !== `offline-${_tempId}`));
           setOrders(prev => prev.filter(o => o.id !== `offline-${_tempId}`));
           setPartialDeliveries(prev => prev.filter(p => !(typeof p.id === "string" && p.id.startsWith("offline-partial-") && p.order_id === `offline-${_tempId}`)));
           syncedAny = true;
@@ -1055,6 +1076,10 @@ export default function LavanderiaApp() {
         if (a.type === "entrega_completa") {
           await db.patch("orders", a.orderId, a.orderPatch);
           for (const ip of a.itemPatches) await db.patch("order_items", ip.id, { delivered_qty: ip.delivered_qty });
+          syncedAny = true;
+        } else if (a.type === "abono") {
+          const ar = await db.post("abonos", a.record);
+          if (!(Array.isArray(ar) && ar[0])) throw new Error("abono no guardado");
           syncedAny = true;
         } else if (a.type === "entrega_parcial") {
           for (const ip of a.itemPatches) await db.patch("order_items", ip.id, { delivered_qty: ip.delivered_qty });
@@ -1085,6 +1110,14 @@ export default function LavanderiaApp() {
     return () => clearInterval(interval);
   }, [offlineQueue.length, offlineActionQueue.length]);
 
+  const buildPaymentInfo = (price) => {
+    if (newOrder.paid_at_intake) return { note: `PAGADO ${fmtCOP(price)} (${PAY_LABELS[newOrder.payment_method] || "Efectivo"})`, abono: null };
+    const a = Math.round(Number(newOrder.abono_amount) || 0);
+    if (a <= 0) return { note: "", abono: null };
+    if (a > Math.round(price)) return { error: `⚠️ El abono (${fmtCOP(a)}) es mayor que el total de la orden (${fmtCOP(price)}). Corrige el valor del abono.` };
+    const method = newOrder.abono_method || "efectivo";
+    return { note: `ABONO: ${fmtCOP(a)} (${PAY_LABELS[method] || method}) | SALDO: ${fmtCOP(price - a)}`, abono: { amount: a, payment_method: method, date: today, employee: user.name } };
+  };
   const addOrder = async () => {
     if (!newOrder.client_name || items.length === 0) return;
     if (items.some(it => !(Number(it.quantity) > 0))) { alert("⚠️ Falta la cantidad (Cant.) de prendas en uno de los ítems. Escríbela antes de guardar."); return; }
@@ -1092,10 +1125,12 @@ export default function LavanderiaApp() {
     const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
     const itemsFinal = pctDesc ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctDesc/100)) })) : items;
     const garments = totalGarments(itemsFinal), price = totalPrice(itemsFinal);
+    const pay = buildPaymentInfo(price);
+    if (pay.error) { alert(pay.error); setSaving(false); return; }
     const uniqueServices = [...new Set(itemsFinal.map(it => it.service))];
-    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: newOrder.notes, delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null, domiciliario_id: newOrder.domiciliario_id || null, a_domicilio: !!newOrder.a_domicilio, address: newOrder.address || "", paid_at_intake: !!newOrder.paid_at_intake, payment_method: newOrder.paid_at_intake ? newOrder.payment_method : null };
+    const o = { client_name: newOrder.client_name, phone: newOrder.phone, status: newOrder.status, notes: [newOrder.notes, pay.note].filter(Boolean).join(" | "), delivery_date: newOrder.delivery_date, service: uniqueServices.join(","), employee: user.name, date: today, garments, price, agencia_id: newOrder.agencia_id || null, domiciliario_id: newOrder.domiciliario_id || null, a_domicilio: !!newOrder.a_domicilio, address: newOrder.address || "", paid_at_intake: !!newOrder.paid_at_intake, payment_method: newOrder.paid_at_intake ? newOrder.payment_method : null };
     const savedItems = [...itemsFinal];
-    const result = await trySaveOrderOrQueue(o, itemsFinal);
+    const result = await trySaveOrderOrQueue(o, itemsFinal, pay.abono);
     if (result.ok && !result.offline && !newOrder.agencia_id && !newOrder.domiciliario_id) {
       const existing = clients.find(c => c.phone === newOrder.phone);
       if (existing) { await db.patch("clients", existing.id, { total_orders: (existing.total_orders||0)+1 }); setClients(prev => prev.map(c => c.id === existing.id ? { ...c, total_orders: (c.total_orders||0)+1 } : c)); }
@@ -5280,6 +5315,30 @@ export default function LavanderiaApp() {
                       </div>
                     </div>
                   )}
+                  {!newOrder.paid_at_intake && (() => {
+                    const pctD = getAgencyDiscountPctFor(newOrder.agencia_id);
+                    const totalNow = totalPrice(pctD ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctD/100)) })) : items);
+                    const ab = Math.round(Number(newOrder.abono_amount) || 0);
+                    const excede = ab > Math.round(totalNow);
+                    return (
+                      <div style={{ background:"rgba(255,213,79,0.06)",border:`1px solid ${excede?"#EF5350":"rgba(255,213,79,0.35)"}`,borderRadius:10,padding:"10px 14px" }}>
+                        <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:6 }}>💵 ABONO AL RECIBIR (opcional)</label>
+                        <input type="number" min={0} placeholder="0" value={newOrder.abono_amount} onChange={e=>setNewOrder(p=>({...p,abono_amount:e.target.value}))} onWheel={e=>e.target.blur()} style={{ ...inp,fontSize:17,fontWeight:700,borderColor:excede?"#EF5350":"var(--border)" }} />
+                        {ab > 0 && (
+                          <>
+                            <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:8 }}>
+                              {[{value:"efectivo",label:"💵 Efectivo"},{value:"nequi",label:"📱 Nequi"},{value:"daviplata",label:"💜 Daviplata"},{value:"breb",label:"🔵 Bre-b"},{value:"tarjeta",label:"💳 Tarjeta"}].map(opt => (
+                                <label key={opt.value} onClick={()=>setNewOrder(p=>({...p,abono_method:opt.value}))} style={{ flex:"1 1 28%",textAlign:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:newOrder.abono_method===opt.value?"rgba(255,213,79,0.15)":"rgba(255,255,255,0.04)",border:`2px solid ${newOrder.abono_method===opt.value?"#FFD54F":"var(--border)"}`,borderRadius:10,padding:"6px 4px",color:newOrder.abono_method===opt.value?"var(--warning-text)":"var(--text-muted)" }}>{opt.label}</label>
+                              ))}
+                            </div>
+                            <div style={{ fontSize:14,marginTop:8,color:excede?"#EF5350":"var(--text-muted)" }}>
+                              {excede ? `⚠️ El abono supera el total (${fmtCOP(totalNow)})` : <>Total {fmtCOP(totalNow)} · Saldo restante: <strong style={{ color:"var(--warning-text)" }}>{fmtCOP(totalNow-ab)}</strong></>}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 </div>
                 <div style={{ padding:"14px 28px 28px", borderTop:"1px solid var(--bg-surface)", display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -5293,10 +5352,12 @@ export default function LavanderiaApp() {
                       const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
                       const itemsFinal = pctDesc ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctDesc/100)) })) : items;
                       const garments=totalGarments(itemsFinal), price=totalPrice(itemsFinal);
+                      const pay=buildPaymentInfo(price);
+                      if(pay.error){alert(pay.error);setSaving(false);return;}
                       const uniqueServices=[...new Set(itemsFinal.map(it=>it.service))];
-                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:newOrder.notes,delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null,domiciliario_id:newOrder.domiciliario_id||null,a_domicilio:!!newOrder.a_domicilio,address:newOrder.address||"",paid_at_intake:!!newOrder.paid_at_intake,payment_method:newOrder.paid_at_intake?newOrder.payment_method:null};
+                      const o={client_name:newOrder.client_name,phone:newOrder.phone,status:newOrder.status,notes:[newOrder.notes,pay.note].filter(Boolean).join(" | "),delivery_date:newOrder.delivery_date,service:uniqueServices.join(","),employee:user.name,date:today,garments,price,agencia_id:newOrder.agencia_id||null,domiciliario_id:newOrder.domiciliario_id||null,a_domicilio:!!newOrder.a_domicilio,address:newOrder.address||"",paid_at_intake:!!newOrder.paid_at_intake,payment_method:newOrder.paid_at_intake?newOrder.payment_method:null};
                       const itemsSnapshot=[...itemsFinal];
-                      const result=await trySaveOrderOrQueue(o, itemsSnapshot);
+                      const result=await trySaveOrderOrQueue(o, itemsSnapshot, pay.abono);
                       if(result.ok && !result.offline){
                         const orderId=result.order.id;
                         if(!newOrder.agencia_id&&!newOrder.domiciliario_id){
