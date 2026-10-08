@@ -130,7 +130,7 @@ const getToday = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const getDeliveryDefault = () => { const d = addBusinessDaysSkippingHolidays(new Date(), 2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const today = getToday();
 const emptyOrder = { client_name: "", phone: "", status: "listo", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "", paid_at_intake: false, payment_method: null };
-const emptyItem = { garment_type: "", quantity: 1, price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
+const emptyItem = { garment_type: "", quantity: "", price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
 const getServiceLabel = (serviceStr, svcs) => { if (!serviceStr) return ""; return serviceStr.split(",").map(sid => { const sv = (svcs||DEFAULT_SERVICES).find(s => s.id === sid.trim()); return sv ? `${sv.icon} ${sv.label}` : sid; }).join(" + "); };
 
 export default function LavanderiaApp() {
@@ -1087,6 +1087,7 @@ export default function LavanderiaApp() {
 
   const addOrder = async () => {
     if (!newOrder.client_name || items.length === 0) return;
+    if (items.some(it => !(Number(it.quantity) > 0))) { alert("⚠️ Falta la cantidad (Cant.) de prendas en uno de los ítems. Escríbela antes de guardar."); return; }
     setSaving(true);
     const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
     const itemsFinal = pctDesc ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctDesc/100)) })) : items;
@@ -5276,6 +5277,7 @@ export default function LavanderiaApp() {
                     </button>
                     <button ref={guardarImprimirBtnRef} onClick={async () => {
                       if (!newOrder.client_name || items.length === 0) return;
+                      if (items.some(it => !(Number(it.quantity) > 0))) { alert("⚠️ Falta la cantidad (Cant.) de prendas en uno de los ítems. Escríbela antes de guardar."); return; }
                       setSaving(true);
                       const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
                       const itemsFinal = pctDesc ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctDesc/100)) })) : items;
