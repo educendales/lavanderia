@@ -2905,6 +2905,14 @@ export default function LavanderiaApp() {
                       <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Total órdenes</span>
                       <span style={{ fontWeight: 800, color: "#4FC3F7" }}>{c.total_orders||0}</span>
                     </div>
+                    <button onClick={() => {
+                      const defaultPrice = precioByService[emptyItem.service]?.[emptyItem.garment_type] || precioDefaults[emptyItem.garment_type] || "";
+                      setItems([{ ...emptyItem, price: defaultPrice }]);
+                      setNewOrder({ ...emptyOrder, delivery_date: getDeliveryDefault(), phone: c.phone || "", client_name: c.name || "" }); lastAutoNotesRef.current = "";
+                      setTab("orders");
+                      setModal("newOrder");
+                      setTimeout(()=>{firstGarmentInputRef.current?.focus();firstGarmentInputRef.current?.select();},150);
+                    }} style={{ ...btn, width: "100%", marginTop: 10, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "9px 12px", fontSize: 15, fontWeight: 700 }}>➕ Crear orden</button>
                   </div>
                 ))}
                 {filteredClients.length === 0 && <p style={{ color: "var(--text-dim)" }}>No se encontraron clientes</p>}
