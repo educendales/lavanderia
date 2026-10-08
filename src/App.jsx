@@ -968,7 +968,7 @@ export default function LavanderiaApp() {
   const handleLogin = () => { if (selectedEmp && pin === selectedEmp.pin) { setUser(selectedEmp); setPinError(false); } else { setPinError(true); setPin(""); } };
   const totalGarments = (its) => its.reduce((s, i) => s + Number(i.quantity) * getPiecesPerUnit(i.garment_type), 0);
   const totalPrice = (its) => its.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0);
-  const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); const brandFound = shoeBrands.filter(b => { const k="marca_"+b.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); if (!found.length && !brandFound.length) return null; const qty = Number(it.quantity)||1; const brandTxt = brandFound.length ? ` (${brandFound.join(", ")})` : ""; return `${qty>1?qty+" ":""}${it.garment_type}${brandTxt}${found.length?": "+found.join(", "):""}`; }).filter(Boolean); return lines.join(" | "); };
+  const buildNotes = (its) => { const lines = its.map(it => { const found = conditions.filter(c => { const k=c.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); const brandFound = shoeBrands.filter(b => { const k="marca_"+b.toLowerCase().replace(/\s+/g,"_"); return it[k]; }); const extraTxt = String(it.obs_extra||"").replace(/\|/g,"/").replace(/\s+/g," ").trim(); if (!found.length && !brandFound.length && !extraTxt) return null; const qty = Number(it.quantity)||1; const brandTxt = brandFound.length ? ` (${brandFound.join(", ")})` : ""; const detail = [found.join(", "), extraTxt].filter(Boolean).join(", "); return `${qty>1?qty+" ":""}${it.garment_type}${brandTxt}${detail?": "+detail:""}`; }).filter(Boolean); return lines.join(" | "); };
   const applyAutoNotes = (its) => {
     const newAuto = buildNotes(its);
     setNewOrder(p => {
@@ -1143,7 +1143,7 @@ export default function LavanderiaApp() {
       }
       const conditionKeys = conditions.map(c => c.toLowerCase().replace(/\s+/g,"_"));
       const brandKeys = shoeBrands.map(b => "marca_"+b.toLowerCase().replace(/\s+/g,"_"));
-      if (conditionKeys.includes(field) || brandKeys.includes(field)) applyAutoNotes(updated);
+      if (conditionKeys.includes(field) || brandKeys.includes(field) || field === "obs_extra") applyAutoNotes(updated);
       if (field === "garment_type") {
         applyAutoNotes(updated);
       }
@@ -5222,6 +5222,9 @@ export default function LavanderiaApp() {
                             })}</div>
                           </div>
                         )}
+                        <div style={{ marginTop:8 }}>
+                          <input type="text" maxLength={120} placeholder="✍️ Otra observación de esta prenda (opcional)..." value={item.obs_extra||""} onChange={e=>updateItem(i,"obs_extra",e.target.value)} style={{ ...inp,padding:"8px 12px",fontSize:14,width:"100%",boxSizing:"border-box" }} />
+                        </div>
                       </div>
                       {i===0 && <button onClick={addItem} style={{ ...btn,background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"6px 12px",fontSize:14,marginTop:6,marginBottom:10 }}>+ Agregar</button>}
                       </div>
