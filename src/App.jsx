@@ -640,6 +640,7 @@ export default function LavanderiaApp() {
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (order.status === "entregado" || order.status === "parcial") {
       if (!window.confirm(`¿Reversar la orden ${order.order_number} a "Listo"? Todas sus prendas volverán a quedar como pendientes por recoger.`)) return;
+      await logDeletedOrder(order, "Reversada a Listo (no se borró)");
       await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null, reversada: true });
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null, reversada: true } : o));
       setReversarResults(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", reversada: true } : o));
@@ -1263,8 +1264,15 @@ export default function LavanderiaApp() {
         items: its.map(it => `${it.quantity}x ${it.garment_type}${it.color ? " " + it.color : ""} $${Math.round(Number(it.price) || 0)}`).join(" | "),
         notes: order.notes || "", deleted_by: user?.name || "", origen, date: today
       });
-      if (Array.isArray(res) && res[0]) setDeletedOrdersLog(prev => [res[0], ...prev]);
-    } catch (e) { console.error("No se pudo registrar el borrado:", e); }
+      if (Array.isArray(res) && res[0]) { setDeletedOrdersLog(prev => [res[0], ...prev]); return true; }
+      console.error("Registro de borrado rechazado:", res);
+      alert("⚠️ La acción se hizo, pero NO se pudo guardar en el registro de órdenes eliminadas.\n\nLo más probable: falta crear la tabla 'deleted_orders_log' en Supabase (corre el SQL del registro) o le falta alguna columna.\n\nDetalle: " + (res && (res.message || res.hint || res.details) || "respuesta inesperada"));
+      return false;
+    } catch (e) {
+      console.error("No se pudo registrar el borrado:", e);
+      alert("⚠️ La acción se hizo, pero NO se pudo guardar en el registro de órdenes eliminadas (sin conexión o error de Supabase).");
+      return false;
+    }
   };
   const deleteOrder = async (id) => {
     const orderToLog = orders.find(o => o.id === id);
@@ -4170,8 +4178,8 @@ export default function LavanderiaApp() {
 
               {/* ÓRDENES ELIMINADAS (REGISTRO) */}
               <div style={{ ...card, marginTop: 20 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#EF5350" }}>🗑 Órdenes Eliminadas</h3>
-                <p style={{ margin: "0 0 14px", fontSize: 15, color: "var(--text-muted)" }}>Registro de cada orden que se elimina: qué era, cuánto valía, y quién la eliminó. Solo cuenta desde que se activó este registro.</p>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#EF5350" }}>🗑 Órdenes Eliminadas y Reversadas</h3>
+                <p style={{ margin: "0 0 14px", fontSize: 15, color: "var(--text-muted)" }}>Registro de cada orden que se elimina o se reversa de Entregado a Listo: qué era, cuánto valía, y quién lo hizo. Solo cuenta desde que se activó este registro.</p>
                 <input style={{ ...inp, marginBottom: 12, maxWidth: 320 }} placeholder="Buscar por número, cliente o teléfono..." value={deletedLogFilter} onChange={e => setDeletedLogFilter(e.target.value)} />
                 {(() => {
                   const q = deletedLogFilter.trim().toLowerCase();
@@ -4202,7 +4210,7 @@ export default function LavanderiaApp() {
                               <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>${Math.round(Number(l.price) || 0).toLocaleString("es-CO")}{Number(l.abonado) > 0 && <div style={{ fontSize: 12, color: "#66BB6A" }}>abonó ${Math.round(Number(l.abonado)).toLocaleString("es-CO")}</div>}</td>
                               <td style={{ padding: "6px 10px", fontSize: 13, color: "var(--text-muted)", maxWidth: 260 }}>{l.items || "—"}{l.notes ? <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Obs: {l.notes}</div> : null}</td>
                               <td style={{ padding: "6px 10px" }}>{l.deleted_by || "—"}</td>
-                              <td style={{ padding: "6px 10px", color: "var(--text-dim)", fontSize: 13 }}>{l.origen}</td>
+                              <td style={{ padding: "6px 10px", color: String(l.origen||"").startsWith("Reversada") ? "var(--warning-text)" : "var(--text-dim)", fontSize: 13 }}>{l.origen}</td>
                             </tr>
                           ))}
                         </tbody>
