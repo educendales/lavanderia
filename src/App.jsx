@@ -130,6 +130,14 @@ const getToday = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const getDeliveryDefault = () => { const d = addBusinessDaysSkippingHolidays(new Date(), 2); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const today = getToday();
 const emptyOrder = { client_name: "", phone: "", status: "listo", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "", paid_at_intake: false, payment_method: null, abono_amount: "", abono_method: "efectivo" };
+// Número de orden como se ve en recibos: las normales sin la "S" ni ceros al inicio (S070266 -> 70266); agencias (A) y domicilios (D) conservan su letra.
+// true = recibos sin "S" ni ceros (versión LUIS). false = como Shaddai/Ricardo (número completo grande, "Factura No." sin letra).
+const NUMERO_SIN_S_NI_CEROS = false;
+const shownOrderNum = (n) => NUMERO_SIN_S_NI_CEROS ? String(n || "").replace(/^S0*(?=\d)/i, "") : String(n || "");
+const factOrderNum = (n) => NUMERO_SIN_S_NI_CEROS ? shownOrderNum(n) : String(n || "").replace(/^[A-Za-z]/, "");
+const orderNumKey = (n) => String(n || "").trim().toLowerCase().replace(/^s?0*(?=\d)/, "");
+// Busca por número exacto primero; si no, tolera "S" y ceros al inicio (70266 = S070266 = 070266).
+const findOrderByNum = (list, q) => { const t = String(q || "").trim().toLowerCase(); if (!t) return undefined; return list.find(o => String(o.order_number || "").toLowerCase() === t) || list.find(o => orderNumKey(o.order_number) === orderNumKey(t)); };
 const PAY_LABELS = { efectivo: "Efectivo", nequi: "Nequi", daviplata: "Daviplata", breb: "Bre-b", tarjeta: "Tarjeta" };
 const fmtCOP = (n) => "$" + String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 const emptyItem = { garment_type: "", quantity: "", price: "", colors: [], service: "lavado_normal", decolorado: false, percudido: false, roto: false, manchado: false };
@@ -394,7 +402,7 @@ export default function LavanderiaApp() {
         const ordenActual = ordersRef.current.find(x => x.id === o.id);
         const sigueListo = ordenActual && ordenActual.status === "listo";
         if (sigueListo) {
-          const msg = getRandomWaMensaje(o.client_name, o.order_number || "");
+          const msg = getRandomWaMensaje(o.client_name, shownOrderNum(o.order_number));
           window.open(getWhatsAppUrl(negocioPais + (o.phone||"").replace(/[^0-9]/g,""), msg), "lavagest_whatsapp");
         } else {
           omitidos++;
@@ -628,7 +636,7 @@ export default function LavanderiaApp() {
   const searchReversar = () => {
     const q = reversarSearch.trim().toLowerCase();
     if (!q) return;
-    const byOrder = orders.find(o => o.order_number?.toLowerCase() === q);
+    const byOrder = findOrderByNum(orders, q);
     if (byOrder) { setReversarResults([byOrder]); }
     else { setReversarResults(orders.filter(o => o.phone?.toLowerCase().includes(q))); }
     setReversarDone(false);
@@ -639,7 +647,7 @@ export default function LavanderiaApp() {
     const pwd = await askClave("Ingresa la clave:");
     if (pwd !== clave) { if (pwd !== null) alert("❌ Clave incorrecta"); return; }
     if (order.status === "entregado" || order.status === "parcial") {
-      if (!window.confirm(`¿Reversar la orden ${order.order_number} a "Listo"? Todas sus prendas volverán a quedar como pendientes por recoger.`)) return;
+      if (!window.confirm(`¿Reversar la orden ${shownOrderNum(order.order_number)} a "Listo"? Todas sus prendas volverán a quedar como pendientes por recoger.`)) return;
       await logDeletedOrder(order, "Reversada a Listo (no se borró)");
       await db.patch("orders", order.id, { status: "listo", payment_method: null, sin_recibo: false, delivered_at: null, reversada: true });
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "listo", payment_method: null, delivered_at: null, reversada: true } : o));
@@ -650,7 +658,7 @@ export default function LavanderiaApp() {
         setOrderItems(prev => ({ ...prev, [order.id]: its.map(it => ({ ...it, delivered_qty: 0 })) }));
       }
     } else {
-      if (!window.confirm(`¿Eliminar la orden ${order.order_number}? El cliente no dejó las prendas.\n\nEsto también borrará sus abonos, entregas parciales y prendas registradas — no podrás deshacerlo.`)) return;
+      if (!window.confirm(`¿Eliminar la orden ${shownOrderNum(order.order_number)}? El cliente no dejó las prendas.\n\nEsto también borrará sus abonos, entregas parciales y prendas registradas — no podrás deshacerlo.`)) return;
       await logDeletedOrder(order, "Reversar");
       await db.deleteBy("order_items", "order_id", order.id);
       await db.deleteBy("abonos", "order_id", order.id);
@@ -1274,6 +1282,12 @@ export default function LavanderiaApp() {
       return false;
     }
   };
+  const deleteLogEntry = async (l) => {
+    const ok = await checkClave("eliminar del registro"); if (!ok) return;
+    if (!window.confirm(`¿Quitar del registro la orden ${shownOrderNum(l.order_number)||""} de ${l.client_name || ""}? Solo se borra la anotación del registro, no hay forma de recuperarla.`)) return;
+    await db.delete("deleted_orders_log", l.id);
+    setDeletedOrdersLog(prev => prev.filter(x => x.id !== l.id));
+  };
   const deleteOrder = async (id) => {
     const orderToLog = orders.find(o => o.id === id);
     if (orderToLog) await logDeletedOrder(orderToLog, "Tabla de órdenes");
@@ -1289,7 +1303,7 @@ export default function LavanderiaApp() {
 
   const searchEntrega = () => {
     const q = entregaSearch.trim().toLowerCase(); if (!q) return;
-    const byOrder = orders.find(o => o.order_number?.toLowerCase() === q);
+    const byOrder = findOrderByNum(orders, q);
     const results = byOrder ? [byOrder] : orders.filter(o => o.phone?.toLowerCase().includes(q));
     setEntregaResults(results);
     setEntregaResult(null); setEntregaConfirmed(false); setEntregaSinRecibo(false); setEntregaPayment("");
@@ -1299,7 +1313,7 @@ export default function LavanderiaApp() {
     if (yaSinRecibo.length > 0) {
       const msg = yaSinRecibo.map(o => {
         const fecha = o.delivered_at ? new Date(o.delivered_at + "T00:00:00").toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }) : "fecha desconocida";
-        return `Orden ${o.order_number || "—"}: entregada SIN RECIBO el ${fecha} por ${o.delivered_by || "—"}.`;
+        return `Orden ${shownOrderNum(o.order_number)||"—"}: entregada SIN RECIBO el ${fecha} por ${o.delivered_by || "—"}.`;
       }).join("\n");
       alert("⚠️ ATENCIÓN — Esta orden ya fue entregada SIN RECIBO:\n\n" + msg + "\n\nSi el cliente presenta el comprobante físico, verifica bien antes de entregar nuevamente.");
     }
@@ -1443,12 +1457,12 @@ export default function LavanderiaApp() {
       }
     </style></head><body>
       <div class="center">
-        <div style="font-size:11px">Factura No.: ${order.order_number?.replace(/^[A-Za-z]/,"") || ""}</div>
+        <div style="font-size:11px">Factura No.: ${factOrderNum(order.order_number)}</div>
         ${logoEnRecibo && negocioLogo ? `<img src="${negocioLogo}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;margin:4px 0" />` : ''}
         <div class="negocio-nombre">${negocioNombre.toUpperCase()}</div>
         <div style="font-size:11px;margin-top:2px">${negocioDireccion}</div>
         <div style="font-size:11px">${reciboSubtitulo}</div>
-        <div class="huge">*${order.order_number||""}*</div>
+        <div class="huge">*${shownOrderNum(order.order_number)}*</div>
         <svg id="barcode"></svg>
       </div>
       <script>
@@ -1513,12 +1527,12 @@ export default function LavanderiaApp() {
       div.style.cssText = "position:fixed;left:-9999px;top:0;width:300px;background:#fff;padding:16px;font-family:Courier New,monospace;font-size:11px;color:#000;";
       div.innerHTML = `
         <div style="text-align:center;margin-bottom:8px">
-          <div style="font-weight:bold;font-size:13px">Factura No.: ${order.order_number?.replace(/^[A-Za-z]/,"")||""}</div>
+          <div style="font-weight:bold;font-size:13px">Factura No.: ${factOrderNum(order.order_number)}</div>
           ${logoEnRecibo && negocioLogo ? `<img src="${negocioLogo}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;margin-bottom:4px" />` : ''}
           <div style="font-weight:bold;font-size:15px;margin:4px 0">${negocioNombre.toUpperCase()}</div>
           <div>${negocioDireccion}</div>
           <div style="font-size:10px">${reciboSubtitulo}</div>
-          <div style="font-weight:bold;font-size:20px;letter-spacing:2px;margin:6px 0">*${order.order_number||""}*</div>
+          <div style="font-weight:bold;font-size:20px;letter-spacing:2px;margin:6px 0">*${shownOrderNum(order.order_number)}*</div>
         </div>
         <hr style="border:1px dashed #000;margin:6px 0"/>
         <table style="width:100%;font-size:10px">
@@ -1556,7 +1570,7 @@ export default function LavanderiaApp() {
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `recibo_${order.order_number||"orden"}.png`;
+          a.download = `recibo_${shownOrderNum(order.order_number)||"orden"}.png`;
           a.click();
           URL.revokeObjectURL(url);
           resolve();
@@ -1889,7 +1903,7 @@ export default function LavanderiaApp() {
     }
     // Header - centered bold
     data += CENTER + BOLD_ON;
-    data += "Factura No.: " + (order.order_number?.replace(/^[A-Za-z]/,"") || "") + LF;
+    data += "Factura No.: " + factOrderNum(order.order_number) + LF;
     data += BOLD_OFF;
     data += LF;
     data += BOLD_ON + BIG_ON;
@@ -1920,7 +1934,7 @@ export default function LavanderiaApp() {
       data += sideLine + LF;
     }
     data += GS + "!" + numSizeCmd;
-    data += (order.order_number||"") + LF;
+    data += shownOrderNum(order.order_number) + LF;
     data += GS + "!\x00";
     if (numeroOrdenCuadro) {
       data += sideLine + LF;
@@ -2101,12 +2115,12 @@ export default function LavanderiaApp() {
     </style></head><body>
       <div class="center title">CONSTANCIA DE ENTREGA<br/>SIN RECIBO FÍSICO</div>
       <div class="center">${negocioNombre.toUpperCase()}</div>
-      <div class="center ordernum">*${order.order_number || ""}*</div>
+      <div class="center ordernum">*${shownOrderNum(order.order_number)||""}*</div>
       <div class="line"></div>
       <p><b>Fecha:</b> ${fechaHoy}</p>
-      <p>Yo <b>${order.client_name || ""}</b>, recibí de parte de <b>${negocioNombre}</b> las siguientes prendas correspondientes a la orden de servicio <b>${order.order_number || ""}</b>:</p>
+      <p>Yo <b>${order.client_name || ""}</b>, recibí de parte de <b>${negocioNombre}</b> las siguientes prendas correspondientes a la orden de servicio <b>${shownOrderNum(order.order_number)||""}</b>:</p>
       <p>${detalle}</p>
-      <p>Mi firma en este documento certifica que he recibido las prendas a satisfacción y que el comprobante físico de la orden de servicio <b>${order.order_number || ""}</b> pierde toda validez para el reclamo de prendas.</p>
+      <p>Mi firma en este documento certifica que he recibido las prendas a satisfacción y que el comprobante físico de la orden de servicio <b>${shownOrderNum(order.order_number)||""}</b> pierde toda validez para el reclamo de prendas.</p>
       <div class="firma">${order.client_name || ""}<br/>C.C./Tel: ${order.phone || ""}</div>
       <div class="line"></div>
       <div class="center" style="font-size:10px">Fecha de impresión: ${horaImpresion}<br/>${negocioNombre}</div>
@@ -2166,11 +2180,11 @@ export default function LavanderiaApp() {
     data += LINE + LF;
     data += LEFT;
     data += "Fecha: " + fechaHoy + LF + LF;
-    data += wrap(`Yo ${order.client_name || ""}, recibi de parte de ${negocioNombre} las siguientes prendas correspondientes a la orden de servicio ${order.order_number || ""}:`);
+    data += wrap(`Yo ${order.client_name || ""}, recibi de parte de ${negocioNombre} las siguientes prendas correspondientes a la orden de servicio ${shownOrderNum(order.order_number)||""}:`);
     data += LF;
     data += wrap(detalle);
     data += LF;
-    data += wrap(`Mi firma en este documento certifica que he recibido las prendas a satisfaccion y que el comprobante fisico de la orden de servicio ${order.order_number || ""} pierde toda validez para el reclamo de prendas.`);
+    data += wrap(`Mi firma en este documento certifica que he recibido las prendas a satisfaccion y que el comprobante fisico de la orden de servicio ${shownOrderNum(order.order_number)||""} pierde toda validez para el reclamo de prendas.`);
     data += LF + LF + LF;
     data += CENTER;
     data += "_______________________________" + LF;
@@ -2531,7 +2545,7 @@ export default function LavanderiaApp() {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                            {o.order_number && <span style={{ fontSize: 13, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 7px", borderRadius: 6 }}>{o.order_number}</span>}
+                            {o.order_number && <span style={{ fontSize: 13, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "2px 7px", borderRadius: 6 }}>{shownOrderNum(o.order_number)}</span>}
                             <div style={{ fontWeight: 600, fontSize: 16 }}>{o.client_name}</div>
                           </div>
                           <div style={{ fontSize: 14, color: "var(--text-muted)" }}>{getServiceLabel(o.service, services)} · {o.garments} prendas</div>
@@ -2598,7 +2612,7 @@ export default function LavanderiaApp() {
                   <tbody>
                     {filteredOrders.map(o => (
                       <tr key={o.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
-                        <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{o.order_number||"—"}</span></td>
+                        <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{shownOrderNum(o.order_number)||"—"}</span></td>
                         <td style={{ padding: "12px 14px" }}><div style={{ fontWeight: 600, display:"flex", alignItems:"center", gap:6 }}>{o.client_name}{o.a_domicilio && <span title="Recibido a domicilio" style={{ fontSize: 13, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "1px 6px", borderRadius: 10 }}>🛵</span>}{o.paid_at_intake && <span title="Pagado al recibir" style={{ fontSize: 13, background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", padding: "1px 6px", borderRadius: 10 }}>💰</span>}{o._offline && <span title="Pendiente de sincronizar (guardado sin conexión)" style={{ fontSize: 13, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "1px 6px", borderRadius: 10 }}>⏳</span>}</div><div style={{ fontSize: 13, color: "var(--text-muted)" }}>{o.phone}</div></td>
                         <td style={{ padding: "12px 14px" }}>
                           <div style={{ fontWeight: 600 }}>{o.garments} prendas</div>
@@ -2690,7 +2704,7 @@ export default function LavanderiaApp() {
                         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 180, overflowY: "auto" }}>
                           {selectedEntregas.map(o => (
                             <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-app)", borderRadius: 8, padding: "6px 10px" }}>
-                              <span style={{ fontSize: 13, color: "var(--text-muted)", minWidth: 90 }}>{o.order_number} · ${Math.round(Number(o.price))}</span>
+                              <span style={{ fontSize: 13, color: "var(--text-muted)", minWidth: 90 }}>{shownOrderNum(o.order_number)} · ${Math.round(Number(o.price))}</span>
                               <div style={{ display: "flex", gap: 4, flex: 1 }}>
                                 {[{value:"efectivo",label:"💵"},{value:"nequi",label:"📱"},{value:"daviplata",label:"💜"},{value:"breb",label:"🔵"},{value:"tarjeta",label:"💳"}].map(opt => (
                                   <button key={opt.value} onClick={() => setEntregaMultiPaymentByOrder(prev => ({ ...prev, [o.id]: opt.value }))} title={opt.value} style={{ flex:1,padding:"5px 0",borderRadius:6,border:`1.5px solid ${entregaMultiPaymentByOrder[o.id]===opt.value?"#66BB6A":"var(--border)"}`,background:entregaMultiPaymentByOrder[o.id]===opt.value?"rgba(102,187,106,0.2)":"transparent",cursor:"pointer",fontSize:14 }}>{opt.label}</button>
@@ -2726,7 +2740,7 @@ export default function LavanderiaApp() {
                           {!isPending && <span style={{ fontSize: 21, flexShrink: 0 }}>{yaSinRecibo?"⚠️":"✅"}</span>}
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                              <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 15 }}>{o.order_number||"—"}</span>
+                              <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 15 }}>{shownOrderNum(o.order_number)||"—"}</span>
                               <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
                               {yaSinRecibo && <span style={{ background: "rgba(239,83,80,0.2)", color: "#EF5350", padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 700 }}>⚠️ Entregada sin recibo</span>}
                             </div>
@@ -2751,7 +2765,7 @@ export default function LavanderiaApp() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 12px", borderRadius: 8, fontSize: 18 }}>{entregaResult.order_number||"—"}</span>
+                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "4px 12px", borderRadius: 8, fontSize: 18 }}>{shownOrderNum(entregaResult.order_number)||"—"}</span>
                           <span style={{ background: STATUS_LABELS[entregaResult.status]?.color+"22", color: STATUS_LABELS[entregaResult.status]?.color, padding: "4px 12px", borderRadius: 20, fontSize: 15, fontWeight: 600 }}>{STATUS_LABELS[entregaResult.status]?.label}</span>
                         </div>
                         <div style={{ fontWeight: 800, fontSize: 23, marginBottom: 2 }}>{entregaResult.client_name}</div>
@@ -2885,7 +2899,7 @@ export default function LavanderiaApp() {
                         </div>}
                         <div style={{ display:"flex",gap:10 }}>
                           {entregaResult.phone && <button onClick={() => {
-                            const msg = `Hola ${entregaResult.client_name}, resumen de tu retiro en ${negocioNombre} (Orden ${entregaResult.order_number}):\n\nSe entregó: ${parcialConfirmedInfo.itemsSummary}\nPagado ahora: $${Math.round(parcialConfirmedInfo.amount).toLocaleString()}\n${!parcialConfirmedInfo.fullyDelivered?`\nPendiente por recoger: ${parcialConfirmedInfo.pendientesSummary}\nSaldo: $${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}`:"\n¡Ya recogiste todo! Gracias por preferirnos."}`;
+                            const msg = `Hola ${entregaResult.client_name}, resumen de tu retiro en ${negocioNombre} (Orden ${shownOrderNum(entregaResult.order_number)}):\n\nSe entregó: ${parcialConfirmedInfo.itemsSummary}\nPagado ahora: $${Math.round(parcialConfirmedInfo.amount).toLocaleString()}\n${!parcialConfirmedInfo.fullyDelivered?`\nPendiente por recoger: ${parcialConfirmedInfo.pendientesSummary}\nSaldo: $${Math.round(parcialConfirmedInfo.saldo).toLocaleString()}`:"\n¡Ya recogiste todo! Gracias por preferirnos."}`;
                             window.open(getWhatsAppUrl(negocioPais + entregaResult.phone.replace(/[^0-9]/g,""), msg), "lavagest_whatsapp");
                           }} style={{ ...btn, background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#fff", flex: 1, padding: 12 }}>📱 Enviar resumen por WhatsApp</button>}
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setParcialConfirmedInfo(null); setEntregaPayment(""); setEntregaSinRecibo(false); setParcialPayment(""); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
@@ -2948,6 +2962,7 @@ export default function LavanderiaApp() {
                       <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Total órdenes</span>
                       <span style={{ fontWeight: 800, color: "#4FC3F7" }}>{c.total_orders||0}</span>
                     </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                     <button onClick={() => {
                       const defaultPrice = precioByService[emptyItem.service]?.[emptyItem.garment_type] || precioDefaults[emptyItem.garment_type] || "";
                       setItems([{ ...emptyItem, price: defaultPrice }]);
@@ -2955,7 +2970,9 @@ export default function LavanderiaApp() {
                       setTab("orders");
                       setModal("newOrder");
                       setTimeout(()=>{firstGarmentInputRef.current?.focus();firstGarmentInputRef.current?.select();},150);
-                    }} style={{ ...btn, width: "100%", marginTop: 10, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "9px 12px", fontSize: 15, fontWeight: 700 }}>➕ Crear orden</button>
+                    }} style={{ ...btn, flex: 1, background: "linear-gradient(135deg,#4FC3F7,#0288D1)", color: "#fff", padding: "9px 8px", fontSize: 14, fontWeight: 700 }}>➕ Crear orden</button>
+                    <button onClick={() => { setTab("entregas"); setEntregaSearch(c.phone || ""); setBarcodeTrigger(t => t + 1); }} disabled={!c.phone} style={{ ...btn, flex: 1, background: "linear-gradient(135deg,#66BB6A,#388E3C)", color: "#fff", padding: "9px 8px", fontSize: 14, fontWeight: 700, opacity: c.phone ? 1 : 0.5 }}>📦 Entregas</button>
+                    </div>
                   </div>
                 ))}
                 {filteredClients.length === 0 && <p style={{ color: "var(--text-dim)" }}>No se encontraron clientes</p>}
@@ -3035,7 +3052,7 @@ export default function LavanderiaApp() {
                           <tbody>
                             {agencyOrders.map(o => (
                               <tr key={o.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
-                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,138,101,0.15)", color: "#FF8A65", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{o.order_number||"—"}</span></td>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(255,138,101,0.15)", color: "#FF8A65", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{shownOrderNum(o.order_number)||"—"}</span></td>
                                 <td style={{ padding: "12px 14px", fontWeight: 600 }}>{o.client_name}</td>
                                 <td style={{ padding: "12px 14px" }}>{o.garments} prendas</td>
                                 <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
@@ -3129,7 +3146,7 @@ export default function LavanderiaApp() {
                           <tbody>
                             {domiciliarioOrders.map(o => (
                               <tr key={o.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
-                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(102,187,106,0.15)", color: "#66BB6A", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{o.order_number||"—"}</span></td>
+                                <td style={{ padding: "12px 14px" }}><span style={{ background: "rgba(102,187,106,0.15)", color: "#66BB6A", fontWeight: 800, padding: "4px 10px", borderRadius: 8, fontSize: 15 }}>{shownOrderNum(o.order_number)||"—"}</span></td>
                                 <td style={{ padding: "12px 14px", fontWeight: 600 }}>{o.client_name}</td>
                                 <td style={{ padding: "12px 14px" }}>{o.garments} prendas</td>
                                 <td style={{ padding: "12px 14px", fontWeight: 800, color: "#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
@@ -3400,7 +3417,7 @@ export default function LavanderiaApp() {
                               <tbody>
                                 {ords.map(o => (
                                   <tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
-                                    <td style={{ padding:"6px 10px",fontWeight:700,color:sv.color }}>{o.order_number}</td>
+                                    <td style={{ padding:"6px 10px",fontWeight:700,color:sv.color }}>{shownOrderNum(o.order_number)}</td>
                                     <td style={{ padding:"6px 10px" }}>{o.client_name}</td>
                                     <td style={{ padding:"6px 10px",textAlign:"right" }}>{o.garments}</td>
                                     <td style={{ padding:"6px 10px",textAlign:"right",fontWeight:700 }}>${Math.round(Number(o.price)).toLocaleString()}</td>
@@ -3711,7 +3728,7 @@ export default function LavanderiaApp() {
                                 const orden = orders.find(o => o.id === a.order_id);
                                 return <tr key={a.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
                                   <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{a.date}</td>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:14 }}>{orden?.order_number||"—"}</span></td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:14 }}>{shownOrderNum(orden.order_number)||"—"}</span></td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{orden?.client_name||"—"}</td>
                                   <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{a.employee||"—"}</td>
                                   <td style={{ padding:"10px 12px" }}><PayMethod m={a.payment_method||"efectivo"} /></td>
@@ -3823,7 +3840,7 @@ export default function LavanderiaApp() {
                             <tbody>
                               {rango.map(o => (
                                 <tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,138,101,0.15)",color:"#FF8A65",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,138,101,0.15)",color:"#FF8A65",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{shownOrderNum(o.order_number)||"—"}</span></td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
                                   <td style={{ padding:"10px 12px" }}>{o.garments}</td>
                                   <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
@@ -3938,7 +3955,7 @@ export default function LavanderiaApp() {
                             <tbody>
                               {rango.map(o => (
                                 <tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(102,187,106,0.15)",color:"#66BB6A",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(102,187,106,0.15)",color:"#66BB6A",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{shownOrderNum(o.order_number)||"—"}</span></td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
                                   <td style={{ padding:"10px 12px" }}>{o.garments}</td>
                                   <td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price)).toLocaleString()}</td>
@@ -4017,7 +4034,7 @@ export default function LavanderiaApp() {
                             <tbody>
                               {rango.map(o => (
                                 <tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}>
-                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td>
+                                  <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{shownOrderNum(o.order_number)||"—"}</span></td>
                                   <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
                                   <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.address||"—"}</td>
                                   <td style={{ padding:"10px 12px",color:"#C792EA" }}>{o.employee||"—"}</td>
@@ -4170,7 +4187,7 @@ export default function LavanderiaApp() {
                         <div style={{ fontSize:15,color:"var(--text-muted)",marginBottom:12 }}><strong style={{ color:"var(--warning-text)" }}>{reversadas.length}</strong> orden{reversadas.length!==1?"es":""} reversada{reversadas.length!==1?"s":""}</div>
                         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:15 }}>
                           <thead><tr style={{ background:"var(--bg-surface)" }}>{["# Orden","Cliente","Teléfono","Servicio","Total","Entregado por","Estado"].map(h=><th key={h} style={{ padding:"8px 12px",textAlign:"left",color:"var(--text-muted)",fontWeight:600,fontSize:13 }}>{h}</th>)}</tr></thead>
-                          <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"var(--warning-text)",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{o.order_number||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:13,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:14 }}>👤 {o.delivered_by}</span>:<span style={{ color:"var(--text-dim)",fontSize:14 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:13,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
+                          <tbody>{reversadas.map(o=>(<tr key={o.id} style={{ borderBottom:"1px solid var(--bg-surface)" }}><td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(255,213,79,0.15)",color:"var(--warning-text)",fontWeight:800,padding:"2px 8px",borderRadius:6 }}>{shownOrderNum(o.order_number)||"—"}</span></td><td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td><td style={{ padding:"10px 12px",color:"var(--text-muted)" }}>{o.phone}</td><td style={{ padding:"10px 12px" }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:13,marginRight:3 }}>{sv.icon} {sv.label}</span>:null;})}</td><td style={{ padding:"10px 12px",fontWeight:700,color:"#66BB6A" }}>${Math.round(Number(o.price))}</td><td style={{ padding:"10px 12px" }}>{o.delivered_by?<span style={{ color:"#C792EA",fontSize:14 }}>👤 {o.delivered_by}</span>:<span style={{ color:"var(--text-dim)",fontSize:14 }}>—</span>}</td><td style={{ padding:"10px 12px" }}><span style={{ background:"#66BB6A22",color:"#66BB6A",padding:"2px 10px",borderRadius:20,fontSize:13,fontWeight:600 }}>↩️ Reversada</span></td></tr>))}</tbody>
                         </table>
                       </div>;
                 })()}
@@ -4198,19 +4215,21 @@ export default function LavanderiaApp() {
                             <th style={{ padding: "6px 10px" }}>Prendas</th>
                             <th style={{ padding: "6px 10px" }}>Por</th>
                             <th style={{ padding: "6px 10px" }}>Desde</th>
+                            <th style={{ padding: "6px 10px" }}></th>
                           </tr>
                         </thead>
                         <tbody>
                           {rows.map(l => (
                             <tr key={l.id} style={{ borderBottom: "1px solid var(--bg-surface)", verticalAlign: "top" }}>
                               <td style={{ padding: "6px 10px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{l.created_at ? new Date(l.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" }) : l.date}</td>
-                              <td style={{ padding: "6px 10px", fontWeight: 700, color: "#EF5350" }}>{l.order_number}</td>
+                              <td style={{ padding: "6px 10px", fontWeight: 700, color: "#EF5350" }}>{shownOrderNum(l.order_number)}</td>
                               <td style={{ padding: "6px 10px" }}>{l.client_name}<div style={{ fontSize: 12, color: "var(--text-dim)" }}>{l.phone}</div></td>
                               <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>{STATUS_LABELS[l.status]?.label || l.status}</td>
                               <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>${Math.round(Number(l.price) || 0).toLocaleString("es-CO")}{Number(l.abonado) > 0 && <div style={{ fontSize: 12, color: "#66BB6A" }}>abonó ${Math.round(Number(l.abonado)).toLocaleString("es-CO")}</div>}</td>
                               <td style={{ padding: "6px 10px", fontSize: 13, color: "var(--text-muted)", maxWidth: 260 }}>{l.items || "—"}{l.notes ? <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Obs: {l.notes}</div> : null}</td>
                               <td style={{ padding: "6px 10px" }}>{l.deleted_by || "—"}</td>
                               <td style={{ padding: "6px 10px", color: String(l.origen||"").startsWith("Reversada") ? "var(--warning-text)" : "var(--text-dim)", fontSize: 13 }}>{l.origen}</td>
+                              <td style={{ padding: "6px 10px" }}><button onClick={() => deleteLogEntry(l)} title="Quitar del registro" style={{ background: "rgba(239,83,80,0.15)", color: "#EF5350", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 14, cursor: "pointer" }}>🗑</button></td>
                             </tr>
                           ))}
                         </tbody>
@@ -4249,7 +4268,7 @@ export default function LavanderiaApp() {
                             <div style={{ width: 110, height: 110, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>🎬</div>
                           )}
                           <div style={{ position: "absolute", bottom: 4, left: 4, right: 4, background: "rgba(0,0,0,0.7)", borderRadius: 6, padding: "2px 6px", fontSize: 11, color: "#fff", textAlign: "center" }}>
-                            {m.order_number || "sin orden"}
+                            {shownOrderNum(m.order_number)||"sin orden"}
                           </div>
                         </a>
                         <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteMediaItem(m); }} title="Eliminar" style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%", border: "none", background: "rgba(239,83,80,0.9)", color: "#fff", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>🗑</button>
@@ -4317,14 +4336,14 @@ export default function LavanderiaApp() {
                             <tbody>
                               {resultados.map((r, i) => (
                                 <tr key={i} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
-                                  <td style={{ padding: "6px 10px", fontWeight: 700, color: "#4FC3F7" }}>{r.order.order_number}</td>
+                                  <td style={{ padding: "6px 10px", fontWeight: 700, color: "#4FC3F7" }}>{shownOrderNum(r.order.order_number)}</td>
                                   <td style={{ padding: "6px 10px" }}>{r.order.client_name}</td>
                                   <td style={{ padding: "6px 10px" }}>{r.item.garment_type}</td>
                                   <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>{r.item.color || "—"}</td>
                                   <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>{r.item.quantity}</td>
                                   <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>{r.order.date}</td>
                                   <td style={{ padding: "6px 10px" }}>{r.order.phone && r.order.status === "listo" && (
-                                    <a href={getWhatsAppUrl(negocioPais + r.order.phone.replace(/[^0-9]/g, ""), getRandomWaMensaje(r.order.client_name, r.order.order_number || ""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar recordatorio por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", padding: "4px 8px", fontSize: 13, textDecoration: "none", display: "inline-block", borderRadius: 8, border: "1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>
+                                    <a href={getWhatsAppUrl(negocioPais + r.order.phone.replace(/[^0-9]/g, ""), getRandomWaMensaje(r.order.client_name, shownOrderNum(r.order.order_number)))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar recordatorio por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", padding: "4px 8px", fontSize: 13, textDecoration: "none", display: "inline-block", borderRadius: 8, border: "1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>
                                   )}</td>
                                 </tr>
                               ))}
@@ -4400,7 +4419,7 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px" }}>
                                 {o.phone && <input type="checkbox" checked={isSelected} onChange={() => setSelectedInventory(prev => isSelected ? prev.filter(id=>id!==o.id) : [...prev,o.id])} style={{ width:16,height:16,accentColor:"#25D366",cursor:"pointer" }} />}
                               </td>
-                              <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:14 }}>{o.order_number||"—"}</span></td>
+                              <td style={{ padding:"10px 12px" }}><span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 8px",borderRadius:6,fontSize:14 }}>{shownOrderNum(o.order_number)||"—"}</span></td>
                               <td style={{ padding:"10px 12px",fontWeight:600 }}>{o.client_name}</td>
                               <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.phone}</td>
                               <td style={{ padding:"10px 12px" }}><div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>{(o.service||"").split(",").map(sid=>{const sv=services.find(s=>s.id===sid.trim());return sv?<span key={sid} style={{ background:sv.color+"22",color:sv.color,padding:"1px 6px",borderRadius:10,fontSize:13,whiteSpace:"nowrap" }}>{sv.icon} {sv.label}</span>:null;})}</div></td>
@@ -4410,7 +4429,7 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.date}</td>
                               <td style={{ padding:"10px 12px",fontSize:14 }}><span style={{ color:isLate?"#EF5350":isFuture?"var(--text-dim)":"#66BB6A",fontWeight:isLate||!isFuture?700:400 }} title={isFuture?"Todavía no llega la fecha prometida de entrega":""}>{isLate?"⚠️ ":isFuture?"⏳ ":"✅ "}{o.delivery_date||"—"}</span></td>
                               <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"var(--warning-text)":"var(--text-muted)",fontSize:15 }}>{daysIn}d</span></td>
-                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), getRandomWaMensaje(o.client_name,o.order_number||""))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" onClick={(e)=>{ if(isFuture && !window.confirm(`La fecha de entrega prometida de ${o.client_name} (${o.delivery_date}) todavía no llega. ¿Seguro que quieres enviarle el recordatorio de todas formas?`)) e.preventDefault(); }} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
+                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), getRandomWaMensaje(o.client_name, shownOrderNum(o.order_number)))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" onClick={(e)=>{ if(isFuture && !window.confirm(`La fecha de entrega prometida de ${o.client_name} (${o.delivery_date}) todavía no llega. ¿Seguro que quieres enviarle el recordatorio de todas formas?`)) e.preventDefault(); }} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
                             </tr>;
                           })}</tbody>
                         </table>
@@ -4440,7 +4459,7 @@ export default function LavanderiaApp() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 15 }}>{o.order_number||"—"}</span>
+                          <span style={{ background: "rgba(79,195,247,0.15)", color: "#4FC3F7", fontWeight: 800, padding: "3px 10px", borderRadius: 6, fontSize: 15 }}>{shownOrderNum(o.order_number)||"—"}</span>
                           <span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span>
                         </div>
                         <div style={{ fontWeight: 700, fontSize: 18 }}>{o.client_name}</div>
@@ -4551,7 +4570,7 @@ export default function LavanderiaApp() {
                                 <td style={{ padding:"12px 14px",fontWeight:600 }}>{d.description}{d.notes && <div style={{ fontSize:13,color:"var(--text-muted)",marginTop:2 }}>{d.notes}</div>}</td>
                                 <td style={{ padding:"12px 14px" }}>{d.quantity||0}</td>
                                 <td style={{ padding:"12px 14px",fontWeight:700,color:d.type==="donacion"?"#C792EA":"#EF5350" }}>${Math.round(Number(d.estimated_value||0)).toLocaleString()}</td>
-                                <td style={{ padding:"12px 14px" }}>{d.order_number?<span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:700,padding:"2px 8px",borderRadius:6,fontSize:14 }}>{d.order_number}</span>:"—"}</td>
+                                <td style={{ padding:"12px 14px" }}>{d.order_number?<span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:700,padding:"2px 8px",borderRadius:6,fontSize:14 }}>{shownOrderNum(d.order_number)}</span>:"—"}</td>
                                 <td style={{ padding:"12px 14px",color:"var(--text-muted)" }}>{d.client_name||"—"}</td>
                                 <td style={{ padding:"12px 14px",color:"var(--text-muted)" }}>{d.foundation_name||"—"}</td>
                                 <td style={{ padding:"12px 14px",color:"var(--text-muted)",fontSize:14 }}>{d.date}</td>
@@ -4641,7 +4660,7 @@ export default function LavanderiaApp() {
                             <tbody>
                               {comparisonResult.faltantes.map(o => (
                                 <tr key={o.id} style={{ borderBottom: "1px solid var(--bg-surface)" }}>
-                                  <td style={{ padding: "10px 12px" }}><span style={{ background: "rgba(239,83,80,0.15)", color: "#EF5350", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{o.order_number||"—"}</span></td>
+                                  <td style={{ padding: "10px 12px" }}><span style={{ background: "rgba(239,83,80,0.15)", color: "#EF5350", fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{shownOrderNum(o.order_number)||"—"}</span></td>
                                   <td style={{ padding: "10px 12px", fontWeight: 600 }}>{o.client_name}</td>
                                   <td style={{ padding: "10px 12px", color: "var(--text-muted)" }}>{o.date}</td>
                                   <td style={{ padding: "10px 12px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "2px 8px", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
@@ -5190,7 +5209,7 @@ export default function LavanderiaApp() {
                     {newOrder.phone&&!clients.find(c=>c.phone===newOrder.phone)&&newOrder.client_name&&<div style={{ fontSize:13,color:"var(--warning-text)",marginTop:4 }}>⚡ Cliente nuevo — se creará automáticamente</div>}
                     {newOrder.client_name&&clients.find(c=>c.phone===newOrder.phone)&&<div style={{ fontSize:13,color:"#66BB6A",marginTop:4 }}>✅ Cliente existente</div>}
                   </div>
-                  {(()=>{ const pendientes=orders.filter(o=>o.phone===newOrder.phone&&(o.status==="listo"||o.status==="en_proceso"||o.status==="recibido")); return pendientes.length>0?<div style={{ background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.4)",borderRadius:10,padding:"12px 14px" }}><div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:8 }}><span style={{ fontSize:18 }}>⚠️</span><span style={{ fontWeight:700,color:"var(--warning-text)",fontSize:15 }}>Tiene {pendientes.length} orden{pendientes.length>1?"es":""} pendiente{pendientes.length>1?"s":""} por recoger</span></div>{pendientes.map(p=><div key={p.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid rgba(255,213,79,0.15)" }}><div><span style={{ fontWeight:700,color:"#4FC3F7",fontSize:15 }}>{p.order_number||"—"}</span><span style={{ color:"var(--text-muted)",fontSize:14 }}> · {getServiceLabel(p.service)} · {p.garments} prendas</span></div><div style={{ display:"flex",alignItems:"center",gap:8 }}><span style={{ fontWeight:700,color:"#66BB6A",fontSize:15 }}>${Math.round(Number(p.price))}</span><span style={{ fontSize:13,background:STATUS_LABELS[p.status]?.color+"22",color:STATUS_LABELS[p.status]?.color,padding:"2px 8px",borderRadius:20 }}>{STATUS_LABELS[p.status]?.label}</span></div></div>)}<div style={{ display:"flex",justifyContent:"space-between",marginTop:8 }}><span style={{ fontSize:14,color:"var(--text-muted)" }}>Total pendiente</span><span style={{ fontWeight:800,color:"var(--warning-text)",fontSize:17 }}>${Math.round(pendientes.reduce((s,p)=>s+Number(p.price),0))}</span></div></div>:null; })()}
+                  {(()=>{ const pendientes=orders.filter(o=>o.phone===newOrder.phone&&(o.status==="listo"||o.status==="en_proceso"||o.status==="recibido")); return pendientes.length>0?<div style={{ background:"rgba(255,213,79,0.08)",border:"1px solid rgba(255,213,79,0.4)",borderRadius:10,padding:"12px 14px" }}><div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:8 }}><span style={{ fontSize:18 }}>⚠️</span><span style={{ fontWeight:700,color:"var(--warning-text)",fontSize:15 }}>Tiene {pendientes.length} orden{pendientes.length>1?"es":""} pendiente{pendientes.length>1?"s":""} por recoger</span></div>{pendientes.map(p=><div key={p.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid rgba(255,213,79,0.15)" }}><div><span style={{ fontWeight:700,color:"#4FC3F7",fontSize:15 }}>{shownOrderNum(p.order_number)||"—"}</span><span style={{ color:"var(--text-muted)",fontSize:14 }}> · {getServiceLabel(p.service)} · {p.garments} prendas</span></div><div style={{ display:"flex",alignItems:"center",gap:8 }}><span style={{ fontWeight:700,color:"#66BB6A",fontSize:15 }}>${Math.round(Number(p.price))}</span><span style={{ fontSize:13,background:STATUS_LABELS[p.status]?.color+"22",color:STATUS_LABELS[p.status]?.color,padding:"2px 8px",borderRadius:20 }}>{STATUS_LABELS[p.status]?.label}</span></div></div>)}<div style={{ display:"flex",justifyContent:"space-between",marginTop:8 }}><span style={{ fontSize:14,color:"var(--text-muted)" }}>Total pendiente</span><span style={{ fontWeight:800,color:"var(--warning-text)",fontSize:17 }}>${Math.round(pendientes.reduce((s,p)=>s+Number(p.price),0))}</span></div></div>:null; })()}
                   <div>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
                       <label style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600 }}>PRENDAS</label>
@@ -5445,8 +5464,8 @@ export default function LavanderiaApp() {
                   {newDonationLoss.type==="donacion" && <div><label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}>FUNDACIÓN (opcional)</label><input style={inp} placeholder="Nombre de la fundación" value={newDonationLoss.foundation_name} onChange={e=>setNewDonationLoss(p=>({...p,foundation_name:e.target.value}))} /></div>}
                   <div>
                     <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4 }}># DE ORDEN (opcional)</label>
-                    <input style={inp} placeholder="Ej: S069018" value={newDonationLoss.order_number} onChange={e=>setNewDonationLoss(p=>({...p,order_number:e.target.value}))} onBlur={e=>{
-                      const found = orders.find(o => o.order_number?.toLowerCase() === e.target.value.trim().toLowerCase());
+                    <input style={inp} placeholder="Ej: S069018" value={shownOrderNum(newDonationLoss.order_number)} onChange={e=>setNewDonationLoss(p=>({...p,order_number:e.target.value}))} onBlur={e=>{
+                      const found = findOrderByNum(orders, e.target.value);
                       if (found && !newDonationLoss.client_name) setNewDonationLoss(p=>({...p,client_name:found.client_name}));
                     }} />
                   </div>
@@ -5464,7 +5483,7 @@ export default function LavanderiaApp() {
                   <div style={{ fontSize:55,marginBottom:8 }}>✅</div>
                   <h3 style={{ margin:"0 0 4px",fontSize:23,fontWeight:800,color:"#66BB6A" }}>¡Orden guardada!</h3>
                   <div style={{ fontSize:15,color:"var(--text-muted)",marginTop:4 }}>
-                    <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{savedOrder.order?.order_number||"—"}</span>
+                    <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{shownOrderNum(savedOrder.order.order_number)||"—"}</span>
                     {" · "}{savedOrder.order?.client_name}
                   </div>
                   <div style={{ fontSize:16,color:"#66BB6A",fontWeight:700,marginTop:6 }}>${Math.round(Number(savedOrder.order?.price||0))}</div>
@@ -5546,7 +5565,7 @@ export default function LavanderiaApp() {
             <h3 style={{ margin:"0 0 4px",fontSize:21,color:"var(--text-primary)" }}>💰 Registrar Abono</h3>
             <div style={{ marginBottom:16 }}>
               <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}>
-                <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{abonoModal.order_number}</span>
+                <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{shownOrderNum(abonoModal.order_number)}</span>
                 <span style={{ fontWeight:600 }}>{abonoModal.client_name}</span>
               </div>
               <div style={{ display:"flex",gap:16,background:"var(--bg-app)",borderRadius:8,padding:"10px 14px",fontSize:15 }}>
@@ -5639,7 +5658,7 @@ export default function LavanderiaApp() {
             <h3 style={{ margin:"0 0 4px",fontSize:21,color:"var(--text-primary)" }}>{markPaidModal.paid_at_intake ? "✏️💰 Corregir Método de Pago" : "✅💰 Marcar como Pagada al Recibir"}</h3>
             <div style={{ marginBottom:16 }}>
               <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
-                <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{markPaidModal.order_number}</span>
+                <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",fontWeight:800,padding:"2px 10px",borderRadius:6 }}>{shownOrderNum(markPaidModal.order_number)}</span>
                 <span style={{ fontWeight:600 }}>{markPaidModal.client_name}</span>
               </div>
               <p style={{ fontSize:15,color:"var(--text-muted)",margin:0 }}>{markPaidModal.paid_at_intake ? `Esta orden ya está marcada como pagada (\$${Math.round(Number(markPaidModal.price)).toLocaleString()}). Elige el método correcto — el número de la orden no cambia.` : `El cliente pagó \$${Math.round(Number(markPaidModal.price)).toLocaleString()} al dejar la ropa (hoy). Esto va a contar la plata el día de hoy, aunque venga a recoger después.`}</p>
@@ -5671,7 +5690,7 @@ export default function LavanderiaApp() {
             <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
               <div>
                 <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}># DE RECIBO (ej: S054210)</label>
-                <input ref={manualOrderNumberRef} style={inp} placeholder="S000000" value={newManualOrder.order_number} onChange={e=>setNewManualOrder(p=>({...p,order_number:e.target.value}))} />
+                <input ref={manualOrderNumberRef} style={inp} placeholder="S000000" value={shownOrderNum(newManualOrder.order_number)} onChange={e=>setNewManualOrder(p=>({...p,order_number:e.target.value}))} />
               </div>
               <div>
                 <label style={{ fontSize:13,color:"var(--text-muted)",display:"block",marginBottom:4 }}>CLIENTE</label>
@@ -5879,7 +5898,7 @@ export default function LavanderiaApp() {
                         {ordenesMetodo.length > 0 && (
                           <div style={{ display:"flex",flexWrap:"wrap",gap:4,marginTop:8 }}>
                             {ordenesMetodo.map(o => (
-                              <span key={o.id} title={o.client_name} style={{ fontSize:12,fontWeight:700,color:m.color,background:`${m.color}22`,border:`1px solid ${m.color}55`,borderRadius:6,padding:"2px 6px" }}>{o.order_number}</span>
+                              <span key={o.id} title={o.client_name} style={{ fontSize:12,fontWeight:700,color:m.color,background:`${m.color}22`,border:`1px solid ${m.color}55`,borderRadius:6,padding:"2px 6px" }}>{shownOrderNum(o.order_number)}</span>
                             ))}
                           </div>
                         )}
