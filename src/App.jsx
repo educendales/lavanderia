@@ -225,6 +225,7 @@ export default function LavanderiaApp() {
   const [entregaMultiPaymentByOrder, setEntregaMultiPaymentByOrder] = useState({});
   const [entregaMultiSinRecibo, setEntregaMultiSinRecibo] = useState(false);
   const [entregaMultiDate, setEntregaMultiDate] = useState(today);
+  const [entregaMultiExpandido, setEntregaMultiExpandido] = useState(false);
   const [confirmingMulti, setConfirmingMulti] = useState(false);
   const [entregaResults, setEntregaResults] = useState(null);
   const [entregaResult, setEntregaResult] = useState(null);
@@ -2502,7 +2503,7 @@ export default function LavanderiaApp() {
         img.emoji { height:1em; width:1em; margin:0 .05em 0 .1em; vertical-align:-0.15em; display:inline-block; }
         input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
         input[type=number] { -moz-appearance:textfield; }
-        .lv-fixed-actionbar { position:fixed; left:0; right:0; bottom:0; z-index:200; padding:12px 16px; max-height:70vh; overflow-y:auto; }
+        .lv-fixed-actionbar { position:fixed; left:0; right:0; bottom:0; z-index:200; padding:10px 16px; max-height:55vh; overflow-y:auto; }
         @media (min-width: 861px) { .lv-fixed-actionbar { left:200px; } }
         .lv-mobile-topbar { display:none; }
         .lv-sidebar-overlay { display:none; }
@@ -2753,7 +2754,7 @@ export default function LavanderiaApp() {
               {entregaResults !== null && entregaResults.length === 0 && <div style={{ ...card, textAlign: "center", color: "#EF5350", padding: 32 }}><div style={{ fontSize: 46, marginBottom: 8 }}>😕</div><div style={{ fontWeight: 600 }}>No se encontró ninguna orden</div></div>}
 
               {entregaResults !== null && entregaResults.length > 0 && !entregaResult && (
-                <div style={{ paddingBottom: selectedEntregas.length > 0 ? 280 : 0 }}>
+                <div style={{ paddingBottom: selectedEntregas.length > 0 ? (entregaMultiExpandido ? 420 : 230) : 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div style={{ fontSize: 15, color: "var(--text-muted)" }}>Se encontraron <strong style={{ color: "#4FC3F7" }}>{entregaResults.length} órdenes</strong> para este cliente</div>
                     {entregaResults.some(o => o.status !== "entregado") && (
@@ -2764,16 +2765,12 @@ export default function LavanderiaApp() {
                   </div>
                   {selectedEntregas.length > 0 && (
                     <div className="lv-fixed-actionbar" style={{ ...card, border: "1px solid #66BB6A", background: "var(--bg-card)", boxShadow: "0 -6px 24px rgba(0,0,0,0.6)", borderRadius: "16px 16px 0 0" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                         <div>
                           <div style={{ fontWeight: 700, color: "#66BB6A", fontSize: 18 }}>{selectedEntregas.length} orden{selectedEntregas.length>1?"es":""} seleccionada{selectedEntregas.length>1?"s":""}</div>
                           <div style={{ fontSize: 15, color: "var(--text-muted)" }}>Total: <strong style={{ color: "#66BB6A" }}>${Math.round(selectedEntregas.reduce((s,o)=>s+Number(o.price),0))}</strong> · {selectedEntregas.reduce((s,o)=>s+Number(o.garments),0)} prendas</div>
                         </div>
                         <button onClick={() => setSelectedEntregas([])} style={{ ...btn, background: "transparent", color: "var(--text-muted)", padding: "4px 10px", fontSize: 14 }}>✕ Cancelar</button>
-                      </div>
-                      <div style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE LA ENTREGA</label>
-                        <input type="date" value={entregaMultiDate} onChange={e=>setEntregaMultiDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 180 }} />
                       </div>
                       <div style={{ marginBottom: 12 }}>
                         <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>MÉTODO DE PAGO <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>(aplicar a todos)</span></label>
@@ -2782,6 +2779,12 @@ export default function LavanderiaApp() {
                             <label key={opt.value} onClick={() => { setEntregaMultiPayment(opt.value); setEntregaMultiPaymentByOrder(prev => { const next = {...prev}; selectedEntregas.forEach(o => { next[o.id] = opt.value; }); return next; }); }} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,fontWeight:600,background:entregaMultiPayment===opt.value?"rgba(102,187,106,0.2)":"rgba(255,255,255,0.04)",border:`2px solid ${entregaMultiPayment===opt.value?"#66BB6A":"var(--border)"}`,borderRadius:8,padding:"8px 4px",color:entregaMultiPayment===opt.value?"#66BB6A":"var(--text-muted)" }}>{opt.label}</label>
                           ))}
                         </div>
+                      </div>
+                      <button onClick={() => setEntregaMultiExpandido(v => !v)} style={{ ...btn, width:"100%",background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",padding:"7px 10px",fontSize:14,marginBottom:10 }}>{entregaMultiExpandido ? "▲ Ocultar opciones" : "⚙️ Más opciones (fecha, pago mixto, sin recibo)"}</button>
+                      {entregaMultiExpandido && (<>
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 4, fontWeight: 600 }}>FECHA DE LA ENTREGA</label>
+                        <input type="date" value={entregaMultiDate} onChange={e=>setEntregaMultiDate(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 180 }} />
                       </div>
                       <div style={{ marginBottom: 12 }}>
                         <label style={{ fontSize: 14, color: "var(--text-muted)", display: "block", marginBottom: 8, fontWeight: 600 }}>💸 PAGO MIXTO — ajusta el método de cada recibo si no pagaron todo con el mismo</label>
@@ -2804,6 +2807,7 @@ export default function LavanderiaApp() {
                           <span style={{ fontSize:15,color:entregaMultiSinRecibo?"var(--warning-text)":"var(--text-muted)" }}>📋 Entregado sin recibo</span>
                         </label>
                       </div>
+                      </>)}
                       {(() => {
                         const faltantes = selectedEntregas.filter(o => !entregaMultiPaymentByOrder[o.id]).length;
                         return (
