@@ -175,6 +175,10 @@ export default function LavanderiaApp() {
   const [galeriaHasta, setGaleriaHasta] = useState(today);
   const [galeriaMedia, setGaleriaMedia] = useState([]);
   const [galeriaLoading, setGaleriaLoading] = useState(false);
+  const [copiaLocalFotos, setCopiaLocalFotos] = useState(() => { try { return localStorage.getItem("copiaLocalFotos") === "true"; } catch { return false; } });
+  const [diasEvidencia, setDiasEvidencia] = useState(() => { try { return Number(localStorage.getItem("diasEvidencia")) || 60; } catch { return 60; } });
+  const [carpetaLocalNombre, setCarpetaLocalNombre] = useState(() => { try { return localStorage.getItem("carpetaLocalNombre") || ""; } catch { return ""; } });
+  const [limpiandoEvidencia, setLimpiandoEvidencia] = useState(false);
   const [deletedOrdersLog, setDeletedOrdersLog] = useState([]);
   const [deletedLogFilter, setDeletedLogFilter] = useState("");
   const [buscarPrendaDesde, setBuscarPrendaDesde] = useState(today);
@@ -1130,6 +1134,7 @@ export default function LavanderiaApp() {
   const addOrder = async () => {
     if (!newOrder.client_name || items.length === 0) return;
     if (items.some(it => !(Number(it.quantity) > 0))) { alert("⚠️ Falta la cantidad (Cant.) de prendas en uno de los ítems. Escríbela antes de guardar."); return; }
+    if (!newOrder.agencia_id && !newOrder.domiciliario_id && String(newOrder.phone||"").replace(/\D/g,"").length < 7) { alert("⚠️ Falta el número de teléfono del cliente. Escríbelo antes de guardar."); return; }
     setSaving(true);
     const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
     const itemsFinal = pctDesc ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctDesc/100)) })) : items;
@@ -1669,20 +1674,24 @@ export default function LavanderiaApp() {
   const takePhoto = () => {
     if (!videoElRef.current || !canvasElRef.current) return;
     const video = videoElRef.current, canvas = canvasElRef.current;
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    // Se reduce a máx. 1280 px del lado largo y se comprime (JPG 0.7): ~70% menos peso que antes
+    const sc = Math.min(1, 1280 / Math.max(video.videoWidth || 1, video.videoHeight || 1));
+    canvas.width = Math.round(video.videoWidth * sc); canvas.height = Math.round(video.videoHeight * sc);
     canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
     canvas.toBlob(blob => {
       if (!blob) return;
       const id = Date.now() + "-" + Math.random();
       setCapturedMedia(prev => [{ id, type: "photo", blob, previewUrl: URL.createObjectURL(blob), orderNumber: "", uploading: false, uploaded: false }, ...prev]);
-    }, "image/jpeg", 0.9);
+    }, "image/jpeg", 0.7);
   };
   const startRecording = () => {
     if (!cameraStreamRef.current) return;
     recordedChunksRef.current = [];
     let mr;
-    try { mr = new MediaRecorder(cameraStreamRef.current, { mimeType: "video/webm;codecs=vp8,opus" }); }
-    catch { mr = new MediaRecorder(cameraStreamRef.current); }
+    // Video liviano: ~0.8 Mbps de imagen y 64 kbps de audio
+    const mrOpts = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 };
+    try { mr = new MediaRecorder(cameraStreamRef.current, { mimeType: "video/webm;codecs=vp8,opus", ...mrOpts }); }
+    catch { try { mr = new MediaRecorder(cameraStreamRef.current, mrOpts); } catch { mr = new MediaRecorder(cameraStreamRef.current); } }
     mr.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data); };
     mr.onstop = () => {
       const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
@@ -1693,7 +1702,8 @@ export default function LavanderiaApp() {
     mr.start();
     setIsRecording(true);
     setRecordSeconds(0);
-    recordTimerRef.current = setInterval(() => setRecordSeconds(s => s + 1), 1000);
+    let secs = 0;
+    recordTimerRef.current = setInterval(() => { secs++; setRecordSeconds(secs); if (secs >= 60) stopRecording(); }, 1000); // máx. 60 s por video
   };
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") mediaRecorderRef.current.stop();
@@ -1701,10 +1711,83 @@ export default function LavanderiaApp() {
     setIsRecording(false);
   };
   const discardCapturedMedia = (id) => setCapturedMedia(prev => prev.filter(m => m.id !== id));
+  // ---- Copia local en el computador (Chrome/Edge) ----
+  const idbCarpeta = (modo, val) => new Promise(res => {
+    try {
+      const rq = indexedDB.open("lavagest_fs", 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore("h");
+      rq.onerror = () => res(null);
+      rq.onsuccess = () => {
+        try {
+          const st = rq.result.transaction("h", modo === "set" ? "readwrite" : "readonly").objectStore("h");
+          const r = modo === "set" ? st.put(val, "dir") : st.get("dir");
+          r.onsuccess = () => res(r.result || null); r.onerror = () => res(null);
+        } catch { res(null); }
+      };
+    } catch { res(null); }
+  });
+  const elegirCarpetaLocal = async () => {
+    if (!window.showDirectoryPicker) { alert("Este navegador no permite guardar en una carpeta. Usa Chrome o Edge en el computador."); return; }
+    try {
+      const h = await window.showDirectoryPicker({ mode: "readwrite" });
+      await idbCarpeta("set", h);
+      setCarpetaLocalNombre(h.name); setCopiaLocalFotos(true);
+      try { localStorage.setItem("carpetaLocalNombre", h.name); localStorage.setItem("copiaLocalFotos", "true"); } catch {}
+    } catch {}
+  };
+  const toggleCopiaLocal = (v) => { setCopiaLocalFotos(v); try { localStorage.setItem("copiaLocalFotos", String(v)); } catch {} };
+  const guardarCopiaLocal = async (item) => {
+    try {
+      const h = await idbCarpeta("get");
+      if (!h) return "Aún no has elegido la carpeta del computador.";
+      let perm = await h.queryPermission({ mode: "readwrite" });
+      if (perm !== "granted") perm = await h.requestPermission({ mode: "readwrite" });
+      if (perm !== "granted") return "El navegador no dio permiso para escribir en la carpeta.";
+      const sub = await h.getDirectoryHandle(today.slice(0, 7), { create: true });
+      const num = String(item.orderNumber || "sin-orden").replace(/[^\w-]/g, "");
+      const fname = `${num}_${today}_${item.type === "photo" ? "foto" : "video"}_${Date.now()}.${item.type === "photo" ? "jpg" : "webm"}`;
+      const fh = await sub.getFileHandle(fname, { create: true });
+      const w = await fh.createWritable(); await w.write(item.blob); await w.close();
+      return "";
+    } catch (e) { return e.message || "error desconocido"; }
+  };
+  const limpiarEvidenciaVieja = async () => {
+    const dias = Math.max(7, Number(diasEvidencia) || 60);
+    const ok = await checkClave(`borrar evidencia de más de ${dias} días`); if (!ok) return;
+    setLimpiandoEvidencia(true);
+    try {
+      const lim = new Date(); lim.setDate(lim.getDate() - dias);
+      const cutoff = `${lim.getFullYear()}-${String(lim.getMonth() + 1).padStart(2, "0")}-${String(lim.getDate()).padStart(2, "0")}`;
+      const rows = await db.get("order_media", `&date=lt.${cutoff}`);
+      if (!Array.isArray(rows)) { alert("❌ No se pudo consultar la evidencia."); setLimpiandoEvidencia(false); return; }
+      if (rows.length === 0) { alert(`No hay evidencia anterior a ${cutoff}.`); setLimpiandoEvidencia(false); return; }
+      if (!window.confirm(`Se borrarán ${rows.length} archivos (fotos/videos) anteriores a ${cutoff} de Supabase.\n\nSi tienes activada la copia en el computador, esos archivos seguirán allí. No se puede deshacer. ¿Continuar?`)) { setLimpiandoEvidencia(false); return; }
+      const marker = "/evidencias/";
+      let borrados = 0, fallos = 0;
+      for (let i = 0; i < rows.length; i += 50) {
+        const lote = rows.slice(i, i + 50);
+        const prefixes = lote.map(r => { const ix = (r.url || "").indexOf(marker); return ix === -1 ? null : r.url.slice(ix + marker.length); }).filter(Boolean);
+        let okStorage = true;
+        if (prefixes.length) {
+          try {
+            const r = await fetch(`${SUPABASE_URL}/storage/v1/object/evidencias`, { method: "DELETE", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ prefixes }) });
+            okStorage = r.ok;
+          } catch { okStorage = false; }
+        }
+        if (!okStorage) { fallos += lote.length; continue; } // si no se pudo borrar el archivo, no se borra la fila
+        for (const r of lote) { try { await db.delete("order_media", r.id); borrados++; } catch { fallos++; } }
+      }
+      setGaleriaMedia(prev => prev.filter(m => m.date >= cutoff));
+      alert(`✅ Limpieza lista: ${borrados} archivos borrados${fallos ? ` · ${fallos} no se pudieron borrar (intenta de nuevo)` : ""}.`);
+    } catch (e) { alert("❌ " + e.message); }
+    setLimpiandoEvidencia(false);
+  };
   const saveCapturedMedia = async (id) => {
     const item = capturedMedia.find(m => m.id === id);
     if (!item) return;
     setCapturedMedia(prev => prev.map(m => m.id === id ? { ...m, uploading: true } : m));
+    let avisoLocal = "";
+    if (copiaLocalFotos) { const er = await guardarCopiaLocal(item); if (er) avisoLocal = er; }
     try {
       const ext = item.type === "photo" ? "jpg" : "webm";
       const path = `${today}/${item.type}-${item.id}.${ext}`;
@@ -1717,6 +1800,7 @@ export default function LavanderiaApp() {
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/evidencias/${path}`;
       await db.post("order_media", { order_number: item.orderNumber || null, type: item.type, url: publicUrl, employee: user?.name || "", date: today });
       setCapturedMedia(prev => prev.map(m => m.id === id ? { ...m, uploading: false, uploaded: true } : m));
+      if (avisoLocal) alert("⚠️ Se subió a la nube, pero NO se pudo guardar la copia en el computador: " + avisoLocal);
     } catch (e) {
       setCapturedMedia(prev => prev.map(m => m.id === id ? { ...m, uploading: false } : m));
       alert("❌ " + e.message);
@@ -4243,6 +4327,26 @@ export default function LavanderiaApp() {
               <div ref={evidenciaSectionRef} style={{ ...card, marginTop: 20 }}>
                 <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#FF8A65" }}>📷 Evidencia Guardada (Fotos y Videos)</h3>
                 <p style={{ margin: "0 0 16px", fontSize: 15, color: "var(--text-muted)" }}>Todo lo que se ha guardado desde el botón flotante de la cámara, en un rango de fechas.</p>
+                {isAdmin && (
+                  <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, marginBottom: 16 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>⚙️ Almacenamiento de la evidencia</div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--text-muted)", cursor: "pointer" }}>
+                        <input type="checkbox" checked={copiaLocalFotos} onChange={e => toggleCopiaLocal(e.target.checked)} style={{ accentColor: "#FF8A65" }} />
+                        Guardar también una copia en este computador
+                      </label>
+                      <button onClick={elegirCarpetaLocal} style={{ ...btn, background: "rgba(255,138,101,0.15)", color: "#FF8A65", padding: "6px 12px", fontSize: 13 }}>📁 {carpetaLocalNombre ? "Cambiar carpeta" : "Elegir carpeta"}</button>
+                      {carpetaLocalNombre && <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Carpeta: <b>{carpetaLocalNombre}</b></span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Solo funciona en Chrome o Edge del computador. Conviene que la carpeta esté dentro de Google Drive u OneDrive para que se respalde sola. Si el navegador se reinicia, puede pedir un clic de "Permitir".</div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Borrar de la nube lo que tenga más de</span>
+                      <input type="number" min="7" value={diasEvidencia} onChange={e => { setDiasEvidencia(e.target.value); try { localStorage.setItem("diasEvidencia", String(e.target.value)); } catch {} }} style={{ ...inp, width: 70, padding: "6px 8px" }} />
+                      <span style={{ fontSize: 14, color: "var(--text-muted)" }}>días</span>
+                      <button onClick={limpiarEvidenciaVieja} disabled={limpiandoEvidencia} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "6px 14px", fontSize: 13, fontWeight: 700 }}>{limpiandoEvidencia ? "Limpiando..." : "🧹 Limpiar evidencia antigua"}</button>
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
                   <div>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>DESDE</label>
@@ -5375,6 +5479,7 @@ export default function LavanderiaApp() {
                     <button ref={guardarImprimirBtnRef} onClick={async () => {
                       if (!newOrder.client_name || items.length === 0) return;
                       if (items.some(it => !(Number(it.quantity) > 0))) { alert("⚠️ Falta la cantidad (Cant.) de prendas en uno de los ítems. Escríbela antes de guardar."); return; }
+                      if (!newOrder.agencia_id && !newOrder.domiciliario_id && String(newOrder.phone||"").replace(/\D/g,"").length < 7) { alert("⚠️ Falta el número de teléfono del cliente. Escríbelo antes de guardar."); return; }
                       setSaving(true);
                       const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
                       const itemsFinal = pctDesc ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctDesc/100)) })) : items;
