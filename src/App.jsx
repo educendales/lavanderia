@@ -366,6 +366,9 @@ export default function LavanderiaApp() {
       return n >= 1 && n <= 8 ? n : 2;
     } catch { return 2; }
   });
+  const [numeroOrdenTamanoLab, setNumeroOrdenTamanoLab] = useState(() => { try { const n = Number(localStorage.getItem("numeroOrdenTamanoLab")); return n >= 0 && n <= 8 && localStorage.getItem("numeroOrdenTamanoLab") !== null ? n : (NUMERO_SIN_S_NI_CEROS ? 4 : 0); } catch { return NUMERO_SIN_S_NI_CEROS ? 4 : 0; } }); // 0 = igual que la copia del cliente
+  // Orden de los campos al digitar prendas: false = Prenda, Cant., Precio, Colores · true = Cant., Prenda, Color, Valor
+  const [ordenCantPrimero, setOrdenCantPrimero] = useState(() => { try { const v = localStorage.getItem("ordenCantPrimero"); return v === null ? NUMERO_SIN_S_NI_CEROS : v === "true"; } catch { return NUMERO_SIN_S_NI_CEROS; } });
   const [numeroOrdenCuadro, setNumeroOrdenCuadro] = useState(() => { try { return localStorage.getItem("numeroOrdenCuadro") !== "false"; } catch { return true; } });
   const [nombreTelTamano, setNombreTelTamano] = useState(() => {
     try {
@@ -2010,8 +2013,10 @@ export default function LavanderiaApp() {
     data += LF;
 
     // Order number, tamaño y cuadro de asteriscos configurables por computador
-    const numMult = Math.max(1, Math.min(8, Number(numeroOrdenTamano) || 2)) - 1;
-    const numSizeCmd = String.fromCharCode((numMult << 4) | numMult);
+    // El tamaño se pone al final (marcador) porque la copia de la lavandería lleva el número más grueso
+    const sizeCmdOf = (n) => { const m = Math.max(1, Math.min(8, Number(n) || 2)) - 1; return String.fromCharCode((m << 4) | m); };
+    const NUM_MARK = "@@NUMSIZE@@";
+    const numSizeCmd = NUM_MARK;
     const sideLine = "*" + " ".repeat(Math.max(0, anchoRecibo - 2)) + "*";
     data += BOLD_ON;
     if (numeroOrdenCuadro) {
@@ -2167,7 +2172,8 @@ export default function LavanderiaApp() {
       if (!window.qz) throw new Error("QZ no disponible");
       if (!window.qz.websocket.isActive()) await window.qz.websocket.connect();
       const config = window.qz.configs.create(nombreImpresora);
-      const printData = Array.from({length: copies}, () => ({ type: 'raw', format: 'plain', data: data }));
+      // Con 2 copias: la 1ª (cliente) usa el tamaño normal y la 2ª (se queda en la lavandería) el tamaño de lavandería
+      const printData = Array.from({length: copies}, (_, i) => ({ type: 'raw', format: 'plain', data: data.split(NUM_MARK).join(sizeCmdOf(copies > 1 && i === copies - 1 && numeroOrdenTamanoLab > 0 ? numeroOrdenTamanoLab : numeroOrdenTamano)) }));
       await window.qz.print(config, printData);
     } catch(e) {
       console.error("QZ Error:", e);
@@ -2519,12 +2525,15 @@ export default function LavanderiaApp() {
           .lv-shortcuts-bar { display:none !important; }
         }
         .lv-item-grid { display:grid; grid-template-columns:2fr 55px 75px 1fr 30px; gap:6px; align-items:center; }
+        .lv-item-grid.lv-item-luis { grid-template-columns:55px 2fr 1fr 75px 30px; }
         @media (max-width: 600px) {
           .lv-item-header { display:none !important; }
           .lv-item-grid { grid-template-columns: 1fr 1fr; row-gap:8px; }
           .lv-item-grid > *:nth-child(1) { grid-column: 1 / -1; }
           .lv-item-grid > *:nth-child(4) { grid-column: 1 / -1; }
           .lv-item-grid > *:nth-child(5) { grid-column: 1 / -1; justify-self:end; }
+          .lv-item-grid.lv-item-luis { grid-template-columns: 1fr; }
+          .lv-item-grid.lv-item-luis > * { grid-column: 1 / -1; }
         }
         @media (max-width: 480px) {
           .lv-kpi-grid { grid-template-columns: 1fr 1fr !important; }
@@ -4879,7 +4888,23 @@ export default function LavanderiaApp() {
                       <input type="checkbox" checked={numeroOrdenCuadro} readOnly style={{ width:16,height:16,accentColor:"#4FC3F7" }} />
                       <span style={{ fontSize:14,color:numeroOrdenCuadro?"#4FC3F7":"var(--text-muted)" }}>Encerrarlo en un cuadro de asteriscos</span>
                     </label>
-                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Este ajuste es solo de este computador — puedes dejarlo distinto en cada impresora.</div>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginTop: 14, marginBottom: 4 }}>🧺 TAMAÑO DEL NÚMERO EN LA COPIA QUE SE QUEDA EN LA LAVANDERÍA (1 a 8, "=" igual que la del cliente)</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <button onClick={() => { const v = Math.max(0, numeroOrdenTamanoLab-1); setNumeroOrdenTamanoLab(v); try { localStorage.setItem("numeroOrdenTamanoLab", String(v)); } catch {} }} disabled={numeroOrdenTamanoLab<=0} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(255,138,101,0.15)",color:"#FF8A65",opacity:numeroOrdenTamanoLab<=0?0.4:1 }}>−</button>
+                      <span style={{ fontSize:20,fontWeight:800,color:"#FF8A65",minWidth:28,textAlign:"center" }}>{numeroOrdenTamanoLab || "="}</span>
+                      <button onClick={() => { const v = Math.min(8, numeroOrdenTamanoLab+1); setNumeroOrdenTamanoLab(v); try { localStorage.setItem("numeroOrdenTamanoLab", String(v)); } catch {} }} disabled={numeroOrdenTamanoLab>=8} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(255,138,101,0.15)",color:"#FF8A65",opacity:numeroOrdenTamanoLab>=8?0.4:1 }}>+</button>
+                      <span style={{ fontSize:13,color:"var(--text-dim)" }}>aplica a la 2ª copia al crear la orden (la 1ª es la del cliente)</span>
+                    </div>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginTop: 14, marginBottom: 6 }}>⌨️ ORDEN DE LOS CAMPOS AL DIGITAR LAS PRENDAS (Nueva orden)</label>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                      {[{v:false,t:"Prenda → Cant. → Precio → Colores"},{v:true,t:"Cant. → Prenda → Color → Valor"}].map(o => (
+                        <label key={String(o.v)} onClick={() => { setOrdenCantPrimero(o.v); try { localStorage.setItem("ordenCantPrimero", String(o.v)); } catch {} }} style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",background:ordenCantPrimero===o.v?"rgba(79,195,247,0.1)":"rgba(255,255,255,0.04)",border:`1px solid ${ordenCantPrimero===o.v?"#4FC3F7":"var(--border)"}`,borderRadius:8,padding:"8px 12px" }}>
+                          <input type="radio" checked={ordenCantPrimero===o.v} readOnly style={{ accentColor:"#4FC3F7" }} />
+                          <span style={{ fontSize:14,color:ordenCantPrimero===o.v?"#4FC3F7":"var(--text-muted)" }}>{o.t}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Este ajuste es solo de este computador — puedes dejarlo distinto en cada impresora. Si el número no cabe en el ancho del papel, baja el tamaño.</div>
                   </div>
                   <div>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>👤 TAMAÑO DE NOMBRE Y TELÉFONO (1 a 8)</label>
@@ -5323,14 +5348,16 @@ export default function LavanderiaApp() {
                       <label style={{ fontSize:14,color:"var(--text-muted)",fontWeight:600 }}>PRENDAS</label>
                       <span style={{ fontSize:13,color:"var(--text-dim)" }}>El botón "+ Agregar" está debajo de la primera prenda</span>
                     </div>
-                    <div className="lv-item-grid lv-item-header" style={{ marginBottom:4 }}>{["Tipo de prenda","Cant.","Precio c/u","Colores",""].map((h,i)=><div key={i} style={{ fontSize:12,color:"var(--text-dim)",fontWeight:600 }}>{h}</div>)}</div>
+                    <div className={"lv-item-grid lv-item-header" + (ordenCantPrimero ? " lv-item-luis" : "")} style={{ marginBottom:4 }}>{(ordenCantPrimero ? ["Cant.","Tipo de prenda","Colores","Precio c/u",""] : ["Tipo de prenda","Cant.","Precio c/u","Colores",""]).map((h,i)=><div key={i} style={{ fontSize:12,color:"var(--text-dim)",fontWeight:600 }}>{h}</div>)}</div>
                     {items.map((item,i) => (
                       <div key={i}>
                       <div style={{ marginBottom:10,background:"rgba(255,255,255,0.02)",borderRadius:10,padding:10,border:"1px solid var(--bg-surface)" }}>
                         <div style={{ display:"flex",gap:4,marginBottom:8 }}>{services.map(sv=>{ const sel=item.service===sv.id; return <label key={sv.id} onClick={()=>updateItem(i,"service",sv.id)} style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:3,cursor:"pointer",fontSize:12,fontWeight:600,background:sel?sv.color+"22":"rgba(255,255,255,0.03)",border:`1.5px solid ${sel?sv.color:"var(--border)"}`,borderRadius:6,padding:"4px 2px",color:sel?sv.color:"var(--text-dim)",userSelect:"none" }}>{sv.icon} {sv.label}</label>; })}</div>
-                        <div className="lv-item-grid" style={{ alignItems:"center",marginBottom:8 }}>
-                          <div style={{ position:"relative" }}>
-                            <input type="text" ref={i===0 ? firstGarmentInputRef : null} placeholder="Prenda..." value={item.garment_type} onChange={e=>{updateItem(i,"garment_type",e.target.value);setGarmentSuggestIdx(-1);}} onFocus={()=>{setGarmentFocusIdx(i);setGarmentSuggestIdx(-1);}} onBlur={()=>setTimeout(()=>setGarmentFocusIdx(null),150)} onKeyDown={e=>{
+                          <div className={"lv-item-grid" + (ordenCantPrimero ? " lv-item-luis" : "")} style={{ alignItems:"center",marginBottom:8 }}>
+                          {(() => {
+                          const cG = (
+                          <div className="lv-c-g" style={{ position:"relative" }}>
+                            <input type="text" ref={i===0 && !ordenCantPrimero ? firstGarmentInputRef : null} placeholder="Prenda..." value={item.garment_type} onChange={e=>{updateItem(i,"garment_type",e.target.value);setGarmentSuggestIdx(-1);}} onFocus={()=>{setGarmentFocusIdx(i);setGarmentSuggestIdx(-1);}} onBlur={()=>setTimeout(()=>setGarmentFocusIdx(null),150)} onKeyDown={e=>{
                               const matches = garmentTypes.filter(g=>g.toLowerCase().includes((item.garment_type||"").toLowerCase()));
                               if(e.key==="ArrowDown"&&matches.length>0){ e.preventDefault(); setGarmentSuggestIdx(idx=>Math.min(idx+1,matches.length-1)); }
                               else if(e.key==="ArrowUp"&&matches.length>0){ e.preventDefault(); setGarmentSuggestIdx(idx=>Math.max(idx-1,0)); }
@@ -5348,9 +5375,15 @@ export default function LavanderiaApp() {
                               </div> : null;
                             })()}
                           </div>
-                          <input type="number" min={1} placeholder="Cant." value={item.quantity} onChange={e=>updateItem(i,"quantity",e.target.value)} onWheel={e=>e.target.blur()} style={{ ...inp,padding:"8px 6px",textAlign:"center" }} />
-                          <input type="number" min={0} placeholder="0" value={item.price} onChange={e=>updateItem(i,"price",e.target.value)} onWheel={e=>e.target.blur()} style={{ ...inp,padding:"8px 6px" }} />
-                          <div style={{ position:"relative" }}>
+                          );
+                          const cQ = (
+                          <input type="number" min={1} className="lv-c-q" ref={i===0 && ordenCantPrimero ? firstGarmentInputRef : null} placeholder="Cant." value={item.quantity} onChange={e=>updateItem(i,"quantity",e.target.value)} onWheel={e=>e.target.blur()} style={{ ...inp,padding:"8px 6px",textAlign:"center" }} />
+                          );
+                          const cP = (
+                          <input type="number" min={0} className="lv-c-p" placeholder="0" value={item.price} onChange={e=>updateItem(i,"price",e.target.value)} onWheel={e=>e.target.blur()} style={{ ...inp,padding:"8px 6px" }} />
+                          );
+                          const cC = (
+                          <div className="lv-c-c" style={{ position:"relative" }}>
                             {(item.colors||[]).length>0&&<div style={{ display:"flex",flexWrap:"wrap",gap:3,marginBottom:3 }}>{(item.colors||[]).map((c,ci)=><span key={ci} style={{ fontSize:12,background:"rgba(199,146,234,0.2)",color:"#C792EA",border:"1px solid rgba(199,146,234,0.4)",borderRadius:10,padding:"1px 6px",display:"flex",alignItems:"center",gap:2 }}>{c}<span onMouseDown={()=>updateItem(i,"colors",(item.colors||[]).filter((_,idx)=>idx!==ci))} style={{ cursor:"pointer",color:"#EF5350",fontWeight:700 }}>×</span></span>)}</div>}
                             {(item.colors||[]).length>0&&(item.colors||[]).length<Number(item.quantity)&&<div style={{ fontSize:12,color:"var(--warning-text)",marginBottom:2 }}>⚠️ Faltan {Number(item.quantity)-(item.colors||[]).length} color{Number(item.quantity)-(item.colors||[]).length>1?"es":""}</div>}
                             {(item.colors||[]).length>=Number(item.quantity)&&Number(item.quantity)>0
@@ -5375,6 +5408,9 @@ export default function LavanderiaApp() {
                                 })()
                             }
                           </div>
+                          );
+                          return ordenCantPrimero ? <>{cQ}{cG}{cC}{cP}</> : <>{cG}{cQ}{cP}{cC}</>;
+                          })()}
                           {items.length>1?<button onClick={()=>removeItem(i)} style={{ background:"rgba(239,83,80,0.2)",color:"#EF5350",border:"none",borderRadius:6,padding:"6px 8px",cursor:"pointer",fontSize:14 }}>✕</button>:<div/>}
                         </div>
                         <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>{conditions.map((condLabel,ci) => {
