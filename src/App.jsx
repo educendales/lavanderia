@@ -179,6 +179,10 @@ export default function LavanderiaApp() {
   const [diasEvidencia, setDiasEvidencia] = useState(() => { try { return Number(localStorage.getItem("diasEvidencia")) || 60; } catch { return 60; } });
   const [carpetaLocalNombre, setCarpetaLocalNombre] = useState(() => { try { return localStorage.getItem("carpetaLocalNombre") || ""; } catch { return ""; } });
   const [limpiandoEvidencia, setLimpiandoEvidencia] = useState(false);
+  // Foto automática de quien deja y quien retira la ropa (por computador). Luis la trae activada.
+  const [fotoAuto, setFotoAuto] = useState(() => { try { const v = localStorage.getItem("fotoAuto"); return v === null ? NUMERO_SIN_S_NI_CEROS : v === "true"; } catch { return NUMERO_SIN_S_NI_CEROS; } });
+  const [diasFotoAuto, setDiasFotoAuto] = useState(() => { try { return Number(localStorage.getItem("diasFotoAuto")) || 120; } catch { return 120; } });
+  const fotoAutoAvisoRef = useRef(false);
   const [deletedOrdersLog, setDeletedOrdersLog] = useState([]);
   const [deletedLogFilter, setDeletedLogFilter] = useState("");
   const [buscarPrendaDesde, setBuscarPrendaDesde] = useState(today);
@@ -598,6 +602,7 @@ export default function LavanderiaApp() {
   const confirmarMultiEntrega = async () => {
     const faltantes = selectedEntregas.filter(o => !entregaMultiPaymentByOrder[o.id]);
     if (faltantes.length) { alert(`⚠️ Falta el método de pago de ${faltantes.length} recibo(s) antes de confirmar.`); return; }
+    const fotoP = capturarFotoAuto(); // una foto de quien retira, se asocia a todos los recibos
     let workingQueue = [...offlineQueue];
     let queueChanged = false;
     const newQueuedActions = [];
@@ -633,6 +638,7 @@ export default function LavanderiaApp() {
     }
     if (queueChanged) saveOfflineQueue(workingQueue);
     if (newQueuedActions.length) saveOfflineActionQueue([...offlineActionQueue, ...newQueuedActions]);
+    { const numsFoto = selectedEntregas.map(o => o.order_number); fotoP.then(b => subirFotoAuto(b, "entrega", numsFoto)); }
     if (huboEfectivo) openCashDrawer("entrega_multiple", `${selectedEntregas.length} órdenes`);
     setEntregaResults(prev => prev.map(o => selectedEntregas.find(s => s.id === o.id) ? { ...o, status: "entregado", payment_method: entregaMultiPaymentByOrder[o.id], delivered_at: entregaMultiDate, delivered_by: user.name } : o));
     setSelectedEntregas([]);
@@ -1004,6 +1010,7 @@ export default function LavanderiaApp() {
     });
   };
 
+  useEffect(() => { const h = () => { try { reintentarFotosAuto(); } catch {} }; window.addEventListener("online", h); return () => window.removeEventListener("online", h); }, []);
   const saveOfflineQueue = (q) => { setOfflineQueue(q); try { localStorage.setItem("offlineQueue", JSON.stringify(q)); } catch {} };
   const getNextOfflineNumber = () => {
     let counter = 1;
@@ -1331,6 +1338,7 @@ export default function LavanderiaApp() {
   const confirmarEntrega = async () => {
     if (!entregaResult) return;
     if (!entregaPayment) { alert("⚠️ Selecciona un método de pago antes de confirmar la entrega."); return; }
+    const fotoP = capturarFotoAuto(); // foto de quien retira la ropa
     const patchBody = { status: "entregado", payment_method: entregaPayment, sin_recibo: entregaSinRecibo, delivered_at: entregaDate, delivered_by: user.name };
     const its = orderItems[entregaResult.id] || [];
     const pendientes = its.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
@@ -1354,6 +1362,7 @@ export default function LavanderiaApp() {
     setOrders(prev => prev.map(o => o.id === entregaResult.id ? { ...o, ...patchBody } : o));
     setEntregaResult(prev => ({ ...prev, ...patchBody }));
     setEntregaConfirmed(true);
+    fotoP.then(b => subirFotoAuto(b, "entrega", [entregaResult.order_number]));
     if (entregaPayment === "efectivo") openCashDrawer("entrega", entregaResult.order_number || "");
     if (entregaSinRecibo) printConstanciaSinRecibo(entregaResult, null);
     if (pendientes.length) {
@@ -1368,6 +1377,7 @@ export default function LavanderiaApp() {
     if (seleccionados.length === 0) { alert("⚠️ No ingresaste ninguna cantidad. Escribe cuántas prendas se lleva el cliente antes de confirmar."); return; }
     if (!parcialPayment) { alert("⚠️ Selecciona un método de pago antes de confirmar la entrega parcial."); return; }
     setSavingParcial(true);
+    const fotoP = capturarFotoAuto(); // foto de quien retira (entrega parcial)
     const amount = seleccionados.reduce((s,x) => s + x.qty*Number(x.it.price), 0);
     const itemsSummary = seleccionados.map(x => `${x.qty} ${x.it.garment_type}${x.it.color?" "+x.it.color:""}`).join(", ");
 
@@ -1425,6 +1435,7 @@ export default function LavanderiaApp() {
     setParcialQtys({});
     setShowParcialForm(false);
     setSavingParcial(false);
+    fotoP.then(b => subirFotoAuto(b, "entrega", [entregaResult.order_number]));
   };
 
   const printOrder = (order, itemsMap) => {
@@ -1715,6 +1726,65 @@ export default function LavanderiaApp() {
     setIsRecording(false);
   };
   const discardCapturedMedia = (id) => setCapturedMedia(prev => prev.filter(m => m.id !== id));
+  // ---- Foto automática (ingreso / entrega) ----
+  const esFotoAuto = (m) => /\/(ingreso|entrega)_/.test(m?.url || "");
+  const etiquetaFotoAuto = (m) => /\/ingreso_/.test(m?.url || "") ? "🧍 Ingreso" : /\/entrega_/.test(m?.url || "") ? "✅ Entrega" : "";
+  const capturarFotoAuto = async (forzar = false) => {
+    if (!fotoAuto && !forzar) return null;
+    let stream = null;
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("este navegador no permite usar la cámara");
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false });
+      const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.srcObject = stream;
+      await v.play();
+      await new Promise(r => setTimeout(r, 700)); // deja que la cámara ajuste la luz
+      const sc = Math.min(1, 480 / Math.max(v.videoWidth || 1, v.videoHeight || 1));
+      const c = document.createElement("canvas");
+      c.width = Math.round((v.videoWidth || 480) * sc); c.height = Math.round((v.videoHeight || 360) * sc);
+      c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+      return await new Promise(res => c.toBlob(b => res(b), "image/jpeg", 0.55));
+    } catch (e) {
+      if (!fotoAutoAvisoRef.current || forzar) { fotoAutoAvisoRef.current = true; alert("⚠️ No se pudo tomar la foto automática (" + (e.name === "NotAllowedError" ? "falta dar permiso a la cámara en el navegador" : e.message) + "). La orden se guardó normal."); }
+      return null;
+    } finally { if (stream) stream.getTracks().forEach(t => t.stop()); }
+  };
+  const subirUnaFotoAuto = async (path, blob, orderNumber) => {
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/evidencias/${path}`, { method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "image/jpeg" }, body: blob });
+    if (!r.ok) throw new Error("subida " + r.status);
+    const url = `${SUPABASE_URL}/storage/v1/object/public/evidencias/${path}`;
+    const row = await db.post("order_media", { order_number: orderNumber, type: "photo", url, employee: user?.name || "", date: today });
+    if (!(Array.isArray(row) && row[0])) throw new Error("no se guardó el registro");
+  };
+  const blobToDataUrl = (blob) => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(blob); });
+  const reintentarFotosAuto = async () => {
+    let q = []; try { q = JSON.parse(localStorage.getItem("fotoAutoQueue") || "[]"); } catch {}
+    if (!q.length) return;
+    const rest = [];
+    for (const it of q) {
+      try { const b = await (await fetch(it.dataUrl)).blob(); await subirUnaFotoAuto(it.path, b, it.order_number); }
+      catch { rest.push(it); }
+    }
+    try { localStorage.setItem("fotoAutoQueue", JSON.stringify(rest)); } catch {}
+  };
+  // evento: "ingreso" | "entrega". Una foto separada por orden (así borrar una no afecta a las demás).
+  const subirFotoAuto = async (blob, evento, orderNumbers) => {
+    if (!blob) return;
+    const nums = [...new Set((orderNumbers || []).filter(n => n && !/^OFF\d/i.test(String(n))))];
+    for (const n of nums) {
+      const path = `${today}/${evento}_${String(n).replace(/[^\w-]/g, "")}_${Date.now()}.jpg`;
+      try { await subirUnaFotoAuto(path, blob, n); }
+      catch {
+        const dataUrl = await blobToDataUrl(blob); if (!dataUrl) continue;
+        try { const q = JSON.parse(localStorage.getItem("fotoAutoQueue") || "[]"); q.push({ path, order_number: n, dataUrl }); localStorage.setItem("fotoAutoQueue", JSON.stringify(q.slice(-30))); } catch {}
+      }
+    }
+    reintentarFotosAuto();
+  };
+  const probarFotoAuto = async () => {
+    const b = await capturarFotoAuto(true);
+    if (b) alert(`✅ La cámara funciona. La foto pesa ${Math.round(b.size / 1024)} KB.`);
+  };
+
   // ---- Copia local en el computador (Chrome/Edge) ----
   const idbCarpeta = (modo, val) => new Promise(res => {
     try {
@@ -1762,10 +1832,14 @@ export default function LavanderiaApp() {
     try {
       const lim = new Date(); lim.setDate(lim.getDate() - dias);
       const cutoff = `${lim.getFullYear()}-${String(lim.getMonth() + 1).padStart(2, "0")}-${String(lim.getDate()).padStart(2, "0")}`;
-      const rows = await db.get("order_media", `&date=lt.${cutoff}`);
+      const limA = new Date(); limA.setDate(limA.getDate() - Math.max(7, Number(diasFotoAuto) || 120));
+      const cutoffAuto = `${limA.getFullYear()}-${String(limA.getMonth() + 1).padStart(2, "0")}-${String(limA.getDate()).padStart(2, "0")}`;
+      const cutoffMax = cutoffAuto > cutoff ? cutoffAuto : cutoff;
+      const rowsAll = await db.get("order_media", `&date=lt.${cutoffMax}`);
+      const rows = Array.isArray(rowsAll) ? rowsAll.filter(r => esFotoAuto(r) ? r.date < cutoffAuto : r.date < cutoff) : rowsAll;
       if (!Array.isArray(rows)) { alert("❌ No se pudo consultar la evidencia."); setLimpiandoEvidencia(false); return; }
-      if (rows.length === 0) { alert(`No hay evidencia anterior a ${cutoff}.`); setLimpiandoEvidencia(false); return; }
-      if (!window.confirm(`Se borrarán ${rows.length} archivos (fotos/videos) anteriores a ${cutoff} de Supabase.\n\nSi tienes activada la copia en el computador, esos archivos seguirán allí. No se puede deshacer. ¿Continuar?`)) { setLimpiandoEvidencia(false); return; }
+      if (rows.length === 0) { alert(`No hay evidencia para borrar (manual anterior a ${cutoff}, automática anterior a ${cutoffAuto}).`); setLimpiandoEvidencia(false); return; }
+      if (!window.confirm(`Se borrarán ${rows.length} archivos de Supabase (fotos/videos manuales anteriores a ${cutoff} y fotos automáticas de ingreso/entrega anteriores a ${cutoffAuto}).\n\nSi tienes activada la copia en el computador, esos archivos seguirán allí. No se puede deshacer. ¿Continuar?`)) { setLimpiandoEvidencia(false); return; }
       const marker = "/evidencias/";
       let borrados = 0, fallos = 0;
       for (let i = 0; i < rows.length; i += 50) {
@@ -1781,7 +1855,7 @@ export default function LavanderiaApp() {
         if (!okStorage) { fallos += lote.length; continue; } // si no se pudo borrar el archivo, no se borra la fila
         for (const r of lote) { try { await db.delete("order_media", r.id); borrados++; } catch { fallos++; } }
       }
-      setGaleriaMedia(prev => prev.filter(m => m.date >= cutoff));
+      setGaleriaMedia(prev => prev.filter(m => esFotoAuto(m) ? m.date >= cutoffAuto : m.date >= cutoff));
       alert(`✅ Limpieza lista: ${borrados} archivos borrados${fallos ? ` · ${fallos} no se pudieron borrar (intenta de nuevo)` : ""}.`);
     } catch (e) { alert("❌ " + e.message); }
     setLimpiandoEvidencia(false);
@@ -2898,6 +2972,7 @@ export default function LavanderiaApp() {
                                 ) : (
                                   <div style={{ width:70,height:70,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg-surface)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24 }}>🎬</div>
                                 )}
+                                {etiquetaFotoAuto(m) && <div style={{ position:"absolute",bottom:2,left:2,right:2,background:"rgba(0,0,0,0.7)",borderRadius:5,padding:"1px 3px",fontSize:10,color:"#fff",textAlign:"center" }}>{etiquetaFotoAuto(m)}</div>}
                               </a>
                               <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteMediaItem(m); }} title="Eliminar" style={{ position:"absolute",top:-6,right:-6,width:20,height:20,borderRadius:"50%",border:"none",background:"rgba(239,83,80,0.95)",color:"#fff",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>🗑</button>
                             </div>
@@ -4352,8 +4427,21 @@ export default function LavanderiaApp() {
                       {carpetaLocalNombre && <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Carpeta: <b>{carpetaLocalNombre}</b></span>}
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Solo funciona en Chrome o Edge del computador. Conviene que la carpeta esté dentro de Google Drive u OneDrive para que se respalde sola. Si el navegador se reinicia, puede pedir un clic de "Permitir".</div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "var(--text-muted)", cursor: "pointer" }}>
+                        <input type="checkbox" checked={fotoAuto} onChange={e => { setFotoAuto(e.target.checked); try { localStorage.setItem("fotoAuto", String(e.target.checked)); } catch {} }} style={{ accentColor: "#FF8A65" }} />
+                        📸 Foto automática de quien deja y de quien retira la ropa (en este computador)
+                      </label>
+                      <button onClick={probarFotoAuto} style={{ ...btn, background: "rgba(255,138,101,0.15)", color: "#FF8A65", padding: "6px 12px", fontSize: 13 }}>Probar cámara</button>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Al dar "Guardar e Imprimir" toma la foto de quien deja la ropa, y al confirmar una entrega toma la de quien la retira. Cada foto pesa unos 20 KB y queda ligada al número de orden. Se ven en el detalle de la orden en Entregas y en esta galería.</div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+                      <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Fotos automáticas: borrar de la nube después de</span>
+                      <input type="number" min="7" value={diasFotoAuto} onChange={e => { setDiasFotoAuto(e.target.value); try { localStorage.setItem("diasFotoAuto", String(e.target.value)); } catch {} }} style={{ ...inp, width: 70, padding: "6px 8px" }} />
+                      <span style={{ fontSize: 14, color: "var(--text-muted)" }}>días</span>
+                    </div>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                      <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Borrar de la nube lo que tenga más de</span>
+                      <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Fotos y videos manuales: borrar lo que tenga más de</span>
                       <input type="number" min="7" value={diasEvidencia} onChange={e => { setDiasEvidencia(e.target.value); try { localStorage.setItem("diasEvidencia", String(e.target.value)); } catch {} }} style={{ ...inp, width: 70, padding: "6px 8px" }} />
                       <span style={{ fontSize: 14, color: "var(--text-muted)" }}>días</span>
                       <button onClick={limpiarEvidenciaVieja} disabled={limpiandoEvidencia} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "6px 14px", fontSize: 13, fontWeight: 700 }}>{limpiandoEvidencia ? "Limpiando..." : "🧹 Limpiar evidencia antigua"}</button>
@@ -4385,7 +4473,7 @@ export default function LavanderiaApp() {
                             <div style={{ width: 110, height: 110, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>🎬</div>
                           )}
                           <div style={{ position: "absolute", bottom: 4, left: 4, right: 4, background: "rgba(0,0,0,0.7)", borderRadius: 6, padding: "2px 6px", fontSize: 11, color: "#fff", textAlign: "center" }}>
-                            {shownOrderNum(m.order_number)||"sin orden"}
+                            {etiquetaFotoAuto(m) ? etiquetaFotoAuto(m) + " · " : ""}{shownOrderNum(m.order_number)||"sin orden"}
                           </div>
                         </a>
                         <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteMediaItem(m); }} title="Eliminar" style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%", border: "none", background: "rgba(239,83,80,0.9)", color: "#fff", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>🗑</button>
@@ -5521,6 +5609,7 @@ export default function LavanderiaApp() {
                       if (items.some(it => !(Number(it.quantity) > 0))) { alert("⚠️ Falta la cantidad (Cant.) de prendas en uno de los ítems. Escríbela antes de guardar."); return; }
                       if (!newOrder.agencia_id && !newOrder.domiciliario_id && String(newOrder.phone||"").replace(/\D/g,"").length < 7) { alert("⚠️ Falta el número de teléfono del cliente. Escríbelo antes de guardar."); return; }
                       setSaving(true);
+                      const fotoP = capturarFotoAuto(); // foto de quien deja la ropa (en paralelo al guardado)
                       const pctDesc = getAgencyDiscountPctFor(newOrder.agencia_id);
                       const itemsFinal = pctDesc ? items.map(it => ({ ...it, price: Math.round(Number(it.price) * (1 - pctDesc/100)) })) : items;
                       const garments=totalGarments(itemsFinal), price=totalPrice(itemsFinal);
@@ -5543,7 +5632,7 @@ export default function LavanderiaApp() {
                         const freshItems=await db.get("order_items",`&order_id=eq.${orderId}`);
                         const itemsMap={[orderId]:Array.isArray(freshItems)?freshItems:[]};
                         setOrderItems(prev=>({...prev,...itemsMap}));
-                        if(freshOrder)printOrderQZ({...freshOrder},itemsMap);
+                        if(freshOrder){ printOrderQZ({...freshOrder},itemsMap); fotoP.then(b=>subirFotoAuto(b,"ingreso",[freshOrder.order_number])); }
                       } else if (result.ok && result.offline) {
                         printOrderQZ(result.order, result.itemsMap);
                       }
