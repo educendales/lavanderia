@@ -186,6 +186,7 @@ export default function LavanderiaApp() {
   const [borrarDesde, setBorrarDesde] = useState(today);
   const [borrarHasta, setBorrarHasta] = useState(today);
   const [borrarTipo, setBorrarTipo] = useState("todas"); // todas | manuales | auto
+  const [galeriaSel, setGaleriaSel] = useState([]);
   const [deletedOrdersLog, setDeletedOrdersLog] = useState([]);
   const [deletedLogFilter, setDeletedLogFilter] = useState("");
   const [buscarPrendaDesde, setBuscarPrendaDesde] = useState(today);
@@ -1883,6 +1884,22 @@ export default function LavanderiaApp() {
       const { borrados, fallos } = await borrarFilasEvidencia(rows);
       const ids = new Set(rows.map(r => r.id));
       setGaleriaMedia(prev => prev.filter(m => !ids.has(m.id)));
+      alert(`✅ Listo: ${borrados} archivos borrados${fallos ? ` · ${fallos} no se pudieron borrar (intenta de nuevo)` : ""}.`);
+    } catch (e) { alert("❌ " + e.message); }
+    setLimpiandoEvidencia(false);
+  };
+  const borrarSeleccionadas = async () => {
+    const rows = galeriaMedia.filter(m => galeriaSel.includes(m.id));
+    if (rows.length === 0) { alert("Marca primero las fotos o videos que quieres borrar."); return; }
+    const ok = await checkClave(`borrar ${rows.length} archivo(s) de evidencia seleccionados`); if (!ok) return;
+    if (!window.confirm(`Se borrarán ${rows.length} archivos de Supabase. No se puede deshacer. ¿Continuar?`)) return;
+    setLimpiandoEvidencia(true);
+    try {
+      const { borrados, fallos } = await borrarFilasEvidencia(rows);
+      const ids = new Set(rows.map(r => r.id));
+      setGaleriaMedia(prev => prev.filter(m => !ids.has(m.id)));
+      setEntregaResultMedia(prev => prev.filter(m => !ids.has(m.id)));
+      setGaleriaSel([]);
       alert(`✅ Listo: ${borrados} archivos borrados${fallos ? ` · ${fallos} no se pudieron borrar (intenta de nuevo)` : ""}.`);
     } catch (e) { alert("❌ " + e.message); }
     setLimpiandoEvidencia(false);
@@ -4512,9 +4529,18 @@ export default function LavanderiaApp() {
                 {galeriaMedia.length === 0 ? (
                   <p style={{ color: "var(--text-dim)", fontSize: 15, textAlign: "center", padding: "20px 0" }}>{galeriaLoading ? "Cargando..." : "No hay evidencia guardada en ese rango."}</p>
                 ) : (
+                  <>
+                  {isAdmin && (
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+                      <button onClick={() => setGaleriaSel(galeriaSel.length === galeriaMedia.length ? [] : galeriaMedia.map(m => m.id))} style={{ ...btn, background: "rgba(255,255,255,0.06)", color: "var(--text-muted)", padding: "6px 12px", fontSize: 13 }}>{galeriaSel.length === galeriaMedia.length ? "Quitar selección" : "Seleccionar todo lo que se ve"}</button>
+                      <span style={{ fontSize: 13, color: "var(--text-dim)" }}>{galeriaSel.length} seleccionada{galeriaSel.length === 1 ? "" : "s"} de {galeriaMedia.length}</span>
+                      <button onClick={borrarSeleccionadas} disabled={limpiandoEvidencia || galeriaSel.length === 0} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "6px 14px", fontSize: 13, fontWeight: 700, opacity: galeriaSel.length === 0 ? 0.5 : 1 }}>{limpiandoEvidencia ? "Borrando..." : `🗑 Borrar seleccionadas (${galeriaSel.length})`}</button>
+                    </div>
+                  )}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                     {galeriaMedia.map(m => (
-                      <div key={m.id} style={{ position: "relative" }}>
+                      <div key={m.id} style={{ position: "relative", outline: galeriaSel.includes(m.id) ? "3px solid #EF5350" : "none", borderRadius: 10 }}>
+                        {isAdmin && <input type="checkbox" checked={galeriaSel.includes(m.id)} onChange={() => setGaleriaSel(prev => prev.includes(m.id) ? prev.filter(x => x !== m.id) : [...prev, m.id])} style={{ position: "absolute", top: 6, left: 6, width: 20, height: 20, zIndex: 2, cursor: "pointer", accentColor: "#EF5350" }} />}
                         <a href={m.url} target="_blank" rel="noreferrer" style={{ display: "block" }}>
                           {m.type === "photo" ? (
                             <img src={m.url} alt="" style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)" }} />
@@ -4529,6 +4555,7 @@ export default function LavanderiaApp() {
                       </div>
                     ))}
                   </div>
+                  </>
                 )}
               </div>
 
