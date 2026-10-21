@@ -2985,6 +2985,16 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ fontWeight: 800, fontSize: 23, marginBottom: 2 }}>{entregaResult.client_name}</div>
                         <div style={{ color: "var(--text-muted)", fontSize: 16 }}>📞 {entregaResult.phone}</div>
+                        {(() => {
+                          const env = (orders.find(x => x.id === entregaResult.id) || entregaResult).recibo_enviado;
+                          return <div style={{ marginTop: 8 }}>
+                            {env === "whatsapp"
+                              ? <span style={{ background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 12px",borderRadius:20,fontSize:14,fontWeight:700 }}>📱 Recibo enviado por WhatsApp</span>
+                              : env === "impreso"
+                              ? <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"4px 12px",borderRadius:20,fontSize:14,fontWeight:700 }}>🖨️ Recibo impreso (no enviado por WhatsApp)</span>
+                              : <span style={{ background:"rgba(255,255,255,0.06)",color:"var(--text-dim)",padding:"4px 12px",borderRadius:20,fontSize:14,fontWeight:600 }}>Recibo sin enviar por WhatsApp</span>}
+                          </div>;
+                        })()}
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontWeight: 800, fontSize: 32, color: "#66BB6A" }}>${Math.round(Number(entregaResult.price))}</div>
@@ -5708,7 +5718,7 @@ export default function LavanderiaApp() {
                         const freshItems=await db.get("order_items",`&order_id=eq.${orderId}`);
                         const itemsMap={[orderId]:Array.isArray(freshItems)?freshItems:[]};
                         setOrderItems(prev=>({...prev,...itemsMap}));
-                        if(freshOrder){ printOrderQZ({...freshOrder},itemsMap); fotoP.then(b=>subirFotoAuto(b,"ingreso",[freshOrder.order_number])); }
+                        if(freshOrder){ printOrderQZ({...freshOrder},itemsMap); db.patch("orders",freshOrder.id,{recibo_enviado:"impreso"}).catch(()=>{}); setOrders(prev=>prev.map(ord=>ord.id===freshOrder.id?{...ord,recibo_enviado:"impreso"}:ord)); fotoP.then(b=>subirFotoAuto(b,"ingreso",[freshOrder.order_number])); }
                       } else if (result.ok && result.offline) {
                         printOrderQZ(result.order, result.itemsMap);
                       }
