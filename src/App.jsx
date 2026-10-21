@@ -183,6 +183,9 @@ export default function LavanderiaApp() {
   const [fotoAuto, setFotoAuto] = useState(() => { try { const v = localStorage.getItem("fotoAuto"); return v === null ? NUMERO_SIN_S_NI_CEROS : v === "true"; } catch { return NUMERO_SIN_S_NI_CEROS; } });
   const [diasFotoAuto, setDiasFotoAuto] = useState(() => { try { return Number(localStorage.getItem("diasFotoAuto")) || 120; } catch { return 120; } });
   const fotoAutoAvisoRef = useRef(false);
+  const [borrarDesde, setBorrarDesde] = useState(today);
+  const [borrarHasta, setBorrarHasta] = useState(today);
+  const [borrarTipo, setBorrarTipo] = useState("todas"); // todas | manuales | auto
   const [deletedOrdersLog, setDeletedOrdersLog] = useState([]);
   const [deletedLogFilter, setDeletedLogFilter] = useState("");
   const [buscarPrendaDesde, setBuscarPrendaDesde] = useState(today);
@@ -1825,21 +1828,7 @@ export default function LavanderiaApp() {
       return "";
     } catch (e) { return e.message || "error desconocido"; }
   };
-  const limpiarEvidenciaVieja = async () => {
-    const dias = Math.max(7, Number(diasEvidencia) || 60);
-    const ok = await checkClave(`borrar evidencia de más de ${dias} días`); if (!ok) return;
-    setLimpiandoEvidencia(true);
-    try {
-      const lim = new Date(); lim.setDate(lim.getDate() - dias);
-      const cutoff = `${lim.getFullYear()}-${String(lim.getMonth() + 1).padStart(2, "0")}-${String(lim.getDate()).padStart(2, "0")}`;
-      const limA = new Date(); limA.setDate(limA.getDate() - Math.max(7, Number(diasFotoAuto) || 120));
-      const cutoffAuto = `${limA.getFullYear()}-${String(limA.getMonth() + 1).padStart(2, "0")}-${String(limA.getDate()).padStart(2, "0")}`;
-      const cutoffMax = cutoffAuto > cutoff ? cutoffAuto : cutoff;
-      const rowsAll = await db.get("order_media", `&date=lt.${cutoffMax}`);
-      const rows = Array.isArray(rowsAll) ? rowsAll.filter(r => esFotoAuto(r) ? r.date < cutoffAuto : r.date < cutoff) : rowsAll;
-      if (!Array.isArray(rows)) { alert("❌ No se pudo consultar la evidencia."); setLimpiandoEvidencia(false); return; }
-      if (rows.length === 0) { alert(`No hay evidencia para borrar (manual anterior a ${cutoff}, automática anterior a ${cutoffAuto}).`); setLimpiandoEvidencia(false); return; }
-      if (!window.confirm(`Se borrarán ${rows.length} archivos de Supabase (fotos/videos manuales anteriores a ${cutoff} y fotos automáticas de ingreso/entrega anteriores a ${cutoffAuto}).\n\nSi tienes activada la copia en el computador, esos archivos seguirán allí. No se puede deshacer. ¿Continuar?`)) { setLimpiandoEvidencia(false); return; }
+  const borrarFilasEvidencia = async (rows) => {
       const marker = "/evidencias/";
       let borrados = 0, fallos = 0;
       for (let i = 0; i < rows.length; i += 50) {
@@ -1855,8 +1844,46 @@ export default function LavanderiaApp() {
         if (!okStorage) { fallos += lote.length; continue; } // si no se pudo borrar el archivo, no se borra la fila
         for (const r of lote) { try { await db.delete("order_media", r.id); borrados++; } catch { fallos++; } }
       }
+      return { borrados, fallos };
+  };
+  const limpiarEvidenciaVieja = async () => {
+    const dias = Math.max(7, Number(diasEvidencia) || 60);
+    const ok = await checkClave(`borrar evidencia de más de ${dias} días`); if (!ok) return;
+    setLimpiandoEvidencia(true);
+    try {
+      const lim = new Date(); lim.setDate(lim.getDate() - dias);
+      const cutoff = `${lim.getFullYear()}-${String(lim.getMonth() + 1).padStart(2, "0")}-${String(lim.getDate()).padStart(2, "0")}`;
+      const limA = new Date(); limA.setDate(limA.getDate() - Math.max(7, Number(diasFotoAuto) || 120));
+      const cutoffAuto = `${limA.getFullYear()}-${String(limA.getMonth() + 1).padStart(2, "0")}-${String(limA.getDate()).padStart(2, "0")}`;
+      const cutoffMax = cutoffAuto > cutoff ? cutoffAuto : cutoff;
+      const rowsAll = await db.get("order_media", `&date=lt.${cutoffMax}`);
+      const rows = Array.isArray(rowsAll) ? rowsAll.filter(r => esFotoAuto(r) ? r.date < cutoffAuto : r.date < cutoff) : rowsAll;
+      if (!Array.isArray(rows)) { alert("❌ No se pudo consultar la evidencia."); setLimpiandoEvidencia(false); return; }
+      if (rows.length === 0) { alert(`No hay evidencia para borrar (manual anterior a ${cutoff}, automática anterior a ${cutoffAuto}).`); setLimpiandoEvidencia(false); return; }
+      if (!window.confirm(`Se borrarán ${rows.length} archivos de Supabase (fotos/videos manuales anteriores a ${cutoff} y fotos automáticas de ingreso/entrega anteriores a ${cutoffAuto}).\n\nSi tienes activada la copia en el computador, esos archivos seguirán allí. No se puede deshacer. ¿Continuar?`)) { setLimpiandoEvidencia(false); return; }
+      const { borrados, fallos } = await borrarFilasEvidencia(rows);
       setGaleriaMedia(prev => prev.filter(m => esFotoAuto(m) ? m.date >= cutoffAuto : m.date >= cutoff));
       alert(`✅ Limpieza lista: ${borrados} archivos borrados${fallos ? ` · ${fallos} no se pudieron borrar (intenta de nuevo)` : ""}.`);
+    } catch (e) { alert("❌ " + e.message); }
+    setLimpiandoEvidencia(false);
+  };
+  const borrarEvidenciaPorRango = async () => {
+    if (!borrarDesde || !borrarHasta) { alert("⚠️ Elige las dos fechas (desde y hasta)."); return; }
+    if (borrarDesde > borrarHasta) { alert("⚠️ La fecha 'desde' no puede ser mayor que la fecha 'hasta'."); return; }
+    const tipoTxt = borrarTipo === "manuales" ? "fotos y videos manuales" : borrarTipo === "auto" ? "fotos automáticas de ingreso/entrega" : "TODA la evidencia (manual y automática)";
+    const ok = await checkClave(`borrar ${tipoTxt} del ${borrarDesde} al ${borrarHasta}`); if (!ok) return;
+    setLimpiandoEvidencia(true);
+    try {
+      const all = await db.get("order_media", `&date=gte.${borrarDesde}&date=lte.${borrarHasta}`);
+      if (!Array.isArray(all)) { alert("❌ No se pudo consultar la evidencia."); setLimpiandoEvidencia(false); return; }
+      const rows = all.filter(r => borrarTipo === "todas" ? true : borrarTipo === "auto" ? esFotoAuto(r) : !esFotoAuto(r));
+      if (rows.length === 0) { alert("No hay evidencia de ese tipo en ese rango de fechas."); setLimpiandoEvidencia(false); return; }
+      const nAuto = rows.filter(esFotoAuto).length;
+      if (!window.confirm(`Se borrarán ${rows.length} archivos de Supabase (${nAuto} fotos automáticas y ${rows.length - nAuto} manuales) del ${borrarDesde} al ${borrarHasta}.\n\nNo se puede deshacer. ¿Continuar?`)) { setLimpiandoEvidencia(false); return; }
+      const { borrados, fallos } = await borrarFilasEvidencia(rows);
+      const ids = new Set(rows.map(r => r.id));
+      setGaleriaMedia(prev => prev.filter(m => !ids.has(m.id)));
+      alert(`✅ Listo: ${borrados} archivos borrados${fallos ? ` · ${fallos} no se pudieron borrar (intenta de nuevo)` : ""}.`);
     } catch (e) { alert("❌ " + e.message); }
     setLimpiandoEvidencia(false);
   };
@@ -4445,6 +4472,28 @@ export default function LavanderiaApp() {
                       <input type="number" min="7" value={diasEvidencia} onChange={e => { setDiasEvidencia(e.target.value); try { localStorage.setItem("diasEvidencia", String(e.target.value)); } catch {} }} style={{ ...inp, width: 70, padding: "6px 8px" }} />
                       <span style={{ fontSize: 14, color: "var(--text-muted)" }}>días</span>
                       <button onClick={limpiarEvidenciaVieja} disabled={limpiandoEvidencia} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "6px 14px", fontSize: 13, fontWeight: 700 }}>{limpiandoEvidencia ? "Limpiando..." : "🧹 Limpiar evidencia antigua"}</button>
+                    </div>
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: 14, color: "var(--text-muted)", marginBottom: 8 }}>🗓️ O borrar por rango de fechas (elige tú desde cuándo hasta cuándo):</div>
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                        <div>
+                          <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>DESDE</label>
+                          <input type="date" value={borrarDesde} onChange={e => setBorrarDesde(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, padding: "6px 8px" }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>HASTA</label>
+                          <input type="date" value={borrarHasta} onChange={e => setBorrarHasta(e.target.value)} style={{ ...inp, colorScheme: "dark", width: 150, padding: "6px 8px" }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 3 }}>QUÉ BORRAR</label>
+                          <select value={borrarTipo} onChange={e => setBorrarTipo(e.target.value)} style={{ ...inp, padding: "6px 8px", width: 230 }}>
+                            <option value="todas">Todo (manual y automática)</option>
+                            <option value="auto">Solo fotos automáticas (ingreso/entrega)</option>
+                            <option value="manuales">Solo fotos y videos manuales</option>
+                          </select>
+                        </div>
+                        <button onClick={borrarEvidenciaPorRango} disabled={limpiandoEvidencia} style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "7px 14px", fontSize: 13, fontWeight: 700 }}>{limpiandoEvidencia ? "Borrando..." : "🗑 Borrar este rango"}</button>
+                      </div>
                     </div>
                   </div>
                 )}
