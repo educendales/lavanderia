@@ -1603,6 +1603,20 @@ export default function LavanderiaApp() {
     });
   };
 
+  // Enviar el recibo por WhatsApp de una orden ya creada (aunque ya se haya impreso)
+  const enviarReciboWA = async (o, itemsMap = null) => {
+    const phone = (o.phone || "").replace(/[^0-9]/g, "");
+    if (!phone) { alert("⚠️ Esta orden no tiene número de teléfono."); return; }
+    await generateReciboImage(o, itemsMap);
+    const partes = ["Hola " + o.client_name + ", adjunto su recibo de " + negocioNombre + ".", "Orden: " + shownOrderNum(o.order_number), "Total: $" + Math.round(Number(o.price)), "Entrega: " + (o.delivery_date || ""), "Gracias por preferirnos!"];
+    window.open(getWhatsAppUrl(negocioPais + phone, partes.join(String.fromCharCode(10))), "lavagest_whatsapp");
+    if (!String(o.id).startsWith("offline-")) {
+      try { await db.patch("orders", o.id, { recibo_enviado: "whatsapp" }); } catch {}
+    }
+    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, recibo_enviado: "whatsapp" } : ord));
+    setEntregaResult(prev => prev && prev.id === o.id ? { ...prev, recibo_enviado: "whatsapp" } : prev);
+  };
+
   const startCamera = async () => {
     setCameraError("");
     try {
@@ -2853,7 +2867,7 @@ export default function LavanderiaApp() {
                             ) : (
                               <button title="Corregir método de pago" onClick={() => { setMarkPaidModal(o); setMarkPaidMethod(o.payment_method || "efectivo"); }} style={{ ...btn, background: "rgba(255,138,101,0.15)", color: "#FF8A65", padding: "5px 10px", fontSize: 14 }}>✏️💰</button>
                             )}
-                            <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>
+                            <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>{o.phone && <button onClick={() => enviarReciboWA(o)} title="Enviar recibo por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", padding: "5px 10px", fontSize: 14 }}>📱</button>}
                             <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 14 }}>🗑</button>
                           </div>
                         </td>
@@ -3145,6 +3159,7 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ display: "flex", gap: 10 }}>
                           <button onClick={() => printOrderQZ(entregaResult, null, 1)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
+                          {entregaResult.phone && <button onClick={() => enviarReciboWA(entregaResult)} title="Enviar recibo por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", flex: 1, padding: 12 }}>📱 Enviar recibo por WhatsApp</button>}
                           <button onClick={() => marcarSinReciboEImprimir(entregaResult)} title="Imprimir constancia sin recibo" style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", flex: 1, padding: 12 }}>📝 {entregaResult.sin_recibo ? "Reimprimir constancia" : "Marcar sin recibo e imprimir"}</button>
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setEntregaPayment(""); setEntregaSinRecibo(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
@@ -3287,7 +3302,7 @@ export default function LavanderiaApp() {
                                 <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                                 <td style={{ padding: "12px 14px" }}>
                                   <div style={{ display: "flex", gap: 6 }}>
-                                    <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>
+                                    <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>{o.phone && <button onClick={() => enviarReciboWA(o)} title="Enviar recibo por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", padding: "5px 10px", fontSize: 14 }}>📱</button>}
                                     <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden de agencia?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 14 }}>🗑</button>
                                   </div>
                                 </td>
@@ -3381,7 +3396,7 @@ export default function LavanderiaApp() {
                                 <td style={{ padding: "12px 14px" }}><span style={{ background: STATUS_LABELS[o.status]?.color+"22", color: STATUS_LABELS[o.status]?.color, padding: "3px 10px", borderRadius: 20, fontSize: 14, fontWeight: 600 }}>{STATUS_LABELS[o.status]?.label}</span></td>
                                 <td style={{ padding: "12px 14px" }}>
                                   <div style={{ display: "flex", gap: 6 }}>
-                                    <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>
+                                    <button onClick={() => printOrderQZ(o, null, 1)} title="Imprimir" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", padding: "5px 10px", fontSize: 14 }}>🖨️</button>{o.phone && <button onClick={() => enviarReciboWA(o)} title="Enviar recibo por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", padding: "5px 10px", fontSize: 14 }}>📱</button>}
                                     <button onClick={async () => { const ok=await checkClave("eliminar"); if(!ok)return; if(window.confirm("¿Eliminar esta orden de domiciliario?"))deleteOrder(o.id); }} title="Eliminar" style={{ ...btn, background: "rgba(239,83,80,0.15)", color: "#EF5350", padding: "5px 10px", fontSize: 14 }}>🗑</button>
                                   </div>
                                 </td>
@@ -5821,7 +5836,7 @@ export default function LavanderiaApp() {
                     const o = savedOrder.order;
                     await generateReciboImage(o, savedOrder.itemsMap);
                     const phone = (o.phone||"").replace(/[^0-9]/g,"");
-                    const partes = ["Hola " + o.client_name + ", adjunto su recibo de " + negocioNombre + ".","Orden: " + (o.order_number||""),"Total: $" + Math.round(Number(o.price)),"Entrega: " + (o.delivery_date||""),"Gracias por preferirnos!"];
+                    const partes = ["Hola " + o.client_name + ", adjunto su recibo de " + negocioNombre + ".","Orden: " + shownOrderNum(o.order_number),"Total: $" + Math.round(Number(o.price)),"Entrega: " + (o.delivery_date||""),"Gracias por preferirnos!"];
                     const msg = partes.join(String.fromCharCode(10));
                     window.open(getWhatsAppUrl(negocioPais + phone, msg), "lavagest_whatsapp");
                     await db.patch("orders", o.id, { recibo_enviado: "whatsapp" });
