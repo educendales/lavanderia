@@ -183,6 +183,9 @@ export default function LavanderiaApp() {
   const [fotoAuto, setFotoAuto] = useState(() => { try { const v = localStorage.getItem("fotoAuto"); return v === null ? NUMERO_SIN_S_NI_CEROS : v === "true"; } catch { return NUMERO_SIN_S_NI_CEROS; } });
   const [diasFotoAuto, setDiasFotoAuto] = useState(() => { try { return Number(localStorage.getItem("diasFotoAuto")) || 120; } catch { return 120; } });
   const fotoAutoAvisoRef = useRef(false);
+  // De dónde sale la foto automática: "webcam" (cámara del computador) o "puente" (cámara de seguridad vía programa puente local)
+  const [fotoFuente, setFotoFuente] = useState(() => { try { return localStorage.getItem("fotoFuente") === "puente" ? "puente" : "webcam"; } catch { return "webcam"; } });
+  const [fotoPuenteUrl, setFotoPuenteUrl] = useState(() => { try { return localStorage.getItem("fotoPuenteUrl") || "http://127.0.0.1:8765/foto"; } catch { return "http://127.0.0.1:8765/foto"; } });
   const [borrarDesde, setBorrarDesde] = useState(today);
   const [borrarHasta, setBorrarHasta] = useState(today);
   const [borrarTipo, setBorrarTipo] = useState("todas"); // todas | manuales | auto
@@ -1747,8 +1750,28 @@ export default function LavanderiaApp() {
   // ---- Foto automática (ingreso / entrega) ----
   const esFotoAuto = (m) => /\/(ingreso|entrega)_/.test(m?.url || "");
   const etiquetaFotoAuto = (m) => /\/ingreso_/.test(m?.url || "") ? "🧍 Ingreso" : /\/entrega_/.test(m?.url || "") ? "✅ Entrega" : "";
+  // Foto desde la cámara de seguridad a través del programa puente (se reduce a 720 px y se comprime)
+  const fotoDesdePuente = async () => {
+    const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 9000);
+    try {
+      const r = await fetch(fotoPuenteUrl, { signal: ctrl.signal, cache: "no-store" });
+      if (!r.ok) throw new Error("el puente respondió " + r.status + " (" + (await r.text()).slice(0, 120) + ")");
+      const blob = await r.blob();
+      const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("imagen inválida")); im.src = URL.createObjectURL(blob); });
+      const sc = Math.min(1, 720 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      return await new Promise(res => c.toBlob(b => res(b), "image/jpeg", 0.55));
+    } finally { clearTimeout(t); }
+  };
   const capturarFotoAuto = async (forzar = false) => {
     if (!fotoAuto && !forzar) return null;
+    let errPuente = "";
+    if (fotoFuente === "puente") {
+      try { return await fotoDesdePuente(); }
+      catch (e) { errPuente = e.name === "AbortError" ? "el puente no respondió a tiempo" : e.message; } // si falla, intenta con la webcam
+    }
     let stream = null;
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("este navegador no permite usar la cámara");
@@ -1762,7 +1785,7 @@ export default function LavanderiaApp() {
       c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
       return await new Promise(res => c.toBlob(b => res(b), "image/jpeg", 0.55));
     } catch (e) {
-      if (!fotoAutoAvisoRef.current || forzar) { fotoAutoAvisoRef.current = true; alert("⚠️ No se pudo tomar la foto automática (" + (e.name === "NotAllowedError" ? "falta dar permiso a la cámara en el navegador" : e.message) + "). La orden se guardó normal."); }
+      if (!fotoAutoAvisoRef.current || forzar) { fotoAutoAvisoRef.current = true; alert("⚠️ No se pudo tomar la foto automática (" + (errPuente ? "cámara de seguridad: " + errPuente + "; webcam: " : "") + (e.name === "NotAllowedError" ? "falta dar permiso a la cámara en el navegador" : e.message) + "). La orden se guardó normal."); }
       return null;
     } finally { if (stream) stream.getTracks().forEach(t => t.stop()); }
   };
@@ -1800,7 +1823,12 @@ export default function LavanderiaApp() {
   };
   const probarFotoAuto = async () => {
     const b = await capturarFotoAuto(true);
-    if (b) alert(`✅ La cámara funciona. La foto pesa ${Math.round(b.size / 1024)} KB.`);
+    if (b) {
+      const u = URL.createObjectURL(b);
+      const w = window.open(u, "_blank", "width=700,height=560");
+      if (!w) alert(`✅ Funciona. La foto pesa ${Math.round(b.size / 1024)} KB.`);
+      else setTimeout(() => alert(`✅ Funciona${fotoFuente === "puente" ? " (cámara de seguridad)" : " (webcam)"}. La foto pesa ${Math.round(b.size / 1024)} KB. Se abrió una ventana para que la veas.`), 400);
+    }
   };
 
   // ---- Copia local en el computador (Chrome/Edge) ----
@@ -4503,6 +4531,22 @@ export default function LavanderiaApp() {
                       </label>
                       <button onClick={probarFotoAuto} style={{ ...btn, background: "rgba(255,138,101,0.15)", color: "#FF8A65", padding: "6px 12px", fontSize: 13 }}>Probar cámara</button>
                     </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+                      <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Fuente de la foto:</span>
+                      {[{v:"webcam",t:"📷 Webcam del computador"},{v:"puente",t:"🎥 Cámara de seguridad (programa puente)"}].map(o => (
+                        <label key={o.v} onClick={() => { setFotoFuente(o.v); try { localStorage.setItem("fotoFuente", o.v); } catch {} }} style={{ display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:fotoFuente===o.v?"rgba(255,138,101,0.12)":"rgba(255,255,255,0.04)",border:`1px solid ${fotoFuente===o.v?"#FF8A65":"var(--border)"}`,borderRadius:8,padding:"6px 10px" }}>
+                          <input type="radio" checked={fotoFuente===o.v} readOnly style={{ accentColor:"#FF8A65" }} />
+                          <span style={{ fontSize:13,color:fotoFuente===o.v?"#FF8A65":"var(--text-muted)" }}>{o.t}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {fotoFuente === "puente" && (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+                        <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Dirección del puente:</span>
+                        <input value={fotoPuenteUrl} onChange={e => { setFotoPuenteUrl(e.target.value); try { localStorage.setItem("fotoPuenteUrl", e.target.value); } catch {} }} style={{ ...inp, width: 280, padding: "6px 8px", fontSize: 13 }} />
+                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Si el puente falla, usa la webcam.</span>
+                      </div>
+                    )}
                     <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Al dar "Guardar e Imprimir" toma la foto de quien deja la ropa, y al confirmar una entrega toma la de quien la retira. Cada foto pesa unos 20 KB y queda ligada al número de orden. Se ven en el detalle de la orden en Entregas y en esta galería.</div>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
                       <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Fotos automáticas: borrar de la nube después de</span>
