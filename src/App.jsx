@@ -132,6 +132,9 @@ const today = getToday();
 const emptyOrder = { client_name: "", phone: "", status: "listo", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "", paid_at_intake: false, payment_method: null, abono_amount: "", abono_method: "efectivo" };
 // Número de orden como se ve en recibos: las normales sin la "S" ni ceros al inicio (S070266 -> 70266); agencias (A) y domicilios (D) conservan su letra.
 // true = recibos sin "S" ni ceros (versión LUIS). false = como Shaddai/Ricardo (número completo grande, "Factura No." sin letra).
+// Algunos escáneres mandan el guion "-" como comilla (') cuando el teclado de Windows está en español.
+// Aquí se corrige: una comilla entre dos números se vuelve guion (ej. OFF0912'002 -> OFF0912-002).
+const fixScan = (c) => String(c || "").replace(/(\d)['´`‘’](?=\d)/g, "$1-");
 const NUMERO_SIN_S_NI_CEROS = false;
 const shownOrderNum = (n) => NUMERO_SIN_S_NI_CEROS ? String(n || "").replace(/^S0*(?=\d)/i, "") : String(n || "");
 const factOrderNum = (n) => NUMERO_SIN_S_NI_CEROS ? shownOrderNum(n) : String(n || "").replace(/^[A-Za-z]/, "");
@@ -929,7 +932,7 @@ export default function LavanderiaApp() {
       if (gap > 100) barcodeBufferRef.current = "";
 
       if (e.key === "Enter") {
-        const code = barcodeBufferRef.current.trim();
+        const code = fixScan(barcodeBufferRef.current.trim());
         barcodeBufferRef.current = "";
         if (code.length >= 3) {
           if (showCalcRef.current) {
@@ -978,7 +981,7 @@ export default function LavanderiaApp() {
       if (e.key === "Enter") {
         if (st.buf.length >= 5 && gap <= 80) {
           e.preventDefault(); e.stopPropagation();
-          const code = st.buf; const before = st.before; st.buf = "";
+          const code = fixScan(st.buf); const before = st.before; st.buf = "";
           setNewOrder(p => ({ ...p, phone: before }));
           setModal(null); setTab("entregas"); setEntregaSearch(code); setBarcodeTrigger(t => t + 1);
         } else { st.buf = ""; }
@@ -1351,7 +1354,7 @@ export default function LavanderiaApp() {
   };
 
   const searchEntrega = () => {
-    const q = entregaSearch.trim().toLowerCase(); if (!q) return;
+    const q = fixScan(entregaSearch.trim()).toLowerCase(); if (!q) return;
     const byOrder = findOrderByNum(orders, q);
     const results = byOrder ? [byOrder] : orders.filter(o => o.phone?.toLowerCase().includes(q));
     setEntregaResults(results);
