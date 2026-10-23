@@ -965,6 +965,32 @@ export default function LavanderiaApp() {
     window.addEventListener("keydown", handleGlobalKeydown);
     return () => window.removeEventListener("keydown", handleGlobalKeydown);
   }, []);
+  // Escáner con el cursor en el campo Teléfono de "Nueva orden": en vez de escribir el número de orden ahí,
+  // cierra la orden nueva y manda a Entregas con ese número. Detecta el escáner por la velocidad (letras casi seguidas);
+  // una persona escribiendo no lo activa, y no se bloquea ninguna tecla (solo se corrige el campo al terminar el escaneo).
+  useEffect(() => {
+    const st = { buf: "", last: 0, before: "" };
+    const onKey = (e) => {
+      const el = phoneInputRef.current;
+      if (!el || e.target !== el) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const now = Date.now(); const gap = now - st.last; st.last = now;
+      if (e.key === "Enter") {
+        if (st.buf.length >= 5 && gap <= 80) {
+          e.preventDefault(); e.stopPropagation();
+          const code = st.buf; const before = st.before; st.buf = "";
+          setNewOrder(p => ({ ...p, phone: before }));
+          setModal(null); setTab("entregas"); setEntregaSearch(code); setBarcodeTrigger(t => t + 1);
+        } else { st.buf = ""; }
+        return;
+      }
+      if (e.key.length !== 1) return;
+      if (st.buf === "" || gap > 60) { st.buf = e.key; st.before = el.value; }
+      else st.buf += e.key;
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
   useEffect(() => { if (barcodeTrigger > 0) searchEntrega(); }, [barcodeTrigger]);
   useEffect(() => { loadGaleriaMedia(); }, []);
   useEffect(() => {
