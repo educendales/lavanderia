@@ -3193,6 +3193,11 @@ export default function LavanderiaApp() {
                           <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:16,fontWeight:700,borderRadius:10,marginTop:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
                         )}
                         <button onClick={() => { setAbonoModal(entregaResult); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, width:"100%",background:"rgba(255,213,79,0.1)",color:"var(--warning-text)",border:"1px solid rgba(255,213,79,0.3)",padding:14,fontSize:16,fontWeight:700,borderRadius:10,marginTop:10 }}>💰 Registrar Abono (el cliente no se lleva la ropa hoy)</button>
+                        {entregaResult.phone && entregaResult.status === "listo" && (() => { const rr = orders.find(x => x.id === entregaResult.id) || entregaResult; return <button onClick={() => {
+                          if (yaRecordadoHoy(rr) && !window.confirm("Ya se le envió un recordatorio hoy a este cliente. ¿Enviar otro de todas formas?")) return;
+                          marcarRecordatorio(rr);
+                          window.open(getWhatsAppUrl(negocioPais + entregaResult.phone.replace(/[^0-9]/g, ""), getRandomWaMensaje(entregaResult.client_name, shownOrderNum(entregaResult.order_number))), "lavagest_whatsapp");
+                        }} title="Enviar recordatorio para que recoja las prendas" style={{ ...btn, width:"100%", marginTop:10, background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#fff", padding: 12, fontWeight: 700 }}>🔔 {rr.recordatorio_wa_at ? "Enviar otro recordatorio por WhatsApp" : "Enviar recordatorio por WhatsApp"}</button>; })()}
                       </>
                     )}
 
