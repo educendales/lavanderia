@@ -132,6 +132,28 @@ const today = getToday();
 const emptyOrder = { client_name: "", phone: "", status: "listo", notes: "", delivery_date: getDeliveryDefault(), agencia_id: null, agencia_name: "", domiciliario_id: null, a_domicilio: false, address: "", paid_at_intake: false, payment_method: null, abono_amount: "", abono_method: "efectivo" };
 // Número de orden como se ve en recibos: las normales sin la "S" ni ceros al inicio (S070266 -> 70266); agencias (A) y domicilios (D) conservan su letra.
 // true = recibos sin "S" ni ceros (versión LUIS). false = como Shaddai/Ricardo (número completo grande, "Factura No." sin letra).
+// ---- Firma de QZ Tray SIN internet ----
+// Normalmente la firma la hace el servidor (/api/sign-message). Sin internet eso falla y QZ Tray no imprime.
+// Si en este computador se guardó la llave (Configuración > "Firma de impresión sin internet"), se firma aquí mismo.
+const qzLlaveLocal = () => { try { return localStorage.getItem("qzLocalKey") || ""; } catch { return ""; } };
+const qzDerLen = (n) => { if (n < 0x80) return [n]; const b = []; let l = n; while (l > 0) { b.unshift(l & 0xff); l >>= 8; } return [0x80 | b.length, ...b]; };
+const qzPkcs1ToPkcs8 = (d) => {
+  const alg = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00];
+  const oct = [0x04, ...qzDerLen(d.length), ...d];
+  const body = [0x02, 0x01, 0x00, ...alg, ...oct];
+  return new Uint8Array([0x30, ...qzDerLen(body.length), ...body]);
+};
+const qzFirmarLocal = async (toSign) => {
+  const pem = qzLlaveLocal().replace(/\\n/g, "\n");
+  const m = pem.match(/-----BEGIN (RSA )?PRIVATE KEY-----([\s\S]*?)-----END (RSA )?PRIVATE KEY-----/);
+  if (!m) throw new Error("no hay llave local");
+  let der = Uint8Array.from(atob(m[2].replace(/\s+/g, "")), c => c.charCodeAt(0));
+  if (m[1]) der = qzPkcs1ToPkcs8(der); // "BEGIN RSA PRIVATE KEY" (PKCS#1)
+  const key = await crypto.subtle.importKey("pkcs8", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-512" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(toSign));
+  let bin = ""; new Uint8Array(sig).forEach(b => { bin += String.fromCharCode(b); });
+  return btoa(bin);
+};
 // Algunos escáneres mandan el guion "-" como comilla (') cuando el teclado de Windows está en español.
 // Aquí se corrige: una comilla entre dos números se vuelve guion (ej. OFF0912'002 -> OFF0912-002).
 const fixScan = (c) => String(c || "").replace(/(\d)['´`‘’](?=\d)/g, "$1-");
@@ -186,6 +208,8 @@ export default function LavanderiaApp() {
   const [fotoAuto, setFotoAuto] = useState(() => { try { const v = localStorage.getItem("fotoAuto"); return v === null ? NUMERO_SIN_S_NI_CEROS : v === "true"; } catch { return NUMERO_SIN_S_NI_CEROS; } });
   const [diasFotoAuto, setDiasFotoAuto] = useState(() => { try { return Number(localStorage.getItem("diasFotoAuto")) || 120; } catch { return 120; } });
   const fotoAutoAvisoRef = useRef(false);
+  const [llaveLocalOk, setLlaveLocalOk] = useState(() => !!qzLlaveLocal());
+  const [llaveTexto, setLlaveTexto] = useState("");
   // De dónde sale la foto automática: "webcam" (cámara del computador) o "puente" (cámara de seguridad vía programa puente local)
   const [fotoFuente, setFotoFuente] = useState(() => { try { return localStorage.getItem("fotoFuente") === "puente" ? "puente" : "webcam"; } catch { return "webcam"; } });
   const [fotoPuenteUrl, setFotoPuenteUrl] = useState(() => { try { return localStorage.getItem("fotoPuenteUrl") || "http://127.0.0.1:8765/foto"; } catch { return "http://127.0.0.1:8765/foto"; } });
@@ -426,6 +450,7 @@ export default function LavanderiaApp() {
         if (sigueListo) {
           const msg = getRandomWaMensaje(o.client_name, shownOrderNum(o.order_number));
           window.open(getWhatsAppUrl(negocioPais + (o.phone||"").replace(/[^0-9]/g,""), msg), "lavagest_whatsapp");
+          marcarRecordatorio(ordenActual);
         } else {
           omitidos++;
         }
@@ -731,9 +756,17 @@ export default function LavanderiaApp() {
     window.qz.security.setCertificatePromise((resolve) => resolve(QZ_CERTIFICATE));
     window.qz.security.setSignatureAlgorithm("SHA512");
     window.qz.security.setSignaturePromise((toSign) => (resolve, reject) => {
-      fetch("/api/sign-message?request=" + encodeURIComponent(toSign), { cache: "no-store" })
-        .then((r) => r.ok ? r.text().then(resolve) : r.text().then(reject))
-        .catch(reject);
+      // 1) Si este computador tiene la llave guardada, firma aquí mismo (funciona con o sin internet).
+      // 2) Si no, o si falla, pide la firma al servidor (necesita internet).
+      const delServidor = () => {
+        const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 6000);
+        fetch("/api/sign-message?request=" + encodeURIComponent(toSign), { cache: "no-store", signal: ctrl.signal })
+          .then((r) => r.ok ? r.text().then(resolve) : r.text().then(reject))
+          .catch(reject)
+          .finally(() => clearTimeout(t));
+      };
+      if (qzLlaveLocal()) qzFirmarLocal(toSign).then(resolve).catch(delServidor);
+      else delServidor();
     });
   }, [qzReady]);
 
@@ -1648,6 +1681,32 @@ export default function LavanderiaApp() {
     setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, recibo_enviado: "whatsapp" } : ord));
     setEntregaResult(prev => prev && prev.id === o.id ? { ...prev, recibo_enviado: "whatsapp" } : prev);
   };
+
+  // Marca de "recordatorio enviado por WhatsApp" (persistente en la orden)
+  const marcarRecordatorio = async (o) => {
+    const actual = ordersRef.current.find(x => x.id === o.id) || o;
+    const cant = (Number(actual.recordatorio_wa_count) || 0) + 1;
+    const cuando = new Date().toISOString();
+    const upd = { recordatorio_wa_at: cuando, recordatorio_wa_count: cant };
+    setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, ...upd } : ord));
+    setEntregaResult(prev => prev && prev.id === o.id ? { ...prev, ...upd } : prev);
+    if (String(o.id).startsWith("offline-")) return;
+    try {
+      const r = await db.patch("orders", o.id, upd);
+      if (r && !Array.isArray(r) && !window.__avisoRecordatorioSQL) {
+        window.__avisoRecordatorioSQL = true;
+        alert("⚠️ No se pudo guardar la marca de recordatorio. Falta ejecutar el SQL_recordatorios.sql en Supabase.");
+      }
+    } catch {}
+  };
+  const textoRecordatorio = (o) => {
+    if (!o || !o.recordatorio_wa_at) return "";
+    const d = new Date(o.recordatorio_wa_at);
+    const f = d.toLocaleDateString("es-CO", { day: "2-digit", month: "short" }) + " " + d.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+    const n = Number(o.recordatorio_wa_count) || 1;
+    return `🔔 Recordatorio enviado ${f}${n > 1 ? ` (${n} veces)` : ""}`;
+  };
+  const yaRecordadoHoy = (o) => !!(o && o.recordatorio_wa_at && new Date(o.recordatorio_wa_at).toDateString() === new Date().toDateString());
 
   const startCamera = async () => {
     setCameraError("");
@@ -3064,6 +3123,7 @@ export default function LavanderiaApp() {
                               : env === "impreso"
                               ? <span style={{ background:"rgba(79,195,247,0.15)",color:"#4FC3F7",padding:"4px 12px",borderRadius:20,fontSize:14,fontWeight:700 }}>🖨️ Recibo impreso (no enviado por WhatsApp)</span>
                               : <span style={{ background:"rgba(255,255,255,0.06)",color:"var(--text-dim)",padding:"4px 12px",borderRadius:20,fontSize:14,fontWeight:600 }}>Recibo sin enviar por WhatsApp</span>}
+                            {(() => { const rr = orders.find(x => x.id === entregaResult.id) || entregaResult; return rr.recordatorio_wa_at ? <span style={{ marginLeft:8,background:"rgba(255,213,79,0.15)",color:"var(--warning-text)",padding:"4px 12px",borderRadius:20,fontSize:14,fontWeight:700,display:"inline-block" }}>{textoRecordatorio(rr)}</span> : null; })()}
                           </div>;
                         })()}
                       </div>
@@ -3214,9 +3274,16 @@ export default function LavanderiaApp() {
                             </div>
                           ))}
                         </div>
-                        <div style={{ display: "flex", gap: 10 }}>
-                          <button onClick={() => printOrderQZ(entregaResult, null, 1)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: 1, padding: 12 }}>🖨️ Imprimir recibo</button>
-                          {entregaResult.phone && <button onClick={() => enviarReciboWA(entregaResult)} title="Enviar recibo por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", flex: 1, padding: 12 }}>📱 Enviar recibo por WhatsApp</button>}
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          <button onClick={() => printOrderQZ(entregaResult, null, 1)} title="Imprimir recibo" style={{ ...btn, background: "rgba(79,195,247,0.15)", color: "#4FC3F7", flex: "1 1 190px", padding: 12 }}>🖨️ Imprimir recibo</button>
+                          {entregaResult.phone && <button onClick={() => enviarReciboWA(entregaResult)} title="Enviar recibo por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", flex: "1 1 190px", padding: 12 }}>📱 Enviar recibo por WhatsApp</button>}
+                          {entregaResult.phone && entregaResult.status === "listo" && <button onClick={() => {
+                            const ya = orders.find(x => x.id === entregaResult.id) || entregaResult;
+                            if (yaRecordadoHoy(ya) && !window.confirm("Ya se le envió un recordatorio hoy a este cliente. ¿Enviar otro de todas formas?")) return;
+                            marcarRecordatorio(ya);
+                            const msg = getRandomWaMensaje(entregaResult.client_name, shownOrderNum(entregaResult.order_number));
+                            window.open(getWhatsAppUrl(negocioPais + entregaResult.phone.replace(/[^0-9]/g, ""), msg), "lavagest_whatsapp");
+                          }} title="Enviar recordatorio para que recoja las prendas" style={{ ...btn, background: "linear-gradient(135deg,#25D366,#128C7E)", color: "#fff", flex: "1 1 190px", padding: 12, fontWeight: 700 }}>🔔 {(orders.find(x => x.id === entregaResult.id) || entregaResult).recordatorio_wa_at ? "Enviar otro recordatorio" : "Enviar recordatorio por WhatsApp"}</button>}
                           <button onClick={() => marcarSinReciboEImprimir(entregaResult)} title="Imprimir constancia sin recibo" style={{ ...btn, background: "rgba(255,213,79,0.15)", color: "var(--warning-text)", flex: 1, padding: 12 }}>📝 {entregaResult.sin_recibo ? "Reimprimir constancia" : "Marcar sin recibo e imprimir"}</button>
                           <button onClick={() => { setEntregaResult(null); setEntregaResults(null); setEntregaSearch(""); setEntregaConfirmed(false); setEntregaPayment(""); setEntregaSinRecibo(false); }} style={{ ...btn, background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", flex: 1, padding: 12 }}>🔍 Nueva búsqueda</button>
                         </div>
@@ -4722,7 +4789,7 @@ export default function LavanderiaApp() {
                                   <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>{r.item.quantity}</td>
                                   <td style={{ padding: "6px 10px", color: "var(--text-muted)" }}>{r.order.date}</td>
                                   <td style={{ padding: "6px 10px" }}>{r.order.phone && r.order.status === "listo" && (
-                                    <a href={getWhatsAppUrl(negocioPais + r.order.phone.replace(/[^0-9]/g, ""), getRandomWaMensaje(r.order.client_name, shownOrderNum(r.order.order_number)))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar recordatorio por WhatsApp" style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", padding: "4px 8px", fontSize: 13, textDecoration: "none", display: "inline-block", borderRadius: 8, border: "1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>
+                                    <a href={getWhatsAppUrl(negocioPais + r.order.phone.replace(/[^0-9]/g, ""), getRandomWaMensaje(r.order.client_name, shownOrderNum(r.order.order_number)))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar recordatorio por WhatsApp" onClick={() => marcarRecordatorio(r.order)} style={{ ...btn, background: "rgba(37,211,102,0.15)", color: "#25D366", padding: "4px 8px", fontSize: 13, textDecoration: "none", display: "inline-block", borderRadius: 8, border: "1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>
                                   )}</td>
                                 </tr>
                               ))}
@@ -4808,7 +4875,7 @@ export default function LavanderiaApp() {
                               <td style={{ padding:"10px 12px",color:"var(--text-muted)",fontSize:14 }}>{o.date}</td>
                               <td style={{ padding:"10px 12px",fontSize:14 }}><span style={{ color:isLate?"#EF5350":isFuture?"var(--text-dim)":"#66BB6A",fontWeight:isLate||!isFuture?700:400 }} title={isFuture?"Todavía no llega la fecha prometida de entrega":""}>{isLate?"⚠️ ":isFuture?"⏳ ":"✅ "}{o.delivery_date||"—"}</span></td>
                               <td style={{ padding:"10px 12px",textAlign:"center" }}><span style={{ fontWeight:700,color:daysIn>7?"#EF5350":daysIn>3?"var(--warning-text)":"var(--text-muted)",fontSize:15 }}>{daysIn}d</span></td>
-                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), getRandomWaMensaje(o.client_name, shownOrderNum(o.order_number)))} target="lavagest_whatsapp" rel="noreferrer" title="Enviar WhatsApp" onClick={(e)=>{ if(isFuture && !window.confirm(`La fecha de entrega prometida de ${o.client_name} (${o.delivery_date}) todavía no llega. ¿Seguro que quieres enviarle el recordatorio de todas formas?`)) e.preventDefault(); }} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}</td>
+                              <td style={{ padding:"8px 10px" }}>{o.phone&&o.status==="listo"&&(<a href={getWhatsAppUrl(negocioPais+o.phone.replace(/[^0-9]/g,""), getRandomWaMensaje(o.client_name, shownOrderNum(o.order_number)))} target="lavagest_whatsapp" rel="noreferrer" title={o.recordatorio_wa_at ? textoRecordatorio(o) : "Enviar WhatsApp"} onClick={(e)=>{ if(isFuture && !window.confirm(`La fecha de entrega prometida de ${o.client_name} (${o.delivery_date}) todavía no llega. ¿Seguro que quieres enviarle el recordatorio de todas formas?`)) { e.preventDefault(); return; } if(yaRecordadoHoy(o) && !window.confirm("Ya se le envió un recordatorio hoy. ¿Enviar otro?")) { e.preventDefault(); return; } marcarRecordatorio(o); }} style={{ ...btn,background:"rgba(37,211,102,0.15)",color:"#25D366",padding:"4px 8px",fontSize:13,textDecoration:"none",display:"inline-block",borderRadius:8,border:"1px solid rgba(37,211,102,0.3)" }}>📱 WA</a>)}{o.recordatorio_wa_at&&<div title={textoRecordatorio(o)} style={{ fontSize:11,color:"var(--warning-text)",marginTop:3,fontWeight:700,whiteSpace:"nowrap" }}>🔔 {new Date(o.recordatorio_wa_at).toLocaleDateString("es-CO",{day:"2-digit",month:"short"})}{(Number(o.recordatorio_wa_count)||1)>1?` ×${o.recordatorio_wa_count}`:""}</div>}</td>
                             </tr>;
                           })}</tbody>
                         </table>
@@ -5132,6 +5199,23 @@ export default function LavanderiaApp() {
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>🖨️ NOMBRE DE LA IMPRESORA (QZ Tray)</label>
                     <input style={{ ...inp, borderColor: "rgba(79,195,247,0.3)" }} value={nombreImpresora} onChange={e => setNombreImpresora(e.target.value)} placeholder="Ej: BIXOLON SRP-330II" />
                     <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>Debe coincidir exactamente con el nombre en Windows → Dispositivos e impresoras</div>
+                  </div>
+                  <div style={{ gridColumn: "span 2", background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>🔐 FIRMA DE IMPRESIÓN SIN INTERNET (este computador)</label>
+                    <div style={{ fontSize: 13, color: llaveLocalOk ? "#66BB6A" : "var(--warning-text)", marginBottom: 8, fontWeight: 600 }}>{llaveLocalOk ? "✅ La llave está guardada en este computador: imprime con o sin internet." : "⚠️ Sin llave en este computador: si se va el internet, QZ Tray no imprime."}</div>
+                    {!llaveLocalOk && <>
+                      <textarea value={llaveTexto} onChange={e => setLlaveTexto(e.target.value)} placeholder={"Pega aquí el contenido completo del archivo private-key.pem (desde -----BEGIN PRIVATE KEY----- hasta -----END PRIVATE KEY-----)"} rows={4} style={{ ...inp, fontFamily: "monospace", fontSize: 12, width: "100%", boxSizing: "border-box" }} />
+                      <button onClick={async () => {
+                        try {
+                          localStorage.setItem("qzLocalKey", llaveTexto.trim());
+                          await qzFirmarLocal("prueba");
+                          setLlaveLocalOk(true); setLlaveTexto("");
+                          alert("✅ Llave guardada en este computador. Desde ahora imprime también sin internet.");
+                        } catch (e) { try { localStorage.removeItem("qzLocalKey"); } catch {} setLlaveLocalOk(false); alert("❌ La llave no es válida: " + e.message); }
+                      }} disabled={!llaveTexto.trim()} style={{ ...btn, marginTop: 8, background: "rgba(102,187,106,0.15)", color: "#66BB6A", padding: "7px 14px", fontSize: 13, fontWeight: 700, opacity: llaveTexto.trim() ? 1 : 0.5 }}>💾 Guardar llave en este computador</button>
+                    </>}
+                    {llaveLocalOk && <button onClick={() => { if (!window.confirm("¿Quitar la llave de este computador? Sin ella, no imprimirá cuando no haya internet.")) return; try { localStorage.removeItem("qzLocalKey"); } catch {} setLlaveLocalOk(false); }} style={{ ...btn, background: "rgba(239,83,80,0.12)", color: "#EF5350", padding: "6px 12px", fontSize: 13 }}>Quitar llave de este computador</button>}
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 8 }}>Se hace una sola vez por computador. La llave se guarda solo en este navegador y no se sube a ninguna parte. Es la misma llave (private-key.pem) que usa el servidor para firmar.</div>
                   </div>
                   <div>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>↔️ ANCHO DEL RECIBO (caracteres por línea)</label>
