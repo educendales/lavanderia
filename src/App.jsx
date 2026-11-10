@@ -407,6 +407,9 @@ export default function LavanderiaApp() {
   const [numeroOrdenTamanoLab, setNumeroOrdenTamanoLab] = useState(() => { try { const n = Number(localStorage.getItem("numeroOrdenTamanoLab")); return n >= 0 && n <= 8 && localStorage.getItem("numeroOrdenTamanoLab") !== null ? n : (NUMERO_SIN_S_NI_CEROS ? 4 : 0); } catch { return NUMERO_SIN_S_NI_CEROS ? 4 : 0; } }); // 0 = igual que la copia del cliente
   // Orden de los campos al digitar prendas: false = Prenda, Cant., Precio, Colores · true = Cant., Prenda, Color, Valor
   const [ordenCantPrimero, setOrdenCantPrimero] = useState(() => { try { const v = localStorage.getItem("ordenCantPrimero"); return v === null ? NUMERO_SIN_S_NI_CEROS : v === "true"; } catch { return NUMERO_SIN_S_NI_CEROS; } });
+  // Tamaño de "No. Piezas" y de "Obs:" en el recibo: 0 = como estaba (normal / letra pequeña), 1 a 8 = más grande
+  const [piezasTamano, setPiezasTamano] = useState(() => { try { const n = Number(localStorage.getItem("piezasTamano")); return n >= 0 && n <= 8 ? n : 0; } catch { return 0; } });
+  const [obsTamano, setObsTamano] = useState(() => { try { const n = Number(localStorage.getItem("obsTamano")); return n >= 0 && n <= 8 ? n : 0; } catch { return 0; } });
   const [numeroOrdenCuadro, setNumeroOrdenCuadro] = useState(() => { try { return localStorage.getItem("numeroOrdenCuadro") !== "false"; } catch { return true; } });
   const [nombreTelTamano, setNombreTelTamano] = useState(() => {
     try {
@@ -2345,13 +2348,34 @@ export default function LavanderiaApp() {
     data += BOLD_ON;
     data += rpad("Total a Pagar:", "$" + Math.round(Number(order.price)).toLocaleString('es-CO')) + LF;
     data += BOLD_OFF;
-    data += rpad("No. Piezas:", String(order.garments)) + LF;
+    if (piezasTamano > 0) {
+      const sz = sizeCmdOf(piezasTamano);
+      const cols = Math.max(8, Math.floor(anchoRecibo / piezasTamano));
+      const izq = "Piezas:", der = String(order.garments);
+      data += BOLD_ON + GS + "!" + sz + izq + " ".repeat(Math.max(1, cols - izq.length - der.length)) + der + LF + GS + "!\x00" + BOLD_OFF;
+    } else {
+      data += rpad("No. Piezas:", String(order.garments)) + LF;
+    }
     data += LINE + LF;
     if (order.notes) {
-      data += NORMAL_FONT;
-      data += SMALL;
-      data += "Obs: " + normalize(order.notes) + LF;
-      data += NORMAL_FONT;
+      if (obsTamano > 0) {
+        const cols = Math.max(8, Math.floor(anchoRecibo / obsTamano));
+        const palabras = ("Obs: " + normalize(order.notes)).split(" ");
+        const lineas = []; let act = "";
+        palabras.forEach(w => {
+          while (w.length > cols) { if (act) { lineas.push(act); act = ""; } lineas.push(w.slice(0, cols)); w = w.slice(cols); }
+          if (!act) act = w; else if ((act + " " + w).length <= cols) act += " " + w; else { lineas.push(act); act = w; }
+        });
+        if (act) lineas.push(act);
+        data += NORMAL_FONT + BOLD_ON + GS + "!" + sizeCmdOf(obsTamano);
+        lineas.forEach(l => { data += l + LF; });
+        data += GS + "!\x00" + BOLD_OFF + NORMAL_FONT;
+      } else {
+        data += NORMAL_FONT;
+        data += SMALL;
+        data += "Obs: " + normalize(order.notes) + LF;
+        data += NORMAL_FONT;
+      }
       data += LINE + LF;
     }
     if (mostrarMensajeTemporada && mensajeTemporada) {
@@ -5246,6 +5270,20 @@ export default function LavanderiaApp() {
                       <span style={{ fontSize:20,fontWeight:800,color:"#FF8A65",minWidth:28,textAlign:"center" }}>{numeroOrdenTamanoLab || "="}</span>
                       <button onClick={() => { const v = Math.min(8, numeroOrdenTamanoLab+1); setNumeroOrdenTamanoLab(v); try { localStorage.setItem("numeroOrdenTamanoLab", String(v)); } catch {} }} disabled={numeroOrdenTamanoLab>=8} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(255,138,101,0.15)",color:"#FF8A65",opacity:numeroOrdenTamanoLab>=8?0.4:1 }}>+</button>
                       <span style={{ fontSize:13,color:"var(--text-dim)" }}>aplica a la 2ª copia al crear la orden (la 1ª es la del cliente)</span>
+                    </div>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginTop: 14, marginBottom: 4 }}>🧮 TAMAÑO DEL TOTAL DE PRENDAS ("No. Piezas") EN EL RECIBO (1 a 8, "=" como estaba)</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <button onClick={() => { const v = Math.max(0, piezasTamano-1); setPiezasTamano(v); try { localStorage.setItem("piezasTamano", String(v)); } catch {} }} disabled={piezasTamano<=0} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(102,187,106,0.15)",color:"#66BB6A" }}>−</button>
+                      <span style={{ fontSize:20,fontWeight:800,color:"#66BB6A",minWidth:28,textAlign:"center" }}>{piezasTamano || "="}</span>
+                      <button onClick={() => { const v = Math.min(8, piezasTamano+1); setPiezasTamano(v); try { localStorage.setItem("piezasTamano", String(v)); } catch {} }} disabled={piezasTamano>=8} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(102,187,106,0.15)",color:"#66BB6A" }}>+</button>
+                      <span style={{ fontSize:13,color:"var(--text-dim)" }}>imprime una prueba después de cada cambio</span>
+                    </div>
+                    <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginTop: 14, marginBottom: 4 }}>📝 TAMAÑO DE LAS OBSERVACIONES EN EL RECIBO (1 a 8, "=" letra pequeña como estaba)</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <button onClick={() => { const v = Math.max(0, obsTamano-1); setObsTamano(v); try { localStorage.setItem("obsTamano", String(v)); } catch {} }} disabled={obsTamano<=0} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(255,213,79,0.15)",color:"#FFD54F" }}>−</button>
+                      <span style={{ fontSize:20,fontWeight:800,color:"#FFD54F",minWidth:28,textAlign:"center" }}>{obsTamano || "="}</span>
+                      <button onClick={() => { const v = Math.min(8, obsTamano+1); setObsTamano(v); try { localStorage.setItem("obsTamano", String(v)); } catch {} }} disabled={obsTamano>=8} style={{ ...btn, width:36,height:36,padding:0,fontSize:18,fontWeight:800,background:"rgba(255,213,79,0.15)",color:"#FFD54F" }}>+</button>
+                      <span style={{ fontSize:13,color:"var(--text-dim)" }}>1 = normal, 2 = el doble, etc.</span>
                     </div>
                     <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginTop: 14, marginBottom: 6 }}>⌨️ ORDEN DE LOS CAMPOS AL DIGITAR LAS PRENDAS (Nueva orden)</label>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
