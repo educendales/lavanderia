@@ -157,6 +157,13 @@ const qzFirmarLocal = async (toSign) => {
 // Algunos escáneres mandan el guion "-" como comilla (') cuando el teclado de Windows está en español.
 // Aquí se corrige: una comilla entre dos números se vuelve guion (ej. OFF0912'002 -> OFF0912-002).
 const fixScan = (c) => String(c || "").replace(/(\d)['´`‘’](?=\d)/g, "$1-");
+// Calidad de las fotos de evidencia: 0 económica (como antes) · 1 media · 2 alta
+// auto/puente = lado largo (px) de la foto automática (webcam / cámara de seguridad) · qa = calidad JPG · man/qm = foto manual · w,h = resolución pedida a la webcam
+const CALIDADES_FOTO = [
+  { nombre: "Económica", kb: "~20 KB", auto: 480, puente: 720, qa: 0.55, man: 1280, qm: 0.7, w: 640, h: 480, espera: 700 },
+  { nombre: "Media", kb: "~70-100 KB", auto: 1024, puente: 1280, qa: 0.75, man: 1280, qm: 0.82, w: 1280, h: 720, espera: 1200 },
+  { nombre: "Alta", kb: "~200-300 KB", auto: 1280, puente: 1920, qa: 0.82, man: 1920, qm: 0.9, w: 1920, h: 1080, espera: 1500 },
+];
 const NUMERO_SIN_S_NI_CEROS = false;
 const shownOrderNum = (n) => NUMERO_SIN_S_NI_CEROS ? String(n || "").replace(/^S0*(?=\d)/i, "") : String(n || "");
 const factOrderNum = (n) => NUMERO_SIN_S_NI_CEROS ? shownOrderNum(n) : String(n || "").replace(/^[A-Za-z]/, "");
@@ -205,6 +212,8 @@ export default function LavanderiaApp() {
   const [carpetaLocalNombre, setCarpetaLocalNombre] = useState(() => { try { return localStorage.getItem("carpetaLocalNombre") || ""; } catch { return ""; } });
   const [limpiandoEvidencia, setLimpiandoEvidencia] = useState(false);
   // Foto automática de quien deja y quien retira la ropa (por computador). Luis la trae activada.
+  const [calidadFoto, setCalidadFoto] = useState(() => { try { const n = localStorage.getItem("calidadFoto"); return n !== null && Number(n) >= 0 && Number(n) <= 2 ? Number(n) : 1; } catch { return 1; } });
+  const QF = CALIDADES_FOTO[calidadFoto] || CALIDADES_FOTO[1];
   const [fotoAuto, setFotoAuto] = useState(() => { try { const v = localStorage.getItem("fotoAuto"); return v === null ? NUMERO_SIN_S_NI_CEROS : v === "true"; } catch { return NUMERO_SIN_S_NI_CEROS; } });
   const [diasFotoAuto, setDiasFotoAuto] = useState(() => { try { return Number(localStorage.getItem("diasFotoAuto")) || 120; } catch { return 120; } });
   const fotoAutoAvisoRef = useRef(false);
@@ -1714,7 +1723,7 @@ export default function LavanderiaApp() {
   const startCamera = async () => {
     setCameraError("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: QF.man >= 1920 ? 1920 : 1280 }, height: { ideal: QF.man >= 1920 ? 1080 : 720 } }, audio: true });
       cameraStreamRef.current = stream;
       if (videoElRef.current) { videoElRef.current.srcObject = stream; await videoElRef.current.play().catch(()=>{}); }
     } catch (e) {
@@ -1802,14 +1811,14 @@ export default function LavanderiaApp() {
     if (!videoElRef.current || !canvasElRef.current) return;
     const video = videoElRef.current, canvas = canvasElRef.current;
     // Se reduce a máx. 1280 px del lado largo y se comprime (JPG 0.7): ~70% menos peso que antes
-    const sc = Math.min(1, 1280 / Math.max(video.videoWidth || 1, video.videoHeight || 1));
+    const sc = Math.min(1, QF.man / Math.max(video.videoWidth || 1, video.videoHeight || 1));
     canvas.width = Math.round(video.videoWidth * sc); canvas.height = Math.round(video.videoHeight * sc);
     canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
     canvas.toBlob(blob => {
       if (!blob) return;
       const id = Date.now() + "-" + Math.random();
       setCapturedMedia(prev => [{ id, type: "photo", blob, previewUrl: URL.createObjectURL(blob), orderNumber: "", uploading: false, uploaded: false }, ...prev]);
-    }, "image/jpeg", 0.7);
+    }, "image/jpeg", QF.qm);
   };
   const startRecording = () => {
     if (!cameraStreamRef.current) return;
@@ -1849,11 +1858,11 @@ export default function LavanderiaApp() {
       if (!r.ok) throw new Error("el puente respondió " + r.status + " (" + (await r.text()).slice(0, 120) + ")");
       const blob = await r.blob();
       const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("imagen inválida")); im.src = URL.createObjectURL(blob); });
-      const sc = Math.min(1, 720 / Math.max(img.width, img.height));
+      const sc = Math.min(1, QF.puente / Math.max(img.width, img.height));
       const c = document.createElement("canvas"); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
       c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(img.src);
-      return await new Promise(res => c.toBlob(b => res(b), "image/jpeg", 0.55));
+      return await new Promise(res => c.toBlob(b => res(b), "image/jpeg", QF.qa));
     } finally { clearTimeout(t); }
   };
   const capturarFotoAuto = async (forzar = false) => {
@@ -1866,15 +1875,15 @@ export default function LavanderiaApp() {
     let stream = null;
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("este navegador no permite usar la cámara");
-      stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: QF.w }, height: { ideal: QF.h }, facingMode: "user" }, audio: false });
       const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.srcObject = stream;
       await v.play();
-      await new Promise(r => setTimeout(r, 700)); // deja que la cámara ajuste la luz
-      const sc = Math.min(1, 480 / Math.max(v.videoWidth || 1, v.videoHeight || 1));
+      await new Promise(r => setTimeout(r, QF.espera)); // deja que la cámara ajuste la luz
+      const sc = Math.min(1, QF.auto / Math.max(v.videoWidth || 1, v.videoHeight || 1));
       const c = document.createElement("canvas");
       c.width = Math.round((v.videoWidth || 480) * sc); c.height = Math.round((v.videoHeight || 360) * sc);
       c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
-      return await new Promise(res => c.toBlob(b => res(b), "image/jpeg", 0.55));
+      return await new Promise(res => c.toBlob(b => res(b), "image/jpeg", QF.qa));
     } catch (e) {
       if (!fotoAutoAvisoRef.current || forzar) { fotoAutoAvisoRef.current = true; alert("⚠️ No se pudo tomar la foto automática (" + (errPuente ? "cámara de seguridad: " + errPuente + "; webcam: " : "") + (e.name === "NotAllowedError" ? "falta dar permiso a la cámara en el navegador" : e.message) + "). La orden se guardó normal."); }
       return null;
@@ -4673,6 +4682,16 @@ export default function LavanderiaApp() {
                         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Si el puente falla, usa la webcam.</span>
                       </div>
                     )}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+                      <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Calidad de las fotos:</span>
+                      {CALIDADES_FOTO.map((o, i) => (
+                        <label key={i} onClick={() => { setCalidadFoto(i); try { localStorage.setItem("calidadFoto", String(i)); } catch {} }} style={{ display:"flex",alignItems:"center",gap:6,cursor:"pointer",background:calidadFoto===i?"rgba(255,138,101,0.12)":"rgba(255,255,255,0.04)",border:`1px solid ${calidadFoto===i?"rgba(255,138,101,0.5)":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"6px 12px" }}>
+                          <input type="radio" checked={calidadFoto===i} readOnly style={{ accentColor:"#FF8A65" }} />
+                          <span style={{ fontSize:13,color:calidadFoto===i?"#FF8A65":"var(--text-muted)" }}>{o.nombre} <span style={{ opacity:0.7 }}>({o.kb} por foto)</span></span>
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>A mayor calidad la foto se ve más nítida pero pesa más y llena antes el almacenamiento de Supabase. Aplica a las fotos nuevas (manuales y automáticas) de este computador. Si usas la cámara de seguridad, la nitidez también depende de la resolución configurada en el DVR.</div>
                     <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Al dar "Guardar e Imprimir" toma la foto de quien deja la ropa, y al confirmar una entrega toma la de quien la retira. Cada foto pesa unos 20 KB y queda ligada al número de orden. Se ven en el detalle de la orden en Entregas y en esta galería.</div>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
                       <span style={{ fontSize: 14, color: "var(--text-muted)" }}>Fotos automáticas: borrar de la nube después de</span>
