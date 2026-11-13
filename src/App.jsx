@@ -285,6 +285,7 @@ export default function LavanderiaApp() {
   const [showParcialForm, setShowParcialForm] = useState(false);
   const [parcialQtys, setParcialQtys] = useState({});
   const [parcialPayment, setParcialPayment] = useState("");
+  const [parcialPago, setParcialPago] = useState(""); // lo que el cliente paga ahora ("" = el valor de las prendas que se lleva)
   const [parcialDate, setParcialDate] = useState(today);
   const [parcialConfirmedInfo, setParcialConfirmedInfo] = useState(null);
   const [savingParcial, setSavingParcial] = useState(false);
@@ -1404,7 +1405,7 @@ export default function LavanderiaApp() {
     const results = byOrder ? [byOrder] : orders.filter(o => o.phone?.toLowerCase().includes(q));
     setEntregaResults(results);
     setEntregaResult(null); setEntregaConfirmed(false); setEntregaSinRecibo(false); setEntregaPayment("");
-    setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null); setParcialPayment("");
+    setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null); setParcialPayment(""); setParcialPago("");
     setEntregaDate(today); setParcialDate(today); setEntregaMultiDate(today); setEntregaMultiPayment(""); setEntregaMultiSinRecibo(false); setEntregaMultiPaymentByOrder({}); setSelectedEntregas([]);
     const yaSinRecibo = results.filter(o => o.status === "entregado" && o.sin_recibo);
     if (yaSinRecibo.length > 0) {
@@ -1459,7 +1460,9 @@ export default function LavanderiaApp() {
     if (!parcialPayment) { alert("⚠️ Selecciona un método de pago antes de confirmar la entrega parcial."); return; }
     setSavingParcial(true);
     const fotoP = capturarFotoAuto(); // foto de quien retira (entrega parcial)
-    const amount = seleccionados.reduce((s,x) => s + x.qty*Number(x.it.price), 0);
+    const valorPrendas = seleccionados.reduce((s,x) => s + x.qty*Number(x.it.price), 0);
+    const pagoDigitado = String(parcialPago).replace(/\D/g, "");
+    const amount = pagoDigitado !== "" ? Number(pagoDigitado) : valorPrendas; // lo que el cliente realmente paga ahora
     const itemsSummary = seleccionados.map(x => `${x.qty} ${x.it.garment_type}${x.it.color?" "+x.it.color:""}`).join(", ");
 
     const updatedItems = its.map(it => {
@@ -1509,11 +1512,12 @@ export default function LavanderiaApp() {
 
     const pendientes = updatedItems.filter(it => (Number(it.delivered_qty)||0) < Number(it.quantity));
     setParcialConfirmedInfo({
-      itemsSummary, amount, fullyDelivered,
+      itemsSummary, amount, valorPrendas, fullyDelivered,
       pendientesSummary: pendientes.map(it => `${Number(it.quantity)-(Number(it.delivered_qty)||0)} ${it.garment_type}${it.color?" "+it.color:""}`).join(", "),
       saldo: Math.max(0, Number(entregaResult.price) - getAbonado(entregaResult.id) - (getParcialPagado(entregaResult.id)+amount)),
     });
     setParcialQtys({});
+    setParcialPago("");
     setShowParcialForm(false);
     setSavingParcial(false);
     fotoP.then(b => subirFotoAuto(b, "entrega", [entregaResult.order_number]));
@@ -3129,7 +3133,7 @@ export default function LavanderiaApp() {
                         </div>
                         <div style={{ textAlign: "right", marginLeft: 12 }}>
                           <div style={{ fontWeight: 800, fontSize: 21, color: "#66BB6A", marginBottom: 4 }}>${Math.round(Number(o.price))}</div>
-                          <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(""); setEntregaSinRecibo(false); setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null); setParcialPayment(""); }} style={{ ...btn, background: yaSinRecibo?"rgba(239,83,80,0.15)":"rgba(79,195,247,0.1)", color: yaSinRecibo?"#EF5350":"#4FC3F7", padding: "4px 10px", fontSize: 13 }}>Ver detalle →</button>
+                          <button onClick={() => { setEntregaResult(o); setEntregaConfirmed(false); setEntregaPayment(""); setEntregaSinRecibo(false); setShowParcialForm(false); setParcialQtys({}); setParcialConfirmedInfo(null); setParcialPayment(""); setParcialPago(""); }} style={{ ...btn, background: yaSinRecibo?"rgba(239,83,80,0.15)":"rgba(79,195,247,0.1)", color: yaSinRecibo?"#EF5350":"#4FC3F7", padding: "4px 10px", fontSize: 13 }}>Ver detalle →</button>
                         </div>
                       </div>
                     </div>;
@@ -3223,7 +3227,7 @@ export default function LavanderiaApp() {
                         </div>
                         <button onClick={confirmarEntrega} disabled={!entregaPayment} style={{ ...btn, width:"100%",background:"linear-gradient(135deg,#66BB6A,#388E3C)",color:"#fff",padding:16,fontSize:18,fontWeight:800,borderRadius:10,marginBottom:10,opacity:!entregaPayment?0.5:1,cursor:!entregaPayment?"not-allowed":"pointer" }}>{!entregaPayment?"⚠️ Selecciona un método de pago":`✅ Confirmar Entrega Completa · $${Math.round(getSaldo(entregaResult))}`}</button>
                         {getItemsPendientes(entregaResult.id).length > 1 && (
-                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:16,fontWeight:700,borderRadius:10,marginTop:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
+                          <button onClick={() => { setShowParcialForm(true); setParcialQtys({}); setParcialPayment(""); setParcialPago(""); }} style={{ ...btn, width:"100%",background:"rgba(255,138,101,0.15)",color:"#FF8A65",border:"1px solid rgba(255,138,101,0.4)",padding:14,fontSize:16,fontWeight:700,borderRadius:10,marginTop:10 }}>📦 Entrega Parcial (solo algunas prendas)</button>
                         )}
                         <button onClick={() => { setAbonoModal(entregaResult); setNewAbono({ amount:"", payment_method:"efectivo", date: today }); }} style={{ ...btn, width:"100%",background:"rgba(255,213,79,0.1)",color:"var(--warning-text)",border:"1px solid rgba(255,213,79,0.3)",padding:14,fontSize:16,fontWeight:700,borderRadius:10,marginTop:10 }}>💰 Registrar Abono (el cliente no se lleva la ropa hoy)</button>
                         {entregaResult.phone && entregaResult.status === "listo" && (() => { const rr = orders.find(x => x.id === entregaResult.id) || entregaResult; return <button onClick={() => {
@@ -3265,9 +3269,24 @@ export default function LavanderiaApp() {
                           const subtotal = its.reduce((s,it) => s + (Math.min(Number(parcialQtys[it.id])||0,it.pendiente))*Number(it.price), 0);
                           return <>
                             <div style={{ background:"rgba(255,138,101,0.08)",border:"1px solid rgba(255,138,101,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:16,display:"flex",justifyContent:"space-between" }}>
-                              <span style={{ color:"var(--text-muted)",fontSize:15 }}>Subtotal a cobrar ahora</span>
+                              <span style={{ color:"var(--text-muted)",fontSize:15 }}>Valor de las prendas que se lleva</span>
                               <span style={{ fontWeight:800,color:"#FF8A65",fontSize:20 }}>${Math.round(subtotal).toLocaleString()}</span>
                             </div>
+                            {(() => {
+                              const dig = String(parcialPago).replace(/\D/g, "");
+                              const pago = dig !== "" ? Number(dig) : subtotal;
+                              const saldoAntes = Math.max(0, Number(entregaResult.price) - getAbonado(entregaResult.id) - getParcialPagado(entregaResult.id));
+                              const saldoDespues = Math.max(0, saldoAntes - pago);
+                              return <div style={{ marginBottom:16 }}>
+                                <label style={{ fontSize:14,color:"var(--text-muted)",display:"block",marginBottom:4,fontWeight:600 }}>💵 ¿CUÁNTO PAGA EL CLIENTE AHORA? (vacío = cobrar el valor de las prendas)</label>
+                                <input inputMode="numeric" placeholder={String(Math.round(subtotal))} value={dig !== "" ? Number(dig).toLocaleString("es-CO") : ""} onChange={e => setParcialPago(e.target.value.replace(/\D/g, ""))} style={{ ...inp, width:"100%", fontSize:20, fontWeight:800 }} />
+                                <div style={{ display:"flex",justifyContent:"space-between",fontSize:14,color:"var(--text-muted)",marginTop:6 }}>
+                                  <span>Saldo de la orden antes: <b>${Math.round(saldoAntes).toLocaleString()}</b></span>
+                                  <span>Saldo después: <b style={{ color:saldoDespues>0?"var(--warning-text)":"#66BB6A" }}>${Math.round(saldoDespues).toLocaleString()}</b></span>
+                                </div>
+                                {pago > saldoAntes && saldoAntes > 0 && <div style={{ fontSize:13,color:"#EF5350",marginTop:4 }}>⚠️ Está pagando más que el saldo de la orden (${Math.round(saldoAntes).toLocaleString()}).</div>}
+                              </div>;
+                            })()}
                             <div style={{ display:"flex",gap:10 }}>
                               <button onClick={() => { setShowParcialForm(false); setParcialQtys({}); }} style={{ ...btn,background:"rgba(255,255,255,0.05)",color:"var(--text-muted)",flex:1,padding:12 }}>‹ Cancelar</button>
                               <button onClick={confirmarEntregaParcial} disabled={savingParcial||subtotal<=0||!parcialPayment} style={{ ...btn,background:"linear-gradient(135deg,#FF8A65,#E64A19)",color:"#fff",flex:2,padding:14,fontSize:16,fontWeight:800,opacity:(savingParcial||subtotal<=0||!parcialPayment)?0.5:1,cursor:(savingParcial||subtotal<=0||!parcialPayment)?"not-allowed":"pointer" }}>{savingParcial?"Guardando...":subtotal<=0?"Ingresa una cantidad primero":!parcialPayment?"Selecciona un método de pago":"📦 Confirmar Entrega Parcial"}</button>
